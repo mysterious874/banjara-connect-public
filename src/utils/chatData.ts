@@ -1,7 +1,7 @@
-import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './authenticatedUser'
 import type { ProfileRecord } from '../types/app'
+import { subscribeToPostgresChanges, type RealtimeSubscriptionStatus } from './realtimeData'
 
 export type ChatMessage = {
   id: string
@@ -23,10 +23,23 @@ export type ConversationSummary = {
 }
 
 const messageColumns = 'id,conversation_id,sender_id,content,media_url,media_type,is_deleted_for_everyone,created_at,updated_at'
+const pendingConversationRequests = new Map<string, Promise<string>>()
 
 export async function getOrCreateConversation(targetUserId: string) {
   const userId = await requireAuthenticatedUserId()
   if (userId === targetUserId) throw new Error('You cannot start a conversation with yourself.')
+  const requestKey = [userId, targetUserId].sort().join(':')
+  const pendingRequest = pendingConversationRequests.get(requestKey)
+  if (pendingRequest) return pendingRequest
+
+  const request = createOrFindConversation(userId, targetUserId).finally(() => {
+    pendingConversationRequests.delete(requestKey)
+  })
+  pendingConversationRequests.set(requestKey, request)
+  return request
+}
+
+async function createOrFindConversation(userId: string, targetUserId: string) {
   const [{ data: outgoingBlock, error: outgoingBlockError }, { data: incomingBlock, error: incomingBlockError }] = await Promise.all([
     supabase.from('blocks').select('blocker_id').eq('blocker_id', userId).eq('blocked_id', targetUserId).maybeSingle(),
     supabase.from('blocks').select('blocker_id').eq('blocker_id', targetUserId).eq('blocked_id', userId).maybeSingle(),
@@ -65,10 +78,47 @@ export async function getOrCreateConversation(targetUserId: string) {
     { conversation_id: conversation.id, user_id: targetUserId },
   ])
   if (createMembersError) {
-    await supabase.from('conversations').delete().eq('id', conversation.id).eq('created_by', userId)
+    const { error: cleanupError } = await supabase.from('conversations').delete()
+      .eq('id', conversation.id).eq('created_by', userId)
+    if (cleanupError) {
+      throw new Error(`Could not add conversation members (${createMembersError.message}) or clean up the new conversation (${cleanupError.message}).`)
+    }
     throw createMembersError
   }
   return conversation.id as string
+}
+
+async function loadConversationSummaryMessages(conversationId: string, userId: string) {
+  const pageSize = 500
+  let offset = 0
+  let lastMessage: ChatMessage | null = null
+  let unreadCount = 0
+
+  while (true) {
+    const { data, error } = await supabase.from('messages').select(messageColumns)
+      .eq('conversation_id', conversationId)
+      .eq('is_deleted_for_everyone', false)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(offset, offset + pageSize - 1)
+    if (error) throw error
+    const page = (data ?? []) as ChatMessage[]
+    if (offset === 0) lastMessage = page[0] ?? null
+
+    const incomingIds = page.filter((message) => message.sender_id !== userId).map((message) => message.id)
+    if (incomingIds.length) {
+      const { data: readRows, error: readsError } = await supabase.from('message_reads')
+        .select('message_id').eq('user_id', userId).in('message_id', incomingIds)
+      if (readsError) throw readsError
+      const readIds = new Set((readRows ?? []).map((row) => row.message_id))
+      unreadCount += incomingIds.filter((id) => !readIds.has(id)).length
+    }
+
+    if (page.length < pageSize) break
+    offset += pageSize
+  }
+
+  return { lastMessage, unreadCount }
 }
 
 export async function loadConversations(): Promise<ConversationSummary[]> {
@@ -79,12 +129,9 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   const conversationIds = [...new Set((ownMemberships ?? []).map((row) => row.conversation_id as string))]
   if (!conversationIds.length) return []
 
-  const [{ data: members, error: membersError }, { data: messages, error: messagesError }] = await Promise.all([
-    supabase.from('conversation_members').select('conversation_id,user_id').in('conversation_id', conversationIds),
-    supabase.from('messages').select(messageColumns).in('conversation_id', conversationIds).eq('is_deleted_for_everyone', false).order('created_at', { ascending: false }).limit(200),
-  ])
+  const { data: members, error: membersError } = await supabase.from('conversation_members')
+    .select('conversation_id,user_id').in('conversation_id', conversationIds)
   if (membersError) throw membersError
-  if (messagesError) throw messagesError
 
   const otherUsers = new Map<string, string>()
   for (const member of members ?? []) {
@@ -92,29 +139,23 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   }
   const otherUserIds = [...new Set(otherUsers.values())]
   if (!otherUserIds.length) return []
-  const [{ data: profiles, error: profilesError }, { data: readRows, error: readsError }] = await Promise.all([
-    supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', otherUserIds),
-    supabase.from('message_reads').select('message_id').eq('user_id', userId),
-  ])
+
+  const summaryMessages: Array<{ lastMessage: ChatMessage | null; unreadCount: number }> = []
+  for (let offset = 0; offset < conversationIds.length; offset += 5) {
+    const batch = await Promise.all(conversationIds.slice(offset, offset + 5)
+      .map((id) => loadConversationSummaryMessages(id, userId)))
+    summaryMessages.push(...batch)
+  }
+  const { data: profiles, error: profilesError } = await supabase.from('profiles')
+    .select('id,username,display_name,avatar_url').in('id', otherUserIds)
   if (profilesError) throw profilesError
-  if (readsError) throw readsError
 
   const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
-  const readIds = new Set((readRows ?? []).map((row) => row.message_id))
-  const messagesByConversation = new Map<string, ChatMessage[]>()
-  for (const message of (messages ?? []) as ChatMessage[]) {
-    const current = messagesByConversation.get(message.conversation_id) ?? []
-    current.push(message)
-    messagesByConversation.set(message.conversation_id, current)
-  }
-
-  return conversationIds.flatMap((id) => {
+  return conversationIds.flatMap((id, index) => {
     const memberId = otherUsers.get(id)
     const member = memberId ? profileMap.get(memberId) : undefined
     if (!member) return []
-    const conversationMessages = messagesByConversation.get(id) ?? []
-    const unreadCount = conversationMessages.filter((message) => message.sender_id !== userId && !readIds.has(message.id)).length
-    return [{ id, member, lastMessage: conversationMessages[0] ?? null, unreadCount }]
+    return [{ id, member, ...summaryMessages[index] }]
   }).sort((left, right) => (right.lastMessage?.created_at ?? '').localeCompare(left.lastMessage?.created_at ?? ''))
 }
 
@@ -179,8 +220,15 @@ export async function sendConversationMessage(conversationId: string, content: s
   return data as ChatMessage
 }
 
-export function subscribeToConversation(conversationId: string, onMessage: () => void): RealtimeChannel {
-  return supabase.channel(`conversation:${conversationId}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, onMessage)
-    .subscribe()
+export function subscribeToConversation(
+  conversationId: string,
+  onMessage: () => void,
+  onStatus?: (status: RealtimeSubscriptionStatus) => void,
+) {
+  return subscribeToPostgresChanges({
+    topic: `conversation:${conversationId}`,
+    event: 'INSERT',
+    table: 'messages',
+    filter: `conversation_id=eq.${conversationId}`,
+  }, onMessage, onStatus)
 }

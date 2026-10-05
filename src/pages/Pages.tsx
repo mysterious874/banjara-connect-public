@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, LockKeyhole, MapPin, MessageCircle, Plus, Send, ShieldCheck, Sparkles, UserRound, Users, WandSparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Pencil, Plus, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { PostCard, PostComposer } from '../components/feed'
 import { SearchBar } from '../components/search'
+import { PwaInstallControl } from '../components/PwaInstall'
 import { StoriesRail } from '../components/stories'
 import { Avatar, Button, ConfirmationDialog, EmptyState, ErrorState, Input, Loading, Tabs } from '../components/ui'
 import { UserCard } from '../components/users'
@@ -15,11 +16,13 @@ import { loadPost, loadPosts } from '../utils/postData'
 import { filterProfiles, loadProfiles } from '../utils/profileData'
 import { getOrCreateConversation } from '../utils/chatData'
 import { supabase } from '../utils/supabase'
+import { hideSyntheticAuthEmail, mobileAuthEmail, normalizeMobileNumber } from '../utils/authIdentity'
+import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
 import { loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
-import { createComment, loadCommentLikes, loadComments, toggleCommentLike, type CommentRecord } from '../utils/socialData'
+import { createComment, deleteComment, loadCommentLikes, loadComments, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 
 function PageHeading({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
   return <div className="page-heading"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h1>{title}</h1>{description && <p>{description}</p>}</div>{action}</div>
@@ -48,7 +51,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { session } = useAuth()
-  const [identifier, setIdentifier] = useState('')
+  const [mobile, setMobile] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -61,58 +64,41 @@ export function LoginPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
-    setIsSubmitting(true)
-    const login = identifier.trim()
-    const credentials = login.includes('@') ? { email: login, password } : { phone: login, password }
-    const { error: authError } = await supabase.auth.signInWithPassword(credentials)
-    setIsSubmitting(false)
-    if (authError) {
-      setError(authError.message)
+    const normalizedPhone = normalizeMobileNumber(mobile)
+    if (!normalizedPhone) {
+      setError('Enter a valid mobile number.')
       return
     }
-    navigate(destination, { replace: true })
+
+    const authEmail = mobileAuthEmail(normalizedPhone)
+    setIsSubmitting(true)
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({ email: authEmail, password })
+      if (authError) {
+        setError(authError.code === 'user_already_exists' || /already (registered|exists)/i.test(authError.message)
+          ? 'We could not complete signup. If you already have an account, sign in instead.'
+          : hideSyntheticAuthEmail(authError.message))
+        return
+      }
+      navigate(destination, { replace: true })
+    } catch (authError) {
+      setError(authError instanceof Error ? hideSyntheticAuthEmail(authError.message) : 'Could not sign in. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><span className="eyebrow">WELCOME BACK</span><h1>Come on in.</h1><p className="auth-card__intro">Your people and their stories are right here.</p><form className="form-stack" onSubmit={submit}><Input label="Email or phone" type="text" autoComplete="username" placeholder="you@example.com" value={identifier} onChange={(event) => setIdentifier(event.target.value)} required /><Input label="Password" type="password" autoComplete="current-password" placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} required />{error && <p className="field__error" role="alert">{error}</p>}<Link to="/settings/privacy" className="text-link auth-card__forgot">Need help signing in?</Link><Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Continue'} {!isSubmitting && <ArrowRight size={17} />}</Button></form><div className="auth-card__divider"><span>NEW TO THE COMMUNITY?</span></div><Button to="/signup" variant="outline" className="button--full">Create an account</Button></div></main>
+  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><span className="eyebrow">WELCOME BACK</span><h1>Come on in.</h1><p className="auth-card__intro">Your people and their stories are right here.</p><form className="form-stack" onSubmit={submit}><Input label="Mobile number" type="tel" autoComplete="username" placeholder="Enter your mobile number" value={mobile} onChange={(event) => setMobile(event.target.value)} required /><Input label="Password" type="password" autoComplete="current-password" placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} required />{error && <p className="field__error" role="alert">{error}</p>}<p className="micro-note auth-card__forgot" role="note">Password recovery is unavailable for mobile-only accounts.</p><Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Continue'} {!isSubmitting && <ArrowRight size={17} />}</Button></form><div className="auth-card__divider"><span>NEW TO THE COMMUNITY?</span></div><p className="micro-note" role="note">New account registration is unavailable until mobile ownership can be verified.</p></div></main>
 }
 
 export function SignupPage() {
-  const navigate = useNavigate()
   const { session } = useAuth()
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
+  const navigate = useNavigate()
   useEffect(() => {
     if (session) navigate('/home', { replace: true })
   }, [navigate, session])
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError('')
-    setNotice('')
-    setIsSubmitting(true)
-    const { data, error: authError } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: { data: { full_name: name.trim() } },
-    })
-    setIsSubmitting(false)
-    if (authError) {
-      setError(authError.message)
-      return
-    }
-    if (data.session) {
-      navigate('/home', { replace: true })
-      return
-    }
-    setNotice('Check your email to confirm your account before signing in.')
-  }
-
-  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><span className="eyebrow">MAKE YOURSELF AT HOME</span><h1>Join the circle.</h1><p className="auth-card__intro">A place for community, culture, and everyday life.</p><form className="form-stack" onSubmit={submit}><Input label="Your name" autoComplete="name" placeholder="Name you go by" value={name} onChange={(event) => setName(event.target.value)} required /><Input label="Email address" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required /><Input label="Create a password" type="password" autoComplete="new-password" placeholder="At least 8 characters" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required /><label className="check-row"><input type="checkbox" required /><span>I agree to the community guidelines and privacy notice.</span></label>{error && <p className="field__error" role="alert">{error}</p>}{notice && <p className="micro-note" role="status">{notice}</p>}<Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Creating account…' : 'Create account'} {!isSubmitting && <ArrowRight size={17} />}</Button></form><p className="auth-card__switch">Already part of the circle? <Link to="/login">Sign in</Link></p></div></main>
+  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><span className="eyebrow">ACCOUNT SAFETY</span><h1>Sign-up is unavailable.</h1><p className="auth-card__intro">We cannot verify ownership of a mobile number with the current sign-up method, so new account creation is temporarily paused.</p><p className="micro-note">Existing members can continue to sign in. No account has been created.</p><Button to="/login" variant="outline" className="button--full">Back to sign in</Button></div></main>
 }
 
 export function HomePage() {
@@ -175,15 +161,12 @@ export function HomePage() {
             <p>There is always room in the circle.</p>
             {profileError && <p className="field__error" role="alert">{profileError}</p>}
           </div>
-          <div className="home-intro__tools">
-            <Button to="/assistant" variant="outline" iconOnly aria-label="Open Banjara Assistant" title="Open Banjara Assistant"><WandSparkles size={17} /></Button>
-          </div>
         </div>
-        <SearchBar />
+        <SearchBar showAssistant />
         <StoriesRail />
-        <PostComposer name={profile?.display_name || profile?.username || session?.user.email || 'Your profile'} image={profile?.avatar_url} />
+        <PostComposer name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url} />
         <div className="feed-heading"><div><span className="eyebrow">FROM YOUR COMMUNITY</span><h2>Your feed</h2></div></div>
-        {isPostsLoading ? <Loading label="Loading posts" /> : postsError ? <ErrorState title="Could not load posts" description={postsError} /> : posts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared with your community will appear here." action={<Button to="/create" variant="outline">Create a post</Button>} /> : <div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} />)}</div>}
+        {isPostsLoading ? <Loading label="Loading posts" /> : postsError ? <ErrorState title="Could not load posts" description={postsError} /> : posts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared with your community will appear here." action={<Button to="/create" variant="outline">Create a post</Button>} /> : <div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>}
       </div>
       <aside className="home-aside">
         <section className="aside-section"><div className="aside-section__heading"><h2>People to know</h2><Link className="text-link" to="/connect">More</Link></div>{isPeopleLoading ? <Loading label="Loading profiles" /> : peopleError ? <p className="field__error" role="alert">{peopleError}</p> : <div className="user-list">{people.slice(0, 2).map((user) => <UserCard key={user.id} user={user} compact />)}</div>}</section>
@@ -270,10 +253,11 @@ export function CreatePostPage() {
     }
   }
 
-  return <section className="page-stack page-stack--narrow"><PageHeading eyebrow="MAKE SOMETHING TOGETHER" title="Create a post" description="Share a thought with your community." /><form className="create-post-box" onSubmit={submit}><div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><span>Sharing with the community</span></span></div><label className="visually-hidden" htmlFor="post-text">Write your post</label><textarea id="post-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="What would you like to share?" maxLength={500} required /><div className="create-post-box__footer"><span>{text.length}/500</span><Button type="submit" disabled={!text.trim() || isSaving}>{isSaving ? 'Publishing…' : 'Publish post'} {!isSaving && <Send size={16} />}</Button></div>{error && <p className="field__error" role="alert">{error}</p>}</form></section>
+  return <section className="page-stack page-stack--narrow"><PageHeading eyebrow="MAKE SOMETHING TOGETHER" title="Create a post" description="Share a thought with your community." /><form className="create-post-box" onSubmit={submit}><div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><span>Sharing with the community</span></span></div><label className="visually-hidden" htmlFor="post-text">Write your post</label><textarea id="post-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="What would you like to share?" maxLength={500} required /><div className="media-unavailable" role="note"><strong>Photo and video posts are not available yet.</strong><span>Only text posts are supported until media storage is configured.</span></div><div className="create-post-box__footer"><span>{text.length}/500</span><Button type="submit" disabled={!text.trim() || isSaving}>{isSaving ? 'Publishing…' : 'Publish post'} {!isSaving && <Send size={16} />}</Button></div>{error && <p className="field__error" role="alert">{error}</p>}</form></section>
 }
 
 export function PostDetailsPage() {
+  const navigate = useNavigate()
   const { postId = '' } = useParams()
   const [post, setPost] = useState<FeedPost | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -296,7 +280,59 @@ export function PostDetailsPage() {
   if (isLoading) return <section className="page-stack"><Loading label="Loading post" /></section>
   if (error) return <section className="page-stack"><ErrorState title="Could not load post" description={error} /></section>
   if (!post) return <section className="page-stack"><EmptyState title="Post not found" description="This post may have been removed or is not available to your account." action={<Button to="/home" variant="outline">Back to feed</Button>} /></section>
-  return <section className="page-stack page-stack--narrow"><Button to="/home" variant="quiet"><ArrowLeft size={16} />Back to feed</Button><PageHeading eyebrow="COMMUNITY POST" title="Post details" /><PostCard post={post} /></section>
+  return <section className="page-stack page-stack--narrow"><Button to="/home" variant="quiet"><ArrowLeft size={16} />Back to feed</Button><PageHeading eyebrow="COMMUNITY POST" title="Post details" /><PostCard post={post} onDeleted={() => navigate('/home', { replace: true })} /></section>
+}
+
+function CommentItemCard({ comment, like, isLikePending, onToggleLike, onUpdated, onDeleted }: {
+  comment: CommentRecord
+  like: { count: number; liked: boolean }
+  isLikePending: boolean
+  onToggleLike: (comment: CommentRecord) => void
+  onUpdated: (commentId: string, content: string) => void
+  onDeleted: (commentId: string) => void
+}) {
+  const { session } = useAuth()
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(comment.content)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [error, setError] = useState('')
+  const isOwner = session?.user.id === comment.user_id
+  const authorName = comment.author?.display_name || comment.author?.username || 'Community member'
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!isOwner || isSaving || !editContent.trim()) return
+    setIsSaving(true)
+    setError('')
+    try {
+      await updateComment(comment.id, editContent)
+      onUpdated(comment.id, editContent.trim())
+      setIsEditing(false)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not update this comment.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function remove() {
+    if (!isOwner || isDeleting) return
+    setIsDeleting(true)
+    setError('')
+    try {
+      await deleteComment(comment.id)
+      onDeleted(comment.id)
+      setConfirmDelete(false)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not delete this comment.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  return <article className="comment-item"><Avatar name={authorName} image={comment.author?.avatar_url ?? undefined} /><div className="comment-item__content"><div className="comment-item__head"><strong>{authorName}</strong><span>{new Date(comment.created_at).toLocaleString()}</span><button type="button" className={`post-action${like.liked ? ' is-liked' : ''}`} aria-pressed={like.liked} disabled={isLikePending} onClick={() => onToggleLike(comment)}><Heart size={16} fill={like.liked ? 'currentColor' : 'none'} />{like.count}</button></div>{isEditing ? <form className="comment-edit-form" onSubmit={save}><label className="visually-hidden" htmlFor={`comment-edit-${comment.id}`}>Edit your comment</label><textarea id={`comment-edit-${comment.id}`} value={editContent} onChange={(event) => setEditContent(event.target.value)} maxLength={1000} required /><div><Button type="button" variant="quiet" onClick={() => { setIsEditing(false); setEditContent(comment.content) }} disabled={isSaving}><X size={14} />Cancel</Button><Button type="submit" disabled={isSaving || !editContent.trim()}><Check size={14} />{isSaving ? 'Saving…' : 'Save'}</Button></div></form> : <p>{comment.content}</p>}{isOwner && <div className="comment-item__actions"><Button variant="quiet" onClick={() => { setEditContent(comment.content); setIsEditing(true) }} disabled={isSaving || isDeleting}><Pencil size={14} />Edit</Button><Button variant="quiet" onClick={() => setConfirmDelete(true)} disabled={isSaving || isDeleting}><Trash2 size={14} />Delete</Button></div>}{error && <p className="field__error" role="alert">{error}</p>}</div><ConfirmationDialog open={confirmDelete} title="Delete this comment?" description="This removes your comment from the post. This action cannot be undone." confirmLabel={isDeleting ? 'Deleting…' : 'Delete comment'} onClose={() => { if (!isDeleting) setConfirmDelete(false) }} onConfirm={() => void remove()} /></article>
 }
 
 export function CommentsPage() {
@@ -378,7 +414,7 @@ export function CommentsPage() {
   if (!post) return <section className="page-stack"><EmptyState title="Post not found" description="This post is not available." /></section>
   const postAuthor = post.author?.display_name || post.author?.username || 'community post'
 
-  return <section className="page-stack page-stack--narrow"><Button to={`/posts/${post.id}`} variant="quiet"><ArrowLeft size={16} />Back to post</Button><PageHeading eyebrow="COMMUNITY COMMENTS" title="The conversation" description={`On ${postAuthor}'s post`} />{error && <p className="field__error" role="alert">{error}</p>}<div className="comment-list">{comments.length ? comments.map((comment) => { const like = commentLikes[comment.id] ?? { count: 0, liked: false }; const authorName = comment.author?.display_name || comment.author?.username || 'Community member'; return <article className="comment-item" key={comment.id}><Avatar name={authorName} image={comment.author?.avatar_url ?? undefined} /><div><div className="comment-item__head"><strong>{authorName}</strong><span>{new Date(comment.created_at).toLocaleString()}</span><button type="button" className={`post-action${like.liked ? ' is-liked' : ''}`} aria-pressed={like.liked} disabled={pendingLikeIds.includes(comment.id)} onClick={() => toggleLike(comment)}><Heart size={16} fill={like.liked ? 'currentColor' : 'none'} />{like.count}</button></div><p>{comment.content}</p></div></article>}) : <EmptyState title="No comments yet" description="Start the conversation." />}</div><form className="comment-compose" onSubmit={submitComment}><Input aria-label="Write a comment" placeholder="Add to the conversation..." value={content} onChange={(event) => setContent(event.target.value)} /><Button type="submit" iconOnly aria-label="Send comment" disabled={!content.trim() || isSubmitting}>{isSubmitting ? '…' : <Send size={17} />}</Button></form></section>
+  return <section className="page-stack page-stack--narrow"><Button to={`/posts/${post.id}`} variant="quiet"><ArrowLeft size={16} />Back to post</Button><PageHeading eyebrow="COMMUNITY COMMENTS" title="The conversation" description={`On ${postAuthor}'s post`} />{error && <p className="field__error" role="alert">{error}</p>}<div className="comment-list">{comments.length ? comments.map((comment) => <CommentItemCard key={comment.id} comment={comment} like={commentLikes[comment.id] ?? { count: 0, liked: false }} isLikePending={pendingLikeIds.includes(comment.id)} onToggleLike={toggleLike} onUpdated={(commentId, updatedContent) => setComments((current) => current.map((item) => item.id === commentId ? { ...item, content: updatedContent } : item))} onDeleted={(commentId) => { setComments((current) => current.filter((item) => item.id !== commentId)); setCommentLikes((current) => { const next = { ...current }; delete next[commentId]; return next }) }} />) : <EmptyState title="No comments yet" description="Start the conversation." />}</div><form className="comment-compose" onSubmit={submitComment}><Input aria-label="Write a comment" placeholder="Add to the conversation..." value={content} onChange={(event) => setContent(event.target.value)} /><Button type="submit" iconOnly aria-label="Send comment" disabled={!content.trim() || isSubmitting}>{isSubmitting ? '…' : <Send size={17} />}</Button></form></section>
 }
 
 export function ProfilePage() {
@@ -411,7 +447,10 @@ export function ProfilePage() {
     setOtherProfileError('')
     void (async () => {
       try {
-        const { data, error } = await supabase.from('profiles').select('id,username,display_name,avatar_url,bio,location,is_verified').eq('username', handle).maybeSingle()
+        const profileLookup = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(handle)
+          ? supabase.from('profiles').select('id,username,display_name,avatar_url,bio,location,is_verified').eq('id', handle)
+          : supabase.from('profiles').select('id,username,display_name,avatar_url,bio,location,is_verified').eq('username', handle)
+        const { data, error } = await profileLookup.maybeSingle()
         if (!active) return
         setOtherProfile(data as ProfileRecord | null)
         setOtherProfileError(error?.message ?? '')
@@ -503,15 +542,16 @@ export function ProfilePage() {
 
   const loading = isOwn ? isProfileLoading : isOtherProfileLoading
   const error = isOwn ? profileError : otherProfileError
-  if (loading) return <section className="page-stack"><Loading label="Loading profile" /></section>
+  if (loading || (isOwn && !ownProfile && !profileError)) return <section className="page-stack"><Loading label="Loading profile" /></section>
   if (error) return <section className="page-stack"><ErrorState title="Could not load profile" description={error} /></section>
   if (!profile) return <section className="page-stack"><EmptyState title="Profile not found" description="This profile is unavailable." /></section>
   if (!isOwn && isBlockLoading) return <section className="page-stack"><Loading label="Checking profile privacy" /></section>
   if (!isOwn && blockError && !isBlocked) return <section className="page-stack"><ErrorState title="Could not check profile privacy" description={blockError} /></section>
 
-  const name = profile.display_name || profile.username
+  const name = profile.display_name || profile.username || 'Your profile'
+  const profileUsername = profile.username || `member-${profile.id.slice(0, 8)}`
   if (!isOwn && isBlocked) return <section className="page-stack"><PageHeading title="Profile blocked" /><Button variant="outline" onClick={handleBlock} disabled={isBlockPending}>{isBlockPending ? 'Updating…' : 'Unblock profile'}</Button>{blockError && <p className="field__error" role="alert">{blockError}</p>}<EmptyState title="Profile content hidden" description="Unblock this profile to view its posts and details." /></section>
-  return <section className="page-stack"><div className="profile-cover"><span className="profile-cover__stitch" /><span className="profile-cover__label">COMMUNITY PROFILE</span></div><div className="profile-summary"><Avatar name={name} image={profile.avatar_url ?? undefined} size="large" /><div className="profile-summary__actions">{isOwn ? <Button to="/edit-profile" variant="outline">Edit profile</Button> : <><Button variant="outline" onClick={startConversation} disabled={isStartingConversation || isBlockPending}>{isStartingConversation ? 'Opening…' : 'Message'}</Button><Button variant="quiet" onClick={handleBlock} disabled={isBlockPending}>{isBlockPending ? 'Updating…' : 'Block'}</Button></>}</div><h1>{name}</h1><span className="profile-handle">@{profile.username}</span><span className="local-label">{profile.is_verified ? 'Verified' : 'Member'}</span>{profile.bio && <p>{profile.bio}</p>}{profile.location && <span className="profile-location"><MapPin size={14} />{profile.location}</span>}{blockError && <p className="field__error" role="alert">{blockError}</p>}</div><div className="section-heading"><h2>Posts</h2></div>{isProfilePostsLoading ? <Loading label="Loading profile posts" /> : profilePostsError ? <ErrorState title="Could not load profile posts" description={profilePostsError} /> : profilePosts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared by this profile will appear here." /> : <div className="feed-list">{profilePosts.map((post) => <PostCard key={post.id} post={post} />)}</div>}</section>
+  return <section className="page-stack"><div className="profile-cover"><span className="profile-cover__stitch" /><span className="profile-cover__label">COMMUNITY PROFILE</span></div><div className="profile-summary"><Avatar name={name} image={profile.avatar_url ?? undefined} size="large" /><div className="profile-summary__actions">{isOwn ? <Button to="/edit-profile" variant="outline">Edit profile</Button> : <><Button variant="outline" onClick={startConversation} disabled={isStartingConversation || isBlockPending}>{isStartingConversation ? 'Opening…' : 'Message'}</Button><Button variant="quiet" onClick={handleBlock} disabled={isBlockPending}>{isBlockPending ? 'Updating…' : 'Block'}</Button></>}</div><h1>{name}</h1><span className="profile-handle">@{profileUsername}</span><span className="local-label">{profile.is_verified ? 'Verified' : 'Member'}</span>{profile.bio && <p>{profile.bio}</p>}{profile.location && <span className="profile-location"><MapPin size={14} />{profile.location}</span>}{blockError && <p className="field__error" role="alert">{blockError}</p>}</div><div className="section-heading"><h2>Posts</h2></div>{isProfilePostsLoading ? <Loading label="Loading profile posts" /> : profilePostsError ? <ErrorState title="Could not load profile posts" description={profilePostsError} /> : profilePosts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared by this profile will appear here." /> : <div className="feed-list">{profilePosts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setProfilePosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>}</section>
 }
 
 export function EditProfilePage() {
@@ -528,7 +568,7 @@ export function EditProfilePage() {
   useEffect(() => {
     if (!profile) return
     setDisplayName(profile.display_name ?? '')
-    setUsername(profile.username)
+    setUsername(profile.username ?? '')
     setBio(profile.bio ?? '')
     setLocation(profile.location ?? '')
     setAvatarUrl(profile.avatar_url ?? '')
@@ -554,7 +594,7 @@ export function EditProfilePage() {
     setSuccess(true)
   }
 
-  if (isProfileLoading && !profile) return <section className="page-stack page-stack--narrow"><Loading label="Loading your profile" /></section>
+  if ((isProfileLoading || !profile) && !profileError) return <section className="page-stack page-stack--narrow"><Loading label="Loading your profile" /></section>
   if (profileError && !profile) return <section className="page-stack page-stack--narrow"><ErrorState title="Could not load your profile" description={profileError} /></section>
   if (!profile) return <section className="page-stack page-stack--narrow"><EmptyState title="Profile unavailable" description="Sign in again to load your profile." /></section>
 
@@ -596,24 +636,29 @@ export function ChatConversationPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
+  const [realtimeError, setRealtimeError] = useState('')
 
   useEffect(() => {
     let active = true
-    let channel: ReturnType<typeof subscribeToConversation> | null = null
+    let unsubscribe: (() => void) | null = null
     setIsLoading(true)
     setError('')
+    setRealtimeError('')
     void (async () => {
       try {
         const [peer, history] = await Promise.all([loadConversationPeer(conversationId), loadConversationMessages(conversationId)])
         if (!active) return
         setPerson(peer as ProfileRecord)
         setMessages(history)
-        channel = subscribeToConversation(conversationId, () => {
+        unsubscribe = subscribeToConversation(conversationId, () => {
           void loadConversationMessages(conversationId).then((nextMessages) => {
             if (active) setMessages(nextMessages)
           }).catch((caught: unknown) => {
             if (active) setError(caught instanceof Error ? caught.message : 'Could not refresh messages.')
           })
+        }, (status) => {
+          if (!active) return
+          setRealtimeError(status === 'SUBSCRIBED' ? '' : `Live message updates are unavailable (${status.toLowerCase().replace('_', ' ')}).`)
         })
       } catch (caught) {
         if (active) setError(caught instanceof Error ? caught.message : 'Could not load this conversation.')
@@ -623,7 +668,7 @@ export function ChatConversationPage() {
     })()
     return () => {
       active = false
-      if (channel) void supabase.removeChannel(channel)
+      unsubscribe?.()
     }
   }, [conversationId])
 
@@ -647,7 +692,7 @@ export function ChatConversationPage() {
   if (error && !person) return <section className="page-stack"><ErrorState title="Could not load conversation" description={error} /></section>
   if (!person) return <section className="page-stack"><EmptyState title="Conversation unavailable" description="This conversation could not be found." action={<Button to="/chat" variant="outline">Back to chats</Button>} /></section>
   const personName = person.display_name || person.username
-  return <section className="chat-screen"><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>Conversation</small></span><span /></header><div className="chat-messages">{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; return <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}`} key={item.id}>{item.content}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area"><form className="chat-disabled-compose" onSubmit={sendMessage}><Input aria-label="Message" placeholder="Write a message" value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send message">{isSending ? '…' : <Send size={17} />}</Button></form></div></section>
+  return <section className="chat-screen"><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>Conversation</small></span><span /></header><div className="chat-messages">{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; return <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}`} key={item.id}>{item.content}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area"><form className="chat-disabled-compose" onSubmit={sendMessage}><Input aria-label="Message" placeholder="Write a message" value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send message">{isSending ? '…' : <Send size={17} />}</Button></form></div></section>
 }
 
 export function NotificationsPage() {
@@ -656,11 +701,13 @@ export function NotificationsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [pendingId, setPendingId] = useState('')
   const [error, setError] = useState('')
+  const [realtimeError, setRealtimeError] = useState('')
   useEffect(() => {
     let active = true
     if (!session?.user) {
       setNotifications([])
       setIsLoading(false)
+      setRealtimeError('')
       return () => { active = false }
     }
     const refresh = async () => {
@@ -677,12 +724,18 @@ export function NotificationsPage() {
       }
     }
     void refresh()
-    const channel = supabase.channel(`notifications:${session.user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${session.user.id}` }, () => { void refresh() })
-      .subscribe()
+    const unsubscribe = subscribeToPostgresChanges({
+      topic: `notifications:${session.user.id}`,
+      event: '*',
+      table: 'notifications',
+      filter: `user_id=eq.${session.user.id}`,
+    }, () => { void refresh() }, (status) => {
+      if (!active) return
+      setRealtimeError(status === 'SUBSCRIBED' ? '' : `Live notification updates are unavailable (${status.toLowerCase().replace('_', ' ')}). Refresh to check for new activity.`)
+    })
     return () => {
       active = false
-      void supabase.removeChannel(channel)
+      unsubscribe()
     }
   }, [session?.user.id])
 
@@ -707,7 +760,7 @@ export function NotificationsPage() {
     return 'sent you a notification'
   }
 
-  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => { const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'; const Icon = notification.type.includes('like') ? Heart : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles; return <article className="notification-row" key={notification.id}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__icon"><Icon size={15} /></span><p><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></p>{!notification.is_read && <button type="button" className="icon-button" aria-label="Mark notification read" disabled={pendingId === notification.id} onClick={() => markRead(notification)}><Check size={17} /></button>}</article>})}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}</section>
+  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => { const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'; const Icon = notification.type.includes('like') ? Heart : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles; return <article className="notification-row" key={notification.id}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__icon"><Icon size={15} /></span><p><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></p>{!notification.is_read && <button type="button" className="icon-button" aria-label="Mark notification read" disabled={pendingId === notification.id} onClick={() => markRead(notification)}><Check size={17} /></button>}</article>})}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}</section>
 }
 
 export function AssistantPage() {
@@ -716,7 +769,7 @@ export function AssistantPage() {
 }
 
 const settingsGroups = [
-  { heading: 'Your account', items: [{ to: '/edit-profile', icon: UserRound, title: 'Edit profile', detail: 'Name, username, and introduction' }, { to: '/settings/privacy', icon: ShieldCheck, title: 'Privacy & security', detail: 'Visibility and account safety' }, { to: '/settings/blocked', icon: LockKeyhole, title: 'Blocked users', detail: 'Manage blocked preview profiles' }] },
+  { heading: 'Your account', items: [{ to: '/edit-profile', icon: UserRound, title: 'Edit profile', detail: 'Name, username, and introduction' }, { to: '/settings/security', icon: KeyRound, title: 'Change password', detail: 'Verify your current password before updating' }, { to: '/settings/privacy', icon: ShieldCheck, title: 'Privacy & security', detail: 'Visibility and account safety' }, { to: '/settings/blocked', icon: LockKeyhole, title: 'Blocked users', detail: 'Manage profiles you have blocked' }] },
   { heading: 'More', items: [{ to: '/report', icon: CircleHelp, title: 'Report a concern', detail: 'Tell us what needs attention' }, { to: '/settings/delete-account', icon: UserRound, title: 'Account deletion', detail: 'Preview account options' }, { to: '/about', icon: Compass, title: 'About Banjara Connect', detail: 'The idea behind this community' }] },
 ]
 
@@ -738,13 +791,69 @@ export function SettingsPage() {
     navigate('/login', { replace: true })
   }
 
-  return <section className="page-stack"><PageHeading eyebrow="MAKE IT YOURS" title="Settings" description="Manage your account and preferences." />{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
+  return <section className="page-stack"><PageHeading eyebrow="MAKE IT YOURS" title="Settings" description="Manage your account and preferences." />{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}<PwaInstallControl />{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
+}
+
+export function ChangePasswordPage() {
+  const { session } = useAuth()
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setSuccess(false)
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters long.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('New passwords do not match.')
+      return
+    }
+    if (!session?.user.email || !session.user.id) {
+      setError('Your authenticated account could not be verified. Sign in again and retry.')
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const { data: verification, error: verificationError } = await supabase.auth.signInWithPassword({
+        email: session.user.email,
+        password: currentPassword,
+      })
+      if (verificationError || verification.user?.id !== session.user.id) {
+        setError('Could not verify your current password. Check it and try again.')
+        return
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+      if (updateError) {
+        setError(hideSyntheticAuthEmail(updateError.message))
+        return
+      }
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setSuccess(true)
+    } catch (caught) {
+      setError(caught instanceof Error ? hideSyntheticAuthEmail(caught.message) : 'Could not update your password.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="ACCOUNT SECURITY" title="Change password" description="Verify your current password before choosing a new one." /><form className="form-stack" onSubmit={submit}><Input label="Current password" type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /><Input label="New password" type="password" autoComplete="new-password" minLength={8} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /><Input label="Confirm new password" type="password" autoComplete="new-password" minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />{error && <p className="field__error" role="alert">{error}</p>}{success && <p className="micro-note" role="status">Password updated. You are still signed in.</p>}<Button type="submit" disabled={isSaving}>{isSaving ? 'Updating password…' : 'Update password'}</Button></form><p className="micro-note">Password recovery is unavailable for mobile-only accounts.</p></section>
 }
 
 export function PrivacyPage() {
   const [privateProfile, setPrivateProfile] = useState(false)
   const [activityStatus, setActivityStatus] = useState(true)
-  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="YOUR SPACE, YOUR CHOICE" title="Privacy & security" description="Preference switches are stored only in this page preview." /><PreviewNotice>LOCAL UI STATE · NO ACCOUNT SETTINGS ARE SAVED</PreviewNotice><div className="settings-group"><h2>Profile visibility</h2><div className="preference-row"><span><strong>Private profile</strong><small>Only people you approve can see your posts.</small></span><button type="button" className={`toggle${privateProfile ? ' is-on' : ''}`} role="switch" aria-checked={privateProfile} aria-label="Private profile" onClick={() => setPrivateProfile(!privateProfile)}><span /></button></div><div className="preference-row"><span><strong>Show activity status</strong><small>Let connections know when you are around.</small></span><button type="button" className={`toggle${activityStatus ? ' is-on' : ''}`} role="switch" aria-checked={activityStatus} aria-label="Show activity status" onClick={() => setActivityStatus(!activityStatus)}><span /></button></div></div><div className="settings-group"><h2>Safety</h2><Link className="settings-row" to="/settings/blocked"><span className="settings-row__icon"><LockKeyhole size={18} /></span><span><strong>Blocked users</strong><small>Review sample blocked accounts</small></span><ChevronRight size={18} /></Link><Link className="settings-row" to="/report"><span className="settings-row__icon"><CircleHelp size={18} /></span><span><strong>Report a concern</strong><small>Let the team know what feels wrong</small></span><ChevronRight size={18} /></Link></div></section>
+  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="YOUR SPACE, YOUR CHOICE" title="Privacy & security" description="Preference switches are stored only in this page preview." /><PreviewNotice>LOCAL UI STATE · NO ACCOUNT SETTINGS ARE SAVED</PreviewNotice><div className="settings-group"><h2>Profile visibility</h2><div className="preference-row"><span><strong>Private profile</strong><small>Only people you approve can see your posts.</small></span><button type="button" className={`toggle${privateProfile ? ' is-on' : ''}`} role="switch" aria-checked={privateProfile} aria-label="Private profile" onClick={() => setPrivateProfile(!privateProfile)}><span /></button></div><div className="preference-row"><span><strong>Show activity status</strong><small>Let connections know when you are around.</small></span><button type="button" className={`toggle${activityStatus ? ' is-on' : ''}`} role="switch" aria-checked={activityStatus} aria-label="Show activity status" onClick={() => setActivityStatus(!activityStatus)}><span /></button></div></div><div className="settings-group"><h2>Safety</h2><Link className="settings-row" to="/settings/blocked"><span className="settings-row__icon"><LockKeyhole size={18} /></span><span><strong>Blocked users</strong><small>Review profiles you have blocked</small></span><ChevronRight size={18} /></Link><Link className="settings-row" to="/report"><span className="settings-row__icon"><CircleHelp size={18} /></span><span><strong>Report a concern</strong><small>Let the team know what feels wrong</small></span><ChevronRight size={18} /></Link></div></section>
 }
 
 export function BlockedUsersPage() {
@@ -791,7 +900,7 @@ export function BlockedUsersPage() {
     }
   }
 
-  return <section className="page-stack page-stack--narrow"><Button to="/settings/privacy" variant="quiet"><ArrowLeft size={16} />Privacy & security</Button><PageHeading eyebrow="YOUR SAFETY" title="Blocked users" description="Manage profiles you have blocked." />{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading blocked profiles" /> : <div className="connect-list">{profiles.length ? profiles.map((profile) => { const name = profile.display_name || profile.username; return <div className="blocked-row" key={profile.id}><Avatar name={name} image={profile.avatar_url ?? undefined} /><span><strong>{name}</strong><small>@{profile.username}</small></span><Button variant="outline" disabled={pendingId === profile.id} onClick={() => unblock(profile.id)}>{pendingId === profile.id ? 'Updating…' : 'Unblock'}</Button></div>}) : <EmptyState title="No blocked profiles" description="Profiles you block will appear here." />}</div>}</section>
+  return <section className="page-stack page-stack--narrow"><Button to="/settings/privacy" variant="quiet"><ArrowLeft size={16} />Privacy & security</Button><PageHeading eyebrow="YOUR SAFETY" title="Blocked users" description="Manage profiles you have blocked." />{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading blocked profiles" /> : <div className="connect-list">{profiles.length ? profiles.map((profile) => { const name = profile.display_name || profile.username || 'Community member'; const username = profile.username || `member-${profile.id.slice(0, 8)}`; return <div className="blocked-row" key={profile.id}><Avatar name={name} image={profile.avatar_url ?? undefined} /><span><strong>{name}</strong><small>@{username}</small></span><Button variant="outline" disabled={pendingId === profile.id} onClick={() => unblock(profile.id)}>{pendingId === profile.id ? 'Updating…' : 'Unblock'}</Button></div>}) : <EmptyState title="No blocked profiles" description="Profiles you block will appear here." />}</div>}</section>
 }
 
 export function ReportPage() {
@@ -820,13 +929,13 @@ export function ReportPage() {
     }
   }
 
-  return <section className="page-stack page-stack--narrow"><PageHeading eyebrow="HELP KEEP THE CIRCLE KIND" title="Report a concern" description="Send a report about a post or comment." /><form className="form-stack" onSubmit={submit}><label className="field"><span className="field__label">Report target</span><select className="field__control" value={targetType} onChange={(event) => setTargetType(event.target.value)} required><option value="" disabled>Select post or comment</option><option value="post">Post</option><option value="comment">Comment</option></select></label><Input label="Target ID" value={targetId} onChange={(event) => setTargetId(event.target.value)} required /><label className="field"><span className="field__label">Reason</span><select className="field__control" value={reason} onChange={(event) => setReason(event.target.value)} required><option value="" disabled>Select a reason</option><option value="harassment">Harassment</option><option value="spam">Spam</option><option value="safety">Safety concern</option><option value="other">Other</option></select></label><label className="field"><span className="field__label">A few details</span><textarea className="field__control field__textarea" value={details} onChange={(event) => setDetails(event.target.value)} placeholder="Add context" maxLength={500} /></label>{error && <p className="field__error" role="alert">{error}</p>}{submitted && <p className="micro-note" role="status">Report submitted.</p>}<Button type="submit" disabled={isSubmitting || !targetId.trim()}>{isSubmitting ? 'Submitting…' : 'Submit report'} <ArrowRight size={16} /></Button><p className="micro-note">User reports are unavailable because the current reports schema has no user-target column.</p></form></section>
+  return <section className="page-stack page-stack--narrow"><PageHeading eyebrow="HELP KEEP THE CIRCLE KIND" title="Report a concern" description="Send a report about a post or comment." /><form className="form-stack" onSubmit={submit}><label className="field"><span className="field__label">Report target</span><select className="field__control" value={targetType} onChange={(event) => setTargetType(event.target.value)} required><option value="" disabled>Select post or comment</option><option value="post">Post</option><option value="comment">Comment</option></select></label><Input label="Target ID" value={targetId} onChange={(event) => setTargetId(event.target.value)} required /><label className="field"><span className="field__label">Reason</span><select className="field__control" value={reason} onChange={(event) => setReason(event.target.value)} required><option value="" disabled>Select a reason</option><option value="harassment">Harassment</option><option value="spam">Spam</option><option value="safety">Safety concern</option><option value="other">Other</option></select></label><label className="field"><span className="field__label">A few details</span><textarea className="field__control field__textarea" value={details} onChange={(event) => setDetails(event.target.value)} placeholder="Add context" maxLength={500} /></label>{error && <p className="field__error" role="alert">{error}</p>}{submitted && <p className="micro-note" role="status">Report submitted.</p>}<Button type="submit" disabled={isSubmitting || !targetId.trim()}>{isSubmitting ? 'Submitting…' : 'Submit report'} <ArrowRight size={16} /></Button><p className="micro-note">Profile reports are unsupported because no user-target reporting schema is verified in this project.</p></form></section>
 }
 
 export function DeleteAccountPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const { notify } = usePreviewToast()
-  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="ACCOUNT OPTIONS" title="Account deletion" description="This screen previews the information a future account flow might show." /><PreviewNotice>NO ACCOUNT EXISTS · DELETION IS NOT AVAILABLE</PreviewNotice><div className="warning-panel"><LockKeyhole size={20} /><div><strong>Nothing will be deleted</strong><p>This frontend has no accounts or server connection. The confirmation below is for visual review only.</p></div></div><Button variant="danger" onClick={() => setConfirmOpen(true)}>Preview deletion confirmation</Button><ConfirmationDialog open={confirmOpen} title="Delete preview account?" description="This is only a UI preview. No account or data will be deleted." confirmLabel="Close preview" onClose={() => setConfirmOpen(false)} onConfirm={() => { setConfirmOpen(false); notify('No account was deleted. This is a frontend preview.') }} /></section>
+  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="ACCOUNT OPTIONS" title="Account deletion" description="Account deletion is not connected to a verified backend flow." /><PreviewNotice>ACCOUNT DELETION IS NOT AVAILABLE</PreviewNotice><div className="warning-panel"><LockKeyhole size={20} /><div><strong>Nothing will be deleted</strong><p>This app uses authenticated accounts, but no verified account-deletion backend is available. This confirmation is visual only.</p></div></div><Button variant="danger" onClick={() => setConfirmOpen(true)}>Preview deletion confirmation</Button><ConfirmationDialog open={confirmOpen} title="Delete preview account?" description="This is only a UI preview. No account or data will be deleted." confirmLabel="Close preview" onClose={() => setConfirmOpen(false)} onConfirm={() => { setConfirmOpen(false); notify('No account was deleted. This is a frontend preview.') }} /></section>
 }
 
 export function AboutPage() {

@@ -4,9 +4,7 @@ export type DeveloperFocus = {
 }
 
 export const developerProfile = {
-  name: 'Harish Lahu Rathod',
-  role: 'Founder & Developer — Banjara Connect',
-  bio: 'Harish Lahu Rathod is the founder and developer of Banjara Connect. No additional personal biography has been provided for publication.',
+  credit: 'Made by the Proud गोरवंशी 🏳️',
   about: 'The project is being developed as a digital place for community connection, cultural knowledge and shared stories.',
   why: 'I started building Banjara Connect to create a digital place for community connection, cultural knowledge and shared stories, and to make discovery and communication easier.',
   vision: 'A welcoming digital future where people can connect, learn from one another and help preserve community knowledge with care.',
@@ -23,8 +21,6 @@ export const developerProfile = {
     { title: 'Cultural preservation', text: 'Make room for stories, language and knowledge shared by their keepers.' },
     { title: 'Respectful participation', text: 'Support a safer, inclusive space without claiming to represent every community.' },
   ] satisfies DeveloperFocus[],
-  portraitAlt: 'Harish Lahu Rathod - Founder and Developer of Banjara Connect',
-  portraitStatus: 'The approved founder photo is not available in the current workspace.',
 }
 
 export type DeveloperProfile = typeof developerProfile

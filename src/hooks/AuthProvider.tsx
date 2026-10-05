@@ -8,16 +8,26 @@ const profileColumns = 'id,username,display_name,avatar_url,bio,location,is_veri
 async function loadOrCreateProfile(user: User): Promise<ProfileRecord> {
   const { data, error } = await supabase.from('profiles').select(profileColumns).eq('id', user.id).maybeSingle()
   if (error) throw error
-  if (data) return data as ProfileRecord
 
-  const emailName = user.email?.split('@')[0] ?? 'member'
-  const usernameBase = emailName.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 18) || 'member'
-  const username = `${usernameBase}-${user.id.slice(0, 8)}`
-  const displayName = user.user_metadata?.display_name ?? user.user_metadata?.full_name ?? emailName
+  const displayBase = user.user_metadata?.display_name ?? user.user_metadata?.full_name ?? 'Banjara member'
+  const username = `member-${user.id.slice(0, 8)}`
+  const displayName = displayBase || 'Banjara member'
+  if (data) {
+    const missingFields: Partial<Pick<ProfileRecord, 'username' | 'display_name'>> = {}
+    if (!data.username) missingFields.username = username
+    if (!data.display_name) missingFields.display_name = displayName
+    if (!Object.keys(missingFields).length) return data as ProfileRecord
+
+    const { data: repaired, error: repairError } = await supabase.from('profiles')
+      .update(missingFields).eq('id', user.id).select(profileColumns).single()
+    if (repairError) throw repairError
+    return repaired as ProfileRecord
+  }
+
   const { data: created, error: createError } = await supabase.from('profiles').insert({
     id: user.id,
     username,
-    display_name: displayName || 'Banjara member',
+    display_name: displayName,
   }).select(profileColumns).single()
 
   if (!createError && created) return created as ProfileRecord

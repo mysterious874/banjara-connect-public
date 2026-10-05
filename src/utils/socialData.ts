@@ -65,6 +65,32 @@ export async function createComment(postId: string, content: string, parentId: s
   return loadComments(postId)
 }
 
+export async function updateComment(commentId: string, content: string) {
+  const normalizedContent = content.trim()
+  if (!normalizedContent) throw new Error('Comment cannot be empty.')
+  const userId = await requireAuthenticatedUserId()
+  const { data, error } = await supabase.from('comments')
+    .update({ content: normalizedContent })
+    .eq('id', commentId)
+    .eq('user_id', userId)
+    .select('id')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('This comment could not be updated. It may have been removed or you may not own it.')
+}
+
+export async function deleteComment(commentId: string) {
+  const userId = await requireAuthenticatedUserId()
+  const { data, error } = await supabase.from('comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('user_id', userId)
+    .select('id')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('This comment could not be deleted. It may have been removed or you may not own it.')
+}
+
 export async function loadCommentLikes(commentIds: string[]) {
   const userId = await requireAuthenticatedUserId()
   if (!commentIds.length) return new Map<string, { count: number; liked: boolean }>()

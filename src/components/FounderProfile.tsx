@@ -1,4 +1,4 @@
-import { BookOpen, HeartHandshake, ImagePlus, Network, ShieldCheck, Sparkles } from 'lucide-react'
+import { BookOpen, HeartHandshake, Network, ShieldCheck, Sparkles } from 'lucide-react'
 import type { DeveloperProfile } from '../data/developer'
 
 export function FounderProfile({ profile }: { profile: DeveloperProfile }) {
@@ -6,16 +6,10 @@ export function FounderProfile({ profile }: { profile: DeveloperProfile }) {
     <section id="developer" className="founder-section" aria-labelledby="founder-heading">
       <div className="section-heading"><div><span className="eyebrow">THE PERSON BUILDING THE PLATFORM</span><h2 id="founder-heading">Founder &amp; developer</h2></div><span className="local-label">BANJARA CONNECT</span></div>
       <div className="founder-profile">
-        <div className="founder-portrait" role="img" aria-label={profile.portraitStatus}>
-          <ImagePlus size={25} aria-hidden="true" />
-          <strong>Founder photo</strong>
-          <span>{profile.portraitStatus}</span>
-        </div>
         <div className="founder-identity">
-          <span className="eyebrow">FOUNDER</span>
-          <h3>{profile.name}</h3>
-          <p className="founder-role">{profile.role}</p>
-          <div className="founder-about"><span className="eyebrow">ABOUT</span><p>{profile.bio}</p></div>
+          <span className="eyebrow">DEVELOPER CREDIT</span>
+          <h3>{profile.credit}</h3>
+          <div className="founder-about"><span className="eyebrow">ABOUT THE PROJECT</span><p>{profile.about}</p></div>
         </div>
       </div>
       <section className="founder-purpose" aria-labelledby="founder-purpose-heading">

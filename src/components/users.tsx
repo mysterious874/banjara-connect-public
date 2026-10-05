@@ -13,7 +13,8 @@ export function UserCard({ user, compact = false }: { user: ProfileRecord; compa
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState('')
-  const name = user.display_name || user.username
+  const name = user.display_name || user.username || 'Community member'
+  const profileHandle = user.username || user.id
   const detail = user.location || user.bio || 'Community profile'
   const isSelf = session?.user.id === user.id
 
@@ -48,5 +49,5 @@ export function UserCard({ user, compact = false }: { user: ProfileRecord; compa
     }
   }
 
-  return <div className={`user-card${compact ? ' user-card--compact' : ''}`}><Link className="user-card__identity" to={`/profile/${user.username}`}><Avatar name={name} image={user.avatar_url ?? undefined} /><span className="user-card__copy"><strong>{name}</strong><span>@{user.username} · {detail}</span></span></Link>{!isSelf && <Button variant={following ? 'quiet' : 'outline'} iconOnly className="user-card__follow" aria-label={following ? `Unfollow ${name}` : `Follow ${name}`} title={error || undefined} disabled={isLoading || isPending} onClick={handleFollow}>{following ? <Check size={17} /> : <Plus size={17} />}</Button>}</div>
+  return <div className={`user-card${compact ? ' user-card--compact' : ''}`}><Link className="user-card__identity" to={`/profile/${profileHandle}`}><Avatar name={name} image={user.avatar_url ?? undefined} /><span className="user-card__copy"><strong>{name}</strong><span>@{user.username || `member-${user.id.slice(0, 8)}`} · {detail}</span></span></Link>{!isSelf && <Button variant={following ? 'quiet' : 'outline'} iconOnly className="user-card__follow" aria-label={following ? `Unfollow ${name}` : `Follow ${name}`} title={error || undefined} disabled={isLoading || isPending} onClick={handleFollow}>{following ? <Check size={17} /> : <Plus size={17} />}</Button>}</div>
 }

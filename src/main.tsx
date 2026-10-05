@@ -3,14 +3,19 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './hooks/AuthProvider'
+import { PwaUpdatePrompt } from './components/PwaUpdatePrompt'
+import { PwaInstallProvider } from './components/PwaInstall'
 import './styles/global.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AuthProvider>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <App />
-      </BrowserRouter>
-    </AuthProvider>
+    <PwaInstallProvider>
+      <AuthProvider>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <App />
+          <PwaUpdatePrompt />
+        </BrowserRouter>
+      </AuthProvider>
+    </PwaInstallProvider>
   </React.StrictMode>,
 )

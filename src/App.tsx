@@ -9,6 +9,7 @@ import {
   CommentsPage,
   CommunityPage,
   ConnectPage,
+  ChangePasswordPage,
   CreatePostPage,
   DeleteAccountPage,
   EditProfilePage,
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="assistant" element={<AssistantPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="settings/privacy" element={<PrivacyPage />} />
+        <Route path="settings/security" element={<ChangePasswordPage />} />
         <Route path="settings/blocked" element={<BlockedUsersPage />} />
         <Route path="report" element={<ReportPage />} />
         <Route path="settings/delete-account" element={<DeleteAccountPage />} />

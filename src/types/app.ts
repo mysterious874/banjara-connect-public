@@ -42,7 +42,7 @@ export type PostRecord = {
 }
 
 export type FeedPost = PostRecord & {
-  author: Pick<ProfileRecord, 'username' | 'display_name' | 'avatar_url' | 'location'> | null
+  author: Pick<ProfileRecord, 'id' | 'username' | 'display_name' | 'avatar_url' | 'location'> | null
 }
 
 export type ToastApi = {
