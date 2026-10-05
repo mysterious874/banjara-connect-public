@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 680" fill="none">
+  <defs>
+    <pattern id="stitch" width="26" height="26" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <path d="M0 13h26M13 0v26" stroke="#315f4b" stroke-opacity=".14" stroke-width="2"/>
+      <circle cx="13" cy="13" r="3" fill="#d95847" fill-opacity=".42"/>
+    </pattern>
+    <pattern id="fine" width="18" height="18" patternUnits="userSpaceOnUse">
+      <path d="M0 9h18" stroke="#fffaf0" stroke-opacity=".38" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect width="1120" height="680" fill="#edf0e8"/>
+  <path d="M0 0h1120v93H0z" fill="#197158"/>
+  <path d="M0 0h1120v93H0z" fill="url(#fine)"/>
+  <path d="M0 586h1120v94H0z" fill="#d95746"/>
+  <path d="M0 586h1120v94H0z" fill="url(#fine)"/>
+  <path d="M0 93h1120v45H0z" fill="#eaa944"/>
+  <path d="M0 541h1120v45H0z" fill="#365da4"/>
+  <path d="M0 138h1120v403H0z" fill="url(#stitch)"/>
+  <rect x="120" y="161" width="880" height="357" rx="14" fill="#f8f6ed"/>
+  <rect x="137" y="178" width="846" height="323" rx="8" stroke="#1d7259" stroke-width="3"/>
+  <path d="M164 340 560 201l396 139-396 139-396-139Z" fill="#e8aa4b"/>
+  <path d="M220 340 560 222l340 118-340 118-340-118Z" fill="#d95546"/>
+  <path d="M284 340 560 244l276 96-276 96-276-96Z" fill="#1d7259"/>
+  <path d="M351 340 560 267l209 73-209 73-209-73Z" fill="#3b5fa6"/>
+  <path d="m560 286 54 54-54 54-54-54 54-54Z" fill="#f7f4e9"/>
+  <path d="m560 307 33 33-33 33-33-33 33-33Z" fill="#e8aa4b"/>
+  <path d="m560 322 18 18-18 18-18-18 18-18Z" fill="#d95546"/>
+  <circle cx="560" cy="340" r="6" fill="#f7f4e9"/>
+  <path d="M177 193h24m-12-12v24m742-12h24m-12-12v24M177 486h24m-12-12v24m742-12h24m-12-12v24" stroke="#d95546" stroke-width="4" stroke-linecap="round"/>
+</svg>
