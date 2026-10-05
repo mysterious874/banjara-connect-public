@@ -2,6 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { Bell, Compass, Ellipsis, House, MessageCircle, Plus, Settings, UserRound, Users, WandSparkles } from 'lucide-react'
 import { BrandLockup } from './brand'
 import { Avatar } from './ui'
+import { useAuth } from '../hooks/AuthProvider'
 
 const desktopItems = [
   { to: '/home', label: 'Home', icon: House },
@@ -25,7 +26,9 @@ const mobileItems = [
 ]
 
 export function Header() {
-  return <header className="topbar"><div className="topbar__inner"><BrandLockup /><div className="topbar__actions"><NavLink to="/notifications" className="icon-button topbar__notice" aria-label="Notifications"><Bell size={19} /><span className="notification-dot" /></NavLink><NavLink to="/profile" className="topbar__avatar" aria-label="Your profile"><Avatar name="Asha Rathod" initials="AR" tone="red" size="small" /></NavLink></div></div></header>
+  const { session, profile } = useAuth()
+  const name = profile?.display_name || profile?.username || session?.user.email || 'Your profile'
+  return <header className="topbar"><div className="topbar__inner"><BrandLockup /><div className="topbar__actions"><NavLink to="/notifications" className="icon-button topbar__notice" aria-label="Notifications"><Bell size={19} /><span className="notification-dot" /></NavLink><NavLink to="/profile" className="topbar__avatar" aria-label="Your profile"><Avatar name={name} image={profile?.avatar_url ?? undefined} size="small" /></NavLink></div></div></header>
 }
 
 function isActiveRoute(pathname: string, to: string) {

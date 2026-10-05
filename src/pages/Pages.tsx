@@ -1,14 +1,25 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, LockKeyhole, MapPin, MoreHorizontal, Plus, Send, ShieldCheck, Sparkles, UserRound, Users, WandSparkles } from 'lucide-react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, LockKeyhole, MapPin, MessageCircle, Plus, Send, ShieldCheck, Sparkles, UserRound, Users, WandSparkles } from 'lucide-react'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { PostCard, PostComposer } from '../components/feed'
 import { SearchBar } from '../components/search'
 import { StoriesRail } from '../components/stories'
 import { Avatar, Button, ConfirmationDialog, EmptyState, ErrorState, Input, Loading, Tabs } from '../components/ui'
 import { UserCard } from '../components/users'
+import { useAuth } from '../hooks/AuthProvider'
 import { usePreviewToast } from '../hooks/usePreviewToast'
-import { previewPosts, previewUsers } from '../utils/previewData'
+import { previewUsers } from '../utils/previewData'
+import { loadBlockState, loadBlockedUserIds, toggleBlock } from '../utils/blockData'
+import { loadPost, loadPosts } from '../utils/postData'
+import { filterProfiles, loadProfiles } from '../utils/profileData'
+import { getOrCreateConversation } from '../utils/chatData'
+import { supabase } from '../utils/supabase'
+import { loadNotifications, markNotificationRead, type NotificationRecord } from '../utils/notificationData'
+import { createReport } from '../utils/reportData'
+import type { FeedPost, ProfileRecord } from '../types/app'
+import { loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
+import { createComment, loadCommentLikes, loadComments, toggleCommentLike, type CommentRecord } from '../utils/socialData'
 
 function PageHeading({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
   return <div className="page-heading"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h1>{title}</h1>{description && <p>{description}</p>}</div>{action}</div>
@@ -35,43 +46,147 @@ export function SplashPage() {
 
 export function LoginPage() {
   const navigate = useNavigate()
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); navigate('/home', { replace: true }) }
-  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><PreviewNotice>FRONTEND PREVIEW · SIGN-IN NOT CONNECTED</PreviewNotice><span className="eyebrow">WELCOME BACK</span><h1>Come on in.</h1><p className="auth-card__intro">Your people and their stories are right here.</p><form className="form-stack" onSubmit={submit}><Input label="Email or phone" type="text" autoComplete="username" placeholder="you@example.com" required /><Input label="Password" type="password" autoComplete="current-password" placeholder="Enter your password" required /><Link to="/settings/privacy" className="text-link auth-card__forgot">Need help signing in?</Link><Button type="submit">Continue <ArrowRight size={17} /></Button></form><div className="auth-card__divider"><span>NEW TO THE COMMUNITY?</span></div><Button to="/signup" variant="outline" className="button--full">Create an account</Button><p className="auth-card__foot">Continuing is a visual preview only. No account is created.</p></div></main>
+  const location = useLocation()
+  const { session } = useAuth()
+  const [identifier, setIdentifier] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const destination = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/home'
+
+  useEffect(() => {
+    if (session) navigate(destination, { replace: true })
+  }, [destination, navigate, session])
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setIsSubmitting(true)
+    const login = identifier.trim()
+    const credentials = login.includes('@') ? { email: login, password } : { phone: login, password }
+    const { error: authError } = await supabase.auth.signInWithPassword(credentials)
+    setIsSubmitting(false)
+    if (authError) {
+      setError(authError.message)
+      return
+    }
+    navigate(destination, { replace: true })
+  }
+
+  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><span className="eyebrow">WELCOME BACK</span><h1>Come on in.</h1><p className="auth-card__intro">Your people and their stories are right here.</p><form className="form-stack" onSubmit={submit}><Input label="Email or phone" type="text" autoComplete="username" placeholder="you@example.com" value={identifier} onChange={(event) => setIdentifier(event.target.value)} required /><Input label="Password" type="password" autoComplete="current-password" placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} required />{error && <p className="field__error" role="alert">{error}</p>}<Link to="/settings/privacy" className="text-link auth-card__forgot">Need help signing in?</Link><Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Continue'} {!isSubmitting && <ArrowRight size={17} />}</Button></form><div className="auth-card__divider"><span>NEW TO THE COMMUNITY?</span></div><Button to="/signup" variant="outline" className="button--full">Create an account</Button></div></main>
 }
 
 export function SignupPage() {
   const navigate = useNavigate()
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); navigate('/home', { replace: true }) }
-  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><PreviewNotice>FRONTEND PREVIEW · REGISTRATION NOT CONNECTED</PreviewNotice><span className="eyebrow">MAKE YOURSELF AT HOME</span><h1>Join the circle.</h1><p className="auth-card__intro">A place for community, culture, and everyday life.</p><form className="form-stack" onSubmit={submit}><Input label="Your name" autoComplete="name" placeholder="Name you go by" required /><Input label="Email address" type="email" autoComplete="email" placeholder="you@example.com" required /><Input label="Create a password" type="password" autoComplete="new-password" placeholder="At least 8 characters" minLength={8} required /><label className="check-row"><input type="checkbox" required /><span>I agree to the community guidelines and privacy notice.</span></label><Button type="submit">Create preview profile <ArrowRight size={17} /></Button></form><p className="auth-card__foot">Your details stay in this form and are not sent anywhere.</p><p className="auth-card__switch">Already part of the circle? <Link to="/login">Sign in</Link></p></div></main>
+  const { session } = useAuth()
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (session) navigate('/home', { replace: true })
+  }, [navigate, session])
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setNotice('')
+    setIsSubmitting(true)
+    const { data, error: authError } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { full_name: name.trim() } },
+    })
+    setIsSubmitting(false)
+    if (authError) {
+      setError(authError.message)
+      return
+    }
+    if (data.session) {
+      navigate('/home', { replace: true })
+      return
+    }
+    setNotice('Check your email to confirm your account before signing in.')
+  }
+
+  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><span className="eyebrow">MAKE YOURSELF AT HOME</span><h1>Join the circle.</h1><p className="auth-card__intro">A place for community, culture, and everyday life.</p><form className="form-stack" onSubmit={submit}><Input label="Your name" autoComplete="name" placeholder="Name you go by" value={name} onChange={(event) => setName(event.target.value)} required /><Input label="Email address" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required /><Input label="Create a password" type="password" autoComplete="new-password" placeholder="At least 8 characters" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required /><label className="check-row"><input type="checkbox" required /><span>I agree to the community guidelines and privacy notice.</span></label>{error && <p className="field__error" role="alert">{error}</p>}{notice && <p className="micro-note" role="status">{notice}</p>}<Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Creating account…' : 'Create account'} {!isSubmitting && <ArrowRight size={17} />}</Button></form><p className="auth-card__switch">Already part of the circle? <Link to="/login">Sign in</Link></p></div></main>
 }
 
 export function HomePage() {
-  const { notify } = usePreviewToast()
-  const [feedState, setFeedState] = useState('Posts')
-  const states = ['Posts', 'Loading', 'Empty', 'Error']
+  const { profile, isProfileLoading, profileError, session } = useAuth()
+  const [posts, setPosts] = useState<FeedPost[]>([])
+  const [isPostsLoading, setIsPostsLoading] = useState(true)
+  const [postsError, setPostsError] = useState('')
+  const [people, setPeople] = useState<ProfileRecord[]>([])
+  const [isPeopleLoading, setIsPeopleLoading] = useState(true)
+  const [peopleError, setPeopleError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    if (!session?.user) {
+      setPeople([])
+      setIsPeopleLoading(false)
+      return () => { active = false }
+    }
+    setIsPeopleLoading(true)
+    loadProfiles().then((nextPeople) => {
+      if (active) setPeople(nextPeople)
+    }).catch((error: unknown) => {
+      if (active) setPeopleError(error instanceof Error ? error.message : 'Could not load profiles.')
+    }).finally(() => {
+      if (active) setIsPeopleLoading(false)
+    })
+    return () => { active = false }
+  }, [session?.user.id])
+
+  useEffect(() => {
+    let active = true
+    if (!session?.user) {
+      setPosts([])
+      setIsPostsLoading(false)
+      return () => { active = false }
+    }
+    setIsPostsLoading(true)
+    setPostsError('')
+    void (async () => {
+      try {
+        const blockedIds = await loadBlockedUserIds()
+        const nextPosts = await loadPosts({ excludeUserIds: blockedIds })
+        if (active) setPosts(nextPosts)
+      } catch (error) {
+        if (active) setPostsError(error instanceof Error ? error.message : 'Could not load posts.')
+      } finally {
+        if (active) setIsPostsLoading(false)
+      }
+    })()
+    return () => { active = false }
+  }, [session?.user.id])
+
   return (
     <div className="home-grid">
       <div className="home-main">
         <div className="home-intro">
           <div>
             <span className="eyebrow">A LITTLE HELLO FROM YOUR CIRCLE</span>
-            <h1>Namaste, Asha <span>✦</span></h1>
+            <h1>{isProfileLoading ? 'Loading your profile…' : `Namaste, ${profile?.display_name || profile?.username || 'there'}`} <span>✦</span></h1>
             <p>There is always room in the circle.</p>
+            {profileError && <p className="field__error" role="alert">{profileError}</p>}
           </div>
           <div className="home-intro__tools">
-            <PreviewNotice />
             <Button to="/assistant" variant="outline" iconOnly aria-label="Open Banjara Assistant" title="Open Banjara Assistant"><WandSparkles size={17} /></Button>
           </div>
         </div>
         <SearchBar />
         <StoriesRail />
-        <PostComposer notify={notify} />
-        <div className="feed-heading"><div><span className="eyebrow">FROM YOUR COMMUNITY</span><h2>Your feed</h2></div><span className="local-label">LOCAL PREVIEW</span></div>
-        <div className="preview-state"><span>Preview state</span><Tabs label="Feed preview state" items={states} value={feedState} onChange={setFeedState} /></div>
-        {feedState === 'Loading' ? <Loading label="Loading local preview posts" /> : feedState === 'Empty' ? <EmptyState title="Your circle is quiet" description="There are no sample posts in this view yet." action={<Button to="/connect" variant="outline">Find your people</Button>} /> : feedState === 'Error' ? <ErrorState title="Preview unavailable" description="This local sample feed could not be displayed." /> : <div className="feed-list">{previewPosts.map((post) => <PostCard key={post.id} post={post} notify={notify} />)}</div>}
+        <PostComposer name={profile?.display_name || profile?.username || session?.user.email || 'Your profile'} image={profile?.avatar_url} />
+        <div className="feed-heading"><div><span className="eyebrow">FROM YOUR COMMUNITY</span><h2>Your feed</h2></div></div>
+        {isPostsLoading ? <Loading label="Loading posts" /> : postsError ? <ErrorState title="Could not load posts" description={postsError} /> : posts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared with your community will appear here." action={<Button to="/create" variant="outline">Create a post</Button>} /> : <div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} />)}</div>}
       </div>
       <aside className="home-aside">
-        <section className="aside-section"><div className="aside-section__heading"><h2>People to know</h2><Link className="text-link" to="/connect">More</Link></div><div className="user-list">{previewUsers.slice(0, 2).map((user) => <UserCard key={user.handle} user={user} compact />)}</div></section>
+        <section className="aside-section"><div className="aside-section__heading"><h2>People to know</h2><Link className="text-link" to="/connect">More</Link></div>{isPeopleLoading ? <Loading label="Loading profiles" /> : peopleError ? <p className="field__error" role="alert">{peopleError}</p> : <div className="user-list">{people.slice(0, 2).map((user) => <UserCard key={user.id} user={user} compact />)}</div>}</section>
         <section className="community-note"><span className="community-note__symbol">✳</span><div><span className="eyebrow">A NOTE FOR THE CIRCLE</span><p>Carry your stories with pride. Make space for someone else's, too.</p></div></section>
         <Link to="/about" className="aside-about">About Banjara Connect <ChevronRight size={15} /></Link>
       </aside>
@@ -80,7 +195,18 @@ export function HomePage() {
 }
 
 export function ConnectPage() {
-  return <section className="page-stack"><PageHeading eyebrow="FIND YOUR CIRCLE" title="Connect" description="Meet community members and discover the places, traditions, and ideas they care about." /><PreviewNotice /><div className="connect-feature"><div className="connect-feature__icon"><Users size={23} /></div><div><span className="eyebrow">COMMUNITY PREVIEW</span><h2>Good things grow together.</h2><p>These suggested profiles are local sample content for the frontend preview.</p></div><Compass className="connect-feature__watermark" size={74} /></div><div className="section-heading"><h2>People you may know</h2><span className="local-label">SAMPLE PROFILES</span></div><div className="connect-list">{previewUsers.map((user) => <UserCard key={user.handle} user={user} />)}</div></section>
+  const { session } = useAuth()
+  const [people, setPeople] = useState<ProfileRecord[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    if (!session?.user) return () => { active = false }
+    setIsLoading(true)
+    loadProfiles().then((nextPeople) => { if (active) setPeople(nextPeople) }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Could not load profiles.') }).finally(() => { if (active) setIsLoading(false) })
+    return () => { active = false }
+  }, [session?.user.id])
+  return <section className="page-stack"><PageHeading eyebrow="FIND YOUR CIRCLE" title="Connect" description="Meet community members and discover the places, traditions, and ideas they care about." /><div className="connect-feature"><div className="connect-feature__icon"><Users size={23} /></div><div><span className="eyebrow">YOUR COMMUNITY</span><h2>Good things grow together.</h2><p>Discover members and shared interests.</p></div><Compass className="connect-feature__watermark" size={74} /></div><div className="section-heading"><h2>People you may know</h2></div>{isLoading ? <Loading label="Loading profiles" /> : error ? <ErrorState title="Could not load profiles" description={error} /> : people.length ? <div className="connect-list">{people.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title="No profiles to show" description="Other community profiles will appear here when available." />}</section>
 }
 
 export function CommunityPage() {
@@ -96,49 +222,343 @@ export function CommunityPage() {
 export function SearchPage() {
   const [params] = useSearchParams()
   const query = params.get('q') ?? ''
-  const matches = previewUsers.filter((user) => `${user.name} ${user.handle} ${user.detail}`.toLowerCase().includes(query.toLowerCase()))
-  return <section className="page-stack"><PageHeading eyebrow="LOOK A LITTLE CLOSER" title="Search" description="Find people and stories in this local preview." /><SearchBar placeholder="Try a name or place" /><div className="section-heading"><h2>{query ? `Results for “${query}”` : 'Suggested people'}</h2><span className="local-label">PREVIEW CONTENT</span></div>{matches.length ? <div className="connect-list">{matches.map((user) => <UserCard key={user.handle} user={user} />)}</div> : <EmptyState title="No preview matches" description="Try another name or place. Search is limited to local sample profiles." />}</section>
+  const { session } = useAuth()
+  const [profiles, setProfiles] = useState<ProfileRecord[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    if (!session?.user) return () => { active = false }
+    setIsLoading(true)
+    loadProfiles().then((nextProfiles) => { if (active) setProfiles(nextProfiles) }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Could not search profiles.') }).finally(() => { if (active) setIsLoading(false) })
+    return () => { active = false }
+  }, [session?.user.id])
+  const matches = filterProfiles(profiles, query)
+  return <section className="page-stack"><PageHeading eyebrow="LOOK A LITTLE CLOSER" title="Search" description="Find community profiles." /><SearchBar placeholder="Try a name or place" /><div className="section-heading"><h2>{query ? `Results for “${query}”` : 'Suggested profiles'}</h2></div>{isLoading ? <Loading label="Searching profiles" /> : error ? <ErrorState title="Could not search profiles" description={error} /> : matches.length ? <div className="connect-list">{matches.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title="No profiles found" description="Try another name or place." />}</section>
 }
 
 export function CreatePostPage() {
-  const { notify } = usePreviewToast()
+  const { session } = useAuth()
+  const navigate = useNavigate()
   const [text, setText] = useState('')
-  return <section className="page-stack page-stack--narrow"><PageHeading eyebrow="MAKE SOMETHING TOGETHER" title="Create a post" description="Share a thought with your community." /><PreviewNotice>LOCAL DRAFT ONLY · NOTHING IS PUBLISHED</PreviewNotice><div className="create-post-box"><div className="post-card__author"><Avatar name="Asha Rathod" initials="AR" tone="red" /><span><strong>Asha Rathod</strong><span>Sharing with the community</span></span></div><label className="visually-hidden" htmlFor="post-text">Write your post</label><textarea id="post-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="What would you like to share?" maxLength={500} /><div className="create-post-box__footer"><span>{text.length}/500</span><Button onClick={() => notify('This draft is local only. Publishing is not connected.')} disabled={!text.trim()}>Save preview draft <Send size={16} /></Button></div></div></section>
+  const { profile } = useAuth()
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!session?.user) {
+      setError('Sign in before creating a post.')
+      return
+    }
+    setIsSaving(true)
+    setError('')
+    try {
+      const { data, error: insertError } = await supabase.from('posts').insert({
+        user_id: session.user.id,
+        content: text.trim(),
+      }).select('id').single()
+      if (insertError) {
+        setError(insertError.message)
+        return
+      }
+      navigate(`/posts/${data.id}`, { replace: true })
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not create your post.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return <section className="page-stack page-stack--narrow"><PageHeading eyebrow="MAKE SOMETHING TOGETHER" title="Create a post" description="Share a thought with your community." /><form className="create-post-box" onSubmit={submit}><div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><span>Sharing with the community</span></span></div><label className="visually-hidden" htmlFor="post-text">Write your post</label><textarea id="post-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="What would you like to share?" maxLength={500} required /><div className="create-post-box__footer"><span>{text.length}/500</span><Button type="submit" disabled={!text.trim() || isSaving}>{isSaving ? 'Publishing…' : 'Publish post'} {!isSaving && <Send size={16} />}</Button></div>{error && <p className="field__error" role="alert">{error}</p>}</form></section>
 }
 
 export function PostDetailsPage() {
   const { postId = '' } = useParams()
-  const { notify } = usePreviewToast()
-  const post = previewPosts.find((item) => item.id === postId)
-  if (!post) return <section className="page-stack"><PageHeading eyebrow="COMMUNITY POST" title="Post details" /><EmptyState title="This post is not in the preview" description="Try opening a post from the home feed." action={<Button to="/home" variant="outline">Back to feed</Button>} /></section>
-  return <section className="page-stack page-stack--narrow"><Button to="/home" variant="quiet"><ArrowLeft size={16} />Back to feed</Button><PageHeading eyebrow="COMMUNITY POST · LOCAL PREVIEW" title="A moment from the circle" /><PostCard post={post} notify={notify} /></section>
+  const [post, setPost] = useState<FeedPost | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    setIsLoading(true)
+    setError('')
+    loadPost(postId).then((nextPost) => {
+      if (active) setPost(nextPost)
+    }).catch((caught: unknown) => {
+      if (active) setError(caught instanceof Error ? caught.message : 'Could not load this post.')
+    }).finally(() => {
+      if (active) setIsLoading(false)
+    })
+    return () => { active = false }
+  }, [postId])
+
+  if (isLoading) return <section className="page-stack"><Loading label="Loading post" /></section>
+  if (error) return <section className="page-stack"><ErrorState title="Could not load post" description={error} /></section>
+  if (!post) return <section className="page-stack"><EmptyState title="Post not found" description="This post may have been removed or is not available to your account." action={<Button to="/home" variant="outline">Back to feed</Button>} /></section>
+  return <section className="page-stack page-stack--narrow"><Button to="/home" variant="quiet"><ArrowLeft size={16} />Back to feed</Button><PageHeading eyebrow="COMMUNITY POST" title="Post details" /><PostCard post={post} /></section>
 }
 
 export function CommentsPage() {
   const { postId = '' } = useParams()
-  const post = previewPosts.find((item) => item.id === postId)
-  const { notify } = usePreviewToast()
-  if (!post) return <section className="page-stack"><PageHeading title="Comments" /><EmptyState title="No preview post found" description="Choose a post from the home feed to see its sample comments." action={<Button to="/home" variant="outline">Back to feed</Button>} /></section>
-  const comments = [{ name: 'Lata Rathod', initials: 'LR', tone: 'green', text: 'The detail in this is beautiful. Thank you for sharing this with us.', time: '1h' }, { name: 'Ravi Jadhav', initials: 'RJ', tone: 'blue', text: 'This reminds me of the work my grandmother used to do.', time: '42m' }]
-  return <section className="page-stack page-stack--narrow"><Button to={`/posts/${post.id}`} variant="quiet"><ArrowLeft size={16} />Back to post</Button><PageHeading eyebrow="LOCAL PREVIEW COMMENTS" title="The conversation" description={`On ${post.name}'s post`} /><div className="comment-list">{comments.map((comment) => <article className="comment-item" key={comment.name}><Avatar name={comment.name} initials={comment.initials} tone={comment.tone} /><div><div className="comment-item__head"><strong>{comment.name}</strong><span>{comment.time} · preview</span><button type="button" className="icon-button" aria-label="Comment options" onClick={() => notify('Comment options are not connected in this preview.')}><MoreHorizontal size={17} /></button></div><p>{comment.text}</p></div></article>)}</div><form className="comment-compose" onSubmit={(event) => { event.preventDefault(); notify('Comments are not connected in this frontend preview.') }}><Input aria-label="Write a comment" placeholder="Add to the conversation..." /><Button type="submit" iconOnly aria-label="Send preview comment"><Send size={17} /></Button></form><p className="micro-note">Comments shown here are local sample content. New comments are not sent.</p></section>
+  const { session } = useAuth()
+  const [post, setPost] = useState<FeedPost | null>(null)
+  const [comments, setComments] = useState<CommentRecord[]>([])
+  const [commentLikes, setCommentLikes] = useState<Record<string, { count: number; liked: boolean }>>({})
+  const [content, setContent] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [pendingLikeIds, setPendingLikeIds] = useState<string[]>([])
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    setIsLoading(true)
+    setError('')
+    Promise.all([loadPost(postId), loadComments(postId)]).then(([nextPost, nextComments]) => {
+      if (!active) return
+      setPost(nextPost)
+      setComments(nextComments)
+    }).catch((caught: unknown) => {
+      if (active) setError(caught instanceof Error ? caught.message : 'Could not load this conversation.')
+    }).finally(() => {
+      if (active) setIsLoading(false)
+    })
+    return () => { active = false }
+  }, [postId])
+
+  useEffect(() => {
+    let active = true
+    if (!session?.user || comments.length === 0) {
+      setCommentLikes({})
+      return () => { active = false }
+    }
+    loadCommentLikes(comments.map((comment) => comment.id)).then((likes) => {
+      if (!active) return
+      setCommentLikes(Object.fromEntries(likes))
+    }).catch((caught: unknown) => {
+      if (active) setError(caught instanceof Error ? caught.message : 'Could not load comment likes.')
+    })
+    return () => { active = false }
+  }, [comments, session?.user.id])
+
+  async function submitComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!content.trim() || isSubmitting) return
+    setIsSubmitting(true)
+    setError('')
+    try {
+      const refreshedComments = await createComment(postId, content)
+      setComments(refreshedComments)
+      setContent('')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not send this comment.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function toggleLike(comment: CommentRecord) {
+    if (!session?.user || pendingLikeIds.includes(comment.id)) return
+    const current = commentLikes[comment.id] ?? { count: 0, liked: false }
+    setPendingLikeIds((currentIds) => [...currentIds, comment.id])
+    setError('')
+    try {
+      const next = await toggleCommentLike(comment.id, current.liked)
+      setCommentLikes((currentLikes) => ({ ...currentLikes, [comment.id]: next }))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not update this comment like.')
+    } finally {
+      setPendingLikeIds((currentIds) => currentIds.filter((id) => id !== comment.id))
+    }
+  }
+
+  if (isLoading) return <section className="page-stack"><Loading label="Loading comments" /></section>
+  if (error && !post) return <section className="page-stack"><ErrorState title="Could not load comments" description={error} /></section>
+  if (!post) return <section className="page-stack"><EmptyState title="Post not found" description="This post is not available." /></section>
+  const postAuthor = post.author?.display_name || post.author?.username || 'community post'
+
+  return <section className="page-stack page-stack--narrow"><Button to={`/posts/${post.id}`} variant="quiet"><ArrowLeft size={16} />Back to post</Button><PageHeading eyebrow="COMMUNITY COMMENTS" title="The conversation" description={`On ${postAuthor}'s post`} />{error && <p className="field__error" role="alert">{error}</p>}<div className="comment-list">{comments.length ? comments.map((comment) => { const like = commentLikes[comment.id] ?? { count: 0, liked: false }; const authorName = comment.author?.display_name || comment.author?.username || 'Community member'; return <article className="comment-item" key={comment.id}><Avatar name={authorName} image={comment.author?.avatar_url ?? undefined} /><div><div className="comment-item__head"><strong>{authorName}</strong><span>{new Date(comment.created_at).toLocaleString()}</span><button type="button" className={`post-action${like.liked ? ' is-liked' : ''}`} aria-pressed={like.liked} disabled={pendingLikeIds.includes(comment.id)} onClick={() => toggleLike(comment)}><Heart size={16} fill={like.liked ? 'currentColor' : 'none'} />{like.count}</button></div><p>{comment.content}</p></div></article>}) : <EmptyState title="No comments yet" description="Start the conversation." />}</div><form className="comment-compose" onSubmit={submitComment}><Input aria-label="Write a comment" placeholder="Add to the conversation..." value={content} onChange={(event) => setContent(event.target.value)} /><Button type="submit" iconOnly aria-label="Send comment" disabled={!content.trim() || isSubmitting}>{isSubmitting ? '…' : <Send size={17} />}</Button></form></section>
 }
 
 export function ProfilePage() {
+  const navigate = useNavigate()
   const { handle } = useParams()
-  const isOwn = !handle || handle === 'asha-rathod'
-  const profile = handle ? previewUsers.find((user) => user.handle === handle) : undefined
-  if (!isOwn && !profile) return <NotFoundPage />
-  const name = profile?.name ?? 'Asha Rathod'
-  const username = profile?.handle ?? 'asha.rathod'
-  const initials = profile?.initials ?? 'AR'
-  const tone = profile?.tone ?? 'red'
-  const location = profile?.detail ?? 'Ahmedabad, Gujarat'
-  return <section className="page-stack"><div className="profile-cover"><span className="profile-cover__stitch" /><span className="profile-cover__label">COMMUNITY PREVIEW</span></div><div className="profile-summary"><Avatar name={name} initials={initials} tone={tone} size="large" /><div className="profile-summary__actions">{isOwn ? <Button to="/edit-profile" variant="outline">Edit profile</Button> : <Button variant="outline"><Plus size={16} />Connect</Button>}<Button variant="quiet" iconOnly aria-label="More profile options"><MoreHorizontal size={20} /></Button></div><h1>{name}</h1><span className="profile-handle">@{username}</span><p>Keeping stories, traditions, and good company close.</p><span className="profile-location"><MapPin size={14} />{location} · preview profile</span><div className="profile-counts"><span><strong>12</strong> posts</span><span><strong>248</strong> connections</span><span><strong>186</strong> following</span></div></div><div className="section-heading"><h2>Recent posts</h2><span className="local-label">SAMPLE CONTENT</span></div><div className="profile-posts">{previewPosts.slice(0, 2).map((post) => <Link to={`/posts/${post.id}`} key={post.id} className="profile-post-tile">{post.image ? <img src={post.image} alt="" /> : <span className="profile-post-tile__quote">“{post.text.slice(0, 90)}...”</span>}<span><Heart size={15} />{post.likes}</span></Link>)}</div></section>
+  const { session, profile: ownProfile, isProfileLoading, profileError } = useAuth()
+  const [otherProfile, setOtherProfile] = useState<ProfileRecord | null>(null)
+  const [isOtherProfileLoading, setIsOtherProfileLoading] = useState(false)
+  const [otherProfileError, setOtherProfileError] = useState('')
+  const [profilePosts, setProfilePosts] = useState<FeedPost[]>([])
+  const [isProfilePostsLoading, setIsProfilePostsLoading] = useState(false)
+  const [profilePostsError, setProfilePostsError] = useState('')
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [isBlockLoading, setIsBlockLoading] = useState(true)
+  const [isBlockPending, setIsBlockPending] = useState(false)
+  const [blockError, setBlockError] = useState('')
+  const [isStartingConversation, setIsStartingConversation] = useState(false)
+  const isOwn = !handle || handle === session?.user.id || handle === ownProfile?.username
+
+  useEffect(() => {
+    let active = true
+    if (isOwn || !handle) {
+      setOtherProfile(null)
+      setOtherProfileError('')
+      setIsOtherProfileLoading(false)
+      return () => { active = false }
+    }
+
+    setIsOtherProfileLoading(true)
+    setOtherProfileError('')
+    void (async () => {
+      try {
+        const { data, error } = await supabase.from('profiles').select('id,username,display_name,avatar_url,bio,location,is_verified').eq('username', handle).maybeSingle()
+        if (!active) return
+        setOtherProfile(data as ProfileRecord | null)
+        setOtherProfileError(error?.message ?? '')
+      } catch (error) {
+        if (active) setOtherProfileError(error instanceof Error ? error.message : 'Could not load this profile.')
+      } finally {
+        if (active) setIsOtherProfileLoading(false)
+      }
+    })()
+
+    return () => { active = false }
+  }, [handle, isOwn, session?.user.id])
+
+  const profile = isOwn ? ownProfile : otherProfile
+  useEffect(() => {
+    let active = true
+    if (!profile || isOwn) {
+      setIsBlocked(false)
+      setIsBlockLoading(false)
+      return () => { active = false }
+    }
+    setIsBlockLoading(true)
+    setBlockError('')
+    loadBlockState(profile.id).then((state) => {
+      if (active) setIsBlocked(state.blocked)
+    }).catch((caught: unknown) => {
+      if (active) setBlockError(caught instanceof Error ? caught.message : 'Could not load block state.')
+    }).finally(() => {
+      if (active) setIsBlockLoading(false)
+    })
+    return () => { active = false }
+  }, [isOwn, profile?.id])
+
+  useEffect(() => {
+    let active = true
+    if (!profile) {
+      setProfilePosts([])
+      setIsProfilePostsLoading(false)
+      return () => { active = false }
+    }
+    if (!isOwn && isBlockLoading) {
+      setIsProfilePostsLoading(true)
+      return () => { active = false }
+    }
+    if (!isOwn && isBlocked) {
+      setProfilePosts([])
+      setIsProfilePostsLoading(false)
+      return () => { active = false }
+    }
+    setIsProfilePostsLoading(true)
+    setProfilePostsError('')
+    loadPosts({ userId: profile.id }).then((nextPosts) => {
+      if (active) setProfilePosts(nextPosts)
+    }).catch((error: unknown) => {
+      if (active) setProfilePostsError(error instanceof Error ? error.message : 'Could not load profile posts.')
+    }).finally(() => {
+      if (active) setIsProfilePostsLoading(false)
+    })
+    return () => { active = false }
+  }, [isBlocked, isBlockLoading, isOwn, profile?.id])
+
+  async function handleBlock() {
+    if (!profile || isOwn || isBlockPending) return
+    setIsBlockPending(true)
+    setBlockError('')
+    try {
+      setIsBlocked(await toggleBlock(profile.id, isBlocked))
+      setProfilePosts([])
+    } catch (caught) {
+      setBlockError(caught instanceof Error ? caught.message : 'Could not update block state.')
+    } finally {
+      setIsBlockPending(false)
+    }
+  }
+
+  async function startConversation() {
+    if (!profile || isOwn || isStartingConversation) return
+    setIsStartingConversation(true)
+    setBlockError('')
+    try {
+      const conversationId = await getOrCreateConversation(profile.id)
+      navigate(`/chat/${conversationId}`)
+    } catch (caught) {
+      setBlockError(caught instanceof Error ? caught.message : 'Could not start this conversation.')
+    } finally {
+      setIsStartingConversation(false)
+    }
+  }
+
+  const loading = isOwn ? isProfileLoading : isOtherProfileLoading
+  const error = isOwn ? profileError : otherProfileError
+  if (loading) return <section className="page-stack"><Loading label="Loading profile" /></section>
+  if (error) return <section className="page-stack"><ErrorState title="Could not load profile" description={error} /></section>
+  if (!profile) return <section className="page-stack"><EmptyState title="Profile not found" description="This profile is unavailable." /></section>
+  if (!isOwn && isBlockLoading) return <section className="page-stack"><Loading label="Checking profile privacy" /></section>
+  if (!isOwn && blockError && !isBlocked) return <section className="page-stack"><ErrorState title="Could not check profile privacy" description={blockError} /></section>
+
+  const name = profile.display_name || profile.username
+  if (!isOwn && isBlocked) return <section className="page-stack"><PageHeading title="Profile blocked" /><Button variant="outline" onClick={handleBlock} disabled={isBlockPending}>{isBlockPending ? 'Updating…' : 'Unblock profile'}</Button>{blockError && <p className="field__error" role="alert">{blockError}</p>}<EmptyState title="Profile content hidden" description="Unblock this profile to view its posts and details." /></section>
+  return <section className="page-stack"><div className="profile-cover"><span className="profile-cover__stitch" /><span className="profile-cover__label">COMMUNITY PROFILE</span></div><div className="profile-summary"><Avatar name={name} image={profile.avatar_url ?? undefined} size="large" /><div className="profile-summary__actions">{isOwn ? <Button to="/edit-profile" variant="outline">Edit profile</Button> : <><Button variant="outline" onClick={startConversation} disabled={isStartingConversation || isBlockPending}>{isStartingConversation ? 'Opening…' : 'Message'}</Button><Button variant="quiet" onClick={handleBlock} disabled={isBlockPending}>{isBlockPending ? 'Updating…' : 'Block'}</Button></>}</div><h1>{name}</h1><span className="profile-handle">@{profile.username}</span><span className="local-label">{profile.is_verified ? 'Verified' : 'Member'}</span>{profile.bio && <p>{profile.bio}</p>}{profile.location && <span className="profile-location"><MapPin size={14} />{profile.location}</span>}{blockError && <p className="field__error" role="alert">{blockError}</p>}</div><div className="section-heading"><h2>Posts</h2></div>{isProfilePostsLoading ? <Loading label="Loading profile posts" /> : profilePostsError ? <ErrorState title="Could not load profile posts" description={profilePostsError} /> : profilePosts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared by this profile will appear here." /> : <div className="feed-list">{profilePosts.map((post) => <PostCard key={post.id} post={post} />)}</div>}</section>
 }
 
 export function EditProfilePage() {
-  const { notify } = usePreviewToast()
-  return <section className="page-stack page-stack--narrow"><Button to="/profile" variant="quiet"><ArrowLeft size={16} />Profile</Button><PageHeading eyebrow="YOUR INTRODUCTION" title="Edit profile" description="Update the details shown on your preview profile." /><PreviewNotice>PREVIEW ONLY · CHANGES ARE NOT SAVED</PreviewNotice><form className="form-stack" onSubmit={(event) => { event.preventDefault(); notify('Profile changes are preview-only and were not saved.') }}><Input label="Name" defaultValue="Asha Rathod" /><Input label="Username" defaultValue="asha.rathod" /><label className="field"><span className="field__label">About you</span><textarea className="field__control field__textarea" defaultValue="Keeping stories, traditions, and good company close." maxLength={160} /></label><Input label="City" defaultValue="Ahmedabad, Gujarat" /><Button type="submit">Save preview changes <Check size={17} /></Button></form></section>
+  const { profile, isProfileLoading, profileError, updateProfile } = useAuth()
+  const [displayName, setDisplayName] = useState('')
+  const [username, setUsername] = useState('')
+  const [bio, setBio] = useState('')
+  const [location, setLocation] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    if (!profile) return
+    setDisplayName(profile.display_name ?? '')
+    setUsername(profile.username)
+    setBio(profile.bio ?? '')
+    setLocation(profile.location ?? '')
+    setAvatarUrl(profile.avatar_url ?? '')
+  }, [profile])
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsSaving(true)
+    setError('')
+    setSuccess(false)
+    const result = await updateProfile({
+      display_name: displayName.trim() || null,
+      username: username.trim(),
+      bio: bio.trim() || null,
+      location: location.trim() || null,
+      avatar_url: avatarUrl.trim() || null,
+    })
+    setIsSaving(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setSuccess(true)
+  }
+
+  if (isProfileLoading && !profile) return <section className="page-stack page-stack--narrow"><Loading label="Loading your profile" /></section>
+  if (profileError && !profile) return <section className="page-stack page-stack--narrow"><ErrorState title="Could not load your profile" description={profileError} /></section>
+  if (!profile) return <section className="page-stack page-stack--narrow"><EmptyState title="Profile unavailable" description="Sign in again to load your profile." /></section>
+
+  return <section className="page-stack page-stack--narrow"><Button to="/profile" variant="quiet"><ArrowLeft size={16} />Profile</Button><PageHeading eyebrow="YOUR INTRODUCTION" title="Edit profile" description="Changes are saved to your account profile." /><form className="form-stack" onSubmit={submit}><Input label="Display name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} /><Input label="Username" value={username} onChange={(event) => setUsername(event.target.value)} required /><label className="field"><span className="field__label">About you</span><textarea className="field__control field__textarea" value={bio} onChange={(event) => setBio(event.target.value)} maxLength={160} /></label><Input label="City" value={location} onChange={(event) => setLocation(event.target.value)} /><Input label="Avatar URL" type="url" value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} />{error && <p className="field__error" role="alert">{error}</p>}{success && <p className="micro-note" role="status">Profile saved.</p>}<Button type="submit" disabled={isSaving || isProfileLoading}>{isSaving ? 'Saving…' : 'Save profile'} {!isSaving && <Check size={17} />}</Button></form></section>
 }
 
 export function StoriesPage() {
@@ -150,22 +570,144 @@ export function ReelsPage() {
 }
 
 export function ChatListPage() {
-  return <section className="page-stack"><PageHeading eyebrow="CONVERSATIONS" title="Chat" description="A quiet place for one-to-one conversations." /><PreviewNotice>FRONTEND PREVIEW · MESSAGES ARE NOT CONNECTED</PreviewNotice><div className="chat-list">{previewUsers.map((user, index) => <Link to={`/chat/${user.handle}`} className="chat-row" key={user.handle}><Avatar name={user.name} initials={user.initials} tone={user.tone} /><span className="chat-row__copy"><strong>{user.name}</strong><span>{['Thanks for sharing that story!', 'See you at the gathering this weekend.', 'That song has been in my head all day.'][index]}</span></span><span className="chat-row__time">{index === 0 ? '10:42' : index === 1 ? 'Yesterday' : 'Tue'}</span></Link>)}</div><p className="micro-note">The conversations above are sample UI only. No messages have been sent or received.</p></section>
+  const [conversations, setConversations] = useState<Awaited<ReturnType<typeof loadConversations>>>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    loadConversations().then((rows) => {
+      if (active) setConversations(rows)
+    }).catch((caught: unknown) => {
+      if (active) setError(caught instanceof Error ? caught.message : 'Could not load conversations.')
+    }).finally(() => {
+      if (active) setIsLoading(false)
+    })
+    return () => { active = false }
+  }, [])
+  return <section className="page-stack"><PageHeading eyebrow="CONVERSATIONS" title="Chat" description="Your conversations." />{isLoading ? <Loading label="Loading conversations" /> : error ? <ErrorState title="Could not load conversations" description={error} /> : conversations.length ? <div className="chat-list">{conversations.map((conversation) => { const name = conversation.member.display_name || conversation.member.username; return <Link to={`/chat/${conversation.id}`} className="chat-row" key={conversation.id}><Avatar name={name} image={conversation.member.avatar_url ?? undefined} /><span className="chat-row__copy"><strong>{name}</strong><span>{conversation.lastMessage?.content ?? 'No messages yet'}</span></span><span className="chat-row__time">{conversation.unreadCount > 0 ? `${conversation.unreadCount} unread` : conversation.lastMessage ? new Date(conversation.lastMessage.created_at).toLocaleDateString() : ''}</span></Link>})}</div> : <EmptyState title="No conversations yet" description="Start a conversation from a community profile." />}</section>
 }
 
 export function ChatConversationPage() {
   const { conversationId = '' } = useParams()
-  const { notify } = usePreviewToast()
+  const { session } = useAuth()
   const [message, setMessage] = useState('')
-  const person = previewUsers.find((user) => user.handle === conversationId)
-  if (!person) return <section className="page-stack"><EmptyState title="Conversation not found" description="Choose a sample conversation from your chat list." action={<Button to="/chat" variant="outline">Back to chat</Button>} /></section>
-  return <section className="chat-screen"><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Avatar name={person.name} initials={person.initials} tone={person.tone} /><span className="chat-screen__identity"><strong>{person.name}</strong><small>Sample conversation · not connected</small></span><Button variant="quiet" iconOnly aria-label="Conversation options" onClick={() => notify('Conversation actions are not connected in this preview.')}><MoreHorizontal size={19} /></Button></header><div className="chat-messages"><p className="chat-date">TODAY · PREVIEW</p><div className="chat-bubble chat-bubble--them">Thanks for sharing that story!<span>10:39</span></div><div className="chat-bubble chat-bubble--you">It means a lot that it resonated.<span>10:42</span></div><div className="chat-system-note"><LockKeyhole size={14} />Sample conversation · messaging is not connected.</div></div><div className="chat-compose-area"><form className="chat-disabled-compose" onSubmit={(event) => { event.preventDefault(); notify('Message not sent. Messaging is not connected.') }}><Input aria-label="Message" placeholder="Write a message (preview only)" value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim()} iconOnly aria-label="Send preview message"><Send size={17} /></Button></form><p className="micro-note">Messages are not sent or saved in this preview.</p></div></section>
+  const [person, setPerson] = useState<ProfileRecord | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSending, setIsSending] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    let channel: ReturnType<typeof subscribeToConversation> | null = null
+    setIsLoading(true)
+    setError('')
+    void (async () => {
+      try {
+        const [peer, history] = await Promise.all([loadConversationPeer(conversationId), loadConversationMessages(conversationId)])
+        if (!active) return
+        setPerson(peer as ProfileRecord)
+        setMessages(history)
+        channel = subscribeToConversation(conversationId, () => {
+          void loadConversationMessages(conversationId).then((nextMessages) => {
+            if (active) setMessages(nextMessages)
+          }).catch((caught: unknown) => {
+            if (active) setError(caught instanceof Error ? caught.message : 'Could not refresh messages.')
+          })
+        })
+      } catch (caught) {
+        if (active) setError(caught instanceof Error ? caught.message : 'Could not load this conversation.')
+      } finally {
+        if (active) setIsLoading(false)
+      }
+    })()
+    return () => {
+      active = false
+      if (channel) void supabase.removeChannel(channel)
+    }
+  }, [conversationId])
+
+  async function sendMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!message.trim() || isSending) return
+    setIsSending(true)
+    setError('')
+    try {
+      const created = await sendConversationMessage(conversationId, message)
+      setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
+      setMessage('')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not send this message.')
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  if (isLoading) return <section className="chat-screen"><Loading label="Loading conversation" /></section>
+  if (error && !person) return <section className="page-stack"><ErrorState title="Could not load conversation" description={error} /></section>
+  if (!person) return <section className="page-stack"><EmptyState title="Conversation unavailable" description="This conversation could not be found." action={<Button to="/chat" variant="outline">Back to chats</Button>} /></section>
+  const personName = person.display_name || person.username
+  return <section className="chat-screen"><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>Conversation</small></span><span /></header><div className="chat-messages">{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; return <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}`} key={item.id}>{item.content}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area"><form className="chat-disabled-compose" onSubmit={sendMessage}><Input aria-label="Message" placeholder="Write a message" value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send message">{isSending ? '…' : <Send size={17} />}</Button></form></div></section>
 }
 
 export function NotificationsPage() {
-  const [view, setView] = useState('Activity')
-  const notifications = [{ initials: 'MP', tone: 'orange', text: <><strong>Meera Pawar</strong> shared a new story</>, time: '12m', icon: Sparkles }, { initials: 'KR', tone: 'blue', text: <><strong>Kiran Rathod</strong> appreciated your post</>, time: '2h', icon: Heart }, { initials: 'SB', tone: 'red', text: <><strong>Sonal Banjara</strong> invited you to a community gathering</>, time: '1d', icon: Users }]
-  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity in the local preview." /><PreviewNotice /><div className="preview-state"><span>Preview state</span><Tabs label="Notification preview state" items={['Activity', 'Empty']} value={view} onChange={setView} /></div>{view === 'Activity' ? <div className="notification-list">{notifications.map(({ initials, tone, text, time, icon: Icon }) => <article className="notification-row" key={initials}><Avatar name={initials} initials={initials} tone={tone} /><span className="notification-row__icon"><Icon size={15} /></span><p>{text}<small>{time} · sample activity</small></p><ChevronRight size={17} /></article>)}</div> : <EmptyState title="You are all caught up" description="This preview does not receive live notifications." />}</section>
+  const { session } = useAuth()
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [pendingId, setPendingId] = useState('')
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    if (!session?.user) {
+      setNotifications([])
+      setIsLoading(false)
+      return () => { active = false }
+    }
+    const refresh = async () => {
+      try {
+        const rows = await loadNotifications()
+        if (active) {
+          setNotifications(rows)
+          setError('')
+        }
+      } catch (caught) {
+        if (active) setError(caught instanceof Error ? caught.message : 'Could not load notifications.')
+      } finally {
+        if (active) setIsLoading(false)
+      }
+    }
+    void refresh()
+    const channel = supabase.channel(`notifications:${session.user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${session.user.id}` }, () => { void refresh() })
+      .subscribe()
+    return () => {
+      active = false
+      void supabase.removeChannel(channel)
+    }
+  }, [session?.user.id])
+
+  async function markRead(notification: NotificationRecord) {
+    setPendingId(notification.id)
+    setError('')
+    try {
+      await markNotificationRead(notification.id)
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true } : item))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not mark notification read.')
+    } finally {
+      setPendingId('')
+    }
+  }
+
+  const copyForType = (type: string) => {
+    if (type === 'like' || type === 'post_like') return 'liked your post'
+    if (type === 'comment' || type === 'post_comment') return 'commented on your post'
+    if (type === 'follow') return 'started following you'
+    if (type === 'message') return 'sent you a message'
+    return 'sent you a notification'
+  }
+
+  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => { const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'; const Icon = notification.type.includes('like') ? Heart : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles; return <article className="notification-row" key={notification.id}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__icon"><Icon size={15} /></span><p><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></p>{!notification.is_read && <button type="button" className="icon-button" aria-label="Mark notification read" disabled={pendingId === notification.id} onClick={() => markRead(notification)}><Check size={17} /></button>}</article>})}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}</section>
 }
 
 export function AssistantPage() {
@@ -179,7 +721,24 @@ const settingsGroups = [
 ]
 
 export function SettingsPage() {
-  return <section className="page-stack"><PageHeading eyebrow="MAKE IT YOURS" title="Settings" description="Manage your preferences in the local preview." /><PreviewNotice />{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}</section>
+  const { signOut } = useAuth()
+  const navigate = useNavigate()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSignOut() {
+    setIsSigningOut(true)
+    setError('')
+    const { error: signOutError } = await signOut()
+    setIsSigningOut(false)
+    if (signOutError) {
+      setError(signOutError.message)
+      return
+    }
+    navigate('/login', { replace: true })
+  }
+
+  return <section className="page-stack"><PageHeading eyebrow="MAKE IT YOURS" title="Settings" description="Manage your account and preferences." />{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
 }
 
 export function PrivacyPage() {
@@ -189,13 +748,79 @@ export function PrivacyPage() {
 }
 
 export function BlockedUsersPage() {
-  const [blocked, setBlocked] = useState(['sample.profile'])
-  return <section className="page-stack page-stack--narrow"><Button to="/settings/privacy" variant="quiet"><ArrowLeft size={16} />Privacy & security</Button><PageHeading eyebrow="YOUR SAFETY" title="Blocked users" description="Manage sample profiles in this frontend preview." /><PreviewNotice /><div className="connect-list">{blocked.length ? blocked.map((handle) => <div className="blocked-row" key={handle}><Avatar name={handle} initials="SP" tone="blue" /><span><strong>{handle}</strong><small>Sample blocked profile</small></span><Button variant="outline" onClick={() => setBlocked(blocked.filter((item) => item !== handle))}>Unblock</Button></div>) : <EmptyState title="No blocked profiles" description="There are no sample users in your blocked list." />}</div></section>
+  const { session } = useAuth()
+  const [profiles, setProfiles] = useState<ProfileRecord[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [pendingId, setPendingId] = useState('')
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    if (!session?.user) return () => { active = false }
+    setIsLoading(true)
+    void (async () => {
+      try {
+        const blockedIds = await loadBlockedUserIds()
+        if (!blockedIds.length) {
+          if (active) setProfiles([])
+          return
+        }
+        const { data, error: profileError } = await supabase.from('profiles')
+          .select('id,username,display_name,avatar_url,bio,location,is_verified')
+          .in('id', blockedIds)
+        if (profileError) throw profileError
+        if (active) setProfiles((data ?? []) as ProfileRecord[])
+      } catch (caught) {
+        if (active) setError(caught instanceof Error ? caught.message : 'Could not load blocked profiles.')
+      } finally {
+        if (active) setIsLoading(false)
+      }
+    })()
+    return () => { active = false }
+  }, [session?.user.id])
+
+  async function unblock(profileId: string) {
+    setPendingId(profileId)
+    setError('')
+    try {
+      await toggleBlock(profileId, true)
+      setProfiles((current) => current.filter((profile) => profile.id !== profileId))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not unblock this profile.')
+    } finally {
+      setPendingId('')
+    }
+  }
+
+  return <section className="page-stack page-stack--narrow"><Button to="/settings/privacy" variant="quiet"><ArrowLeft size={16} />Privacy & security</Button><PageHeading eyebrow="YOUR SAFETY" title="Blocked users" description="Manage profiles you have blocked." />{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading blocked profiles" /> : <div className="connect-list">{profiles.length ? profiles.map((profile) => { const name = profile.display_name || profile.username; return <div className="blocked-row" key={profile.id}><Avatar name={name} image={profile.avatar_url ?? undefined} /><span><strong>{name}</strong><small>@{profile.username}</small></span><Button variant="outline" disabled={pendingId === profile.id} onClick={() => unblock(profile.id)}>{pendingId === profile.id ? 'Updating…' : 'Unblock'}</Button></div>}) : <EmptyState title="No blocked profiles" description="Profiles you block will appear here." />}</div>}</section>
 }
 
 export function ReportPage() {
-  const { notify } = usePreviewToast()
-  return <section className="page-stack page-stack--narrow"><PageHeading eyebrow="HELP KEEP THE CIRCLE KIND" title="Report a concern" description="Choose a topic to preview the reporting form." /><PreviewNotice>REPORTING IS NOT CONNECTED · NOTHING WILL BE SENT</PreviewNotice><form className="form-stack" onSubmit={(event) => { event.preventDefault(); notify('Your report was not sent. Reporting is not connected in this preview.') }}><label className="field"><span className="field__label">What is this about?</span><select className="field__control" defaultValue=""><option value="" disabled>Select a reason</option><option>Someone's post</option><option>A profile</option><option>A safety concern</option><option>Something else</option></select></label><label className="field"><span className="field__label">A few details</span><textarea className="field__control field__textarea" placeholder="Add context for the preview form" maxLength={500} /></label><Button type="submit">Preview report form <ArrowRight size={16} /></Button></form></section>
+  const [targetType, setTargetType] = useState('')
+  const [targetId, setTargetId] = useState('')
+  const [reason, setReason] = useState('')
+  const [details, setDetails] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsSubmitting(true)
+    setError('')
+    setSubmitted(false)
+    try {
+      await createReport({ postId: targetType === 'post' ? targetId : undefined, commentId: targetType === 'comment' ? targetId : undefined }, reason, details)
+      setSubmitted(true)
+      setTargetId('')
+      setDetails('')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not submit this report.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return <section className="page-stack page-stack--narrow"><PageHeading eyebrow="HELP KEEP THE CIRCLE KIND" title="Report a concern" description="Send a report about a post or comment." /><form className="form-stack" onSubmit={submit}><label className="field"><span className="field__label">Report target</span><select className="field__control" value={targetType} onChange={(event) => setTargetType(event.target.value)} required><option value="" disabled>Select post or comment</option><option value="post">Post</option><option value="comment">Comment</option></select></label><Input label="Target ID" value={targetId} onChange={(event) => setTargetId(event.target.value)} required /><label className="field"><span className="field__label">Reason</span><select className="field__control" value={reason} onChange={(event) => setReason(event.target.value)} required><option value="" disabled>Select a reason</option><option value="harassment">Harassment</option><option value="spam">Spam</option><option value="safety">Safety concern</option><option value="other">Other</option></select></label><label className="field"><span className="field__label">A few details</span><textarea className="field__control field__textarea" value={details} onChange={(event) => setDetails(event.target.value)} placeholder="Add context" maxLength={500} /></label>{error && <p className="field__error" role="alert">{error}</p>}{submitted && <p className="micro-note" role="status">Report submitted.</p>}<Button type="submit" disabled={isSubmitting || !targetId.trim()}>{isSubmitting ? 'Submitting…' : 'Submit report'} <ArrowRight size={16} /></Button><p className="micro-note">User reports are unavailable because the current reports schema has no user-target column.</p></form></section>
 }
 
 export function DeleteAccountPage() {
