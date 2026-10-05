@@ -697,6 +697,10 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   .bottom-nav__icon svg { width: 14px; height: 14px; }
   .home-intro__tools .preview-notice { padding: 6px; font-size: 8px; }
 }
+@media (max-width: 320px) {
+  html, body { min-width: 0; }
+  .bottom-nav { width: calc(100% - 8px); }
+}
 @media (max-width: 480px) {
   .splash__logo-wrap { width: 102px; height: 102px; margin-bottom: 20px; }
   .brand-mark--large { width: 88px; height: 88px; }
