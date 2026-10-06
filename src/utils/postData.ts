@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type { FeedPost, ProfileRecord, PostRecord } from '../types/app'
-import { createPostMediaUrl } from './mediaData'
+import { createPostMediaUrls } from './mediaData'
 
 const postColumns = 'id,user_id,content,created_at,visibility,media_urls,media_type'
 
@@ -17,12 +17,13 @@ async function attachAuthors(posts: PostRecord[]): Promise<FeedPost[]> {
   const withAuthors = posts.map((post) => ({ ...post, author: authorsById.get(post.user_id) ?? null })) as Array<FeedPost & { media_urls?: string[]; media_type?: string | null }>
   return await Promise.all(withAuthors.map(async (post) => {
     const paths = post.media_urls ?? []
-    const media = await Promise.all(paths.map(async (path) => ({
+    const signedUrls = await createPostMediaUrls(paths)
+    const media = paths.map((path) => ({
       path,
       type: post.media_type === 'video' ? 'video' as const : 'image' as const,
       mimeType: post.media_type === 'video' ? 'video/*' : 'image/*',
-      signedUrl: await createPostMediaUrl(path),
-    })))
+      signedUrl: signedUrls.get(path),
+    }))
     return { ...post, media }
   }))
 }
