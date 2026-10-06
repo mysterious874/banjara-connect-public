@@ -38,10 +38,18 @@ export default function App() {
 
   useEffect(() => {
     const isSplashRoute = window.location.pathname === '/' || window.location.pathname === '/splash'
-    if (isSplashRoute) return
-    setShowLaunchIntro(true)
-    const timer = window.setTimeout(() => setShowLaunchIntro(false), 4000)
-    return () => window.clearTimeout(timer)
+    if (!isSplashRoute) {
+      setShowLaunchIntro(true)
+      const timer = window.setTimeout(() => setShowLaunchIntro(false), 4000)
+      return () => window.clearTimeout(timer)
+    }
+  }, [])
+
+  // Warm the main app chunk while the launch intro is visible so route changes do not wait on it.
+  useEffect(() => {
+    void import('./pages/Pages')
+    void import('./pages/BanjaraHistoryPage')
+    void import('./pages/DeveloperPage')
   }, [])
 
   return (
