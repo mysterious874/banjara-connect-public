@@ -1819,6 +1819,12 @@ export function CommunityGroupPage() {
     setGroupSaving(true)
     setMemberError('')
     try {
+      const { data: mediaRows, error: mediaListError } = await supabase.rpc('list_community_group_media_for_cleanup', { p_group_id: groupId })
+      if (mediaListError) throw mediaListError
+      const mediaPaths = ((mediaRows ?? []) as Array<{ media_path: string | null }>)
+        .map((row) => row.media_path)
+        .filter((path): path is string => Boolean(path))
+      if (mediaPaths.length) await deleteGroupMedia(mediaPaths)
       const { error: deleteError } = await supabase.rpc('delete_community_group', { p_group_id: groupId })
       if (deleteError) throw deleteError
       window.location.href = '/community'
