@@ -8,11 +8,11 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: null,
-      includeAssets: ['banjara-mark.svg'],
+      includeAssets: ['banjara-mark.svg', 'banjara-mark-maskable.svg'],
       manifest: {
         id: '/',
-        name: 'Banjara Connect',
-        short_name: 'Banjara',
+        name: 'Connect',
+        short_name: 'Connect',
         description: 'Banjara Connect brings community stories, culture, and conversations together.',
         start_url: '/',
         scope: '/',
@@ -20,10 +20,8 @@ export default defineConfig({
         theme_color: '#7b1e2b',
         background_color: '#fbf4e8',
         icons: [
-          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/pwa-192x192-maskable.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-          { src: '/pwa-512x512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/banjara-mark.svg', sizes: '64x64', type: 'image/svg+xml', purpose: 'any' },
+          { src: '/banjara-mark-maskable.svg', sizes: '64x64', type: 'image/svg+xml', purpose: 'maskable' },
         ],
       },
       workbox: {
