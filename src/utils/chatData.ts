@@ -110,7 +110,14 @@ async function loadConversationSummaryMessages(conversationId: string, userId: s
       .order('id', { ascending: false })
       .range(offset, offset + pageSize - 1)
     if (error) throw error
-    const page = (data ?? []) as ChatMessage[]
+    let page = (data ?? []) as ChatMessage[]
+    if (page.length) {
+      const ids = page.map((message) => message.id)
+      const { data: hidden, error: hiddenError } = await supabase.from('message_deletions').select('message_id').eq('user_id', userId).in('message_id', ids)
+      if (hiddenError) throw hiddenError
+      const hiddenIds = new Set((hidden ?? []).map((row) => row.message_id as string))
+      page = page.filter((message) => !hiddenIds.has(message.id))
+    }
     if (offset === 0) lastMessage = page[0] ?? null
 
     const incomingIds = page.filter((message) => message.sender_id !== userId).map((message) => message.id)
@@ -194,7 +201,14 @@ export async function loadConversationMessages(
   }
   const { data, error } = await query
   if (error) throw error
-  const page = (data ?? []) as ChatMessage[]
+  let page = (data ?? []) as ChatMessage[]
+  if (page.length) {
+    const ids = page.map((message) => message.id)
+    const { data: hidden, error: hiddenError } = await supabase.from('message_deletions').select('message_id').eq('user_id', userId).in('message_id', ids)
+    if (hiddenError) throw hiddenError
+    const hiddenIds = new Set((hidden ?? []).map((row) => row.message_id as string))
+    page = page.filter((message) => !hiddenIds.has(message.id))
+  }
   const messages = page.reverse()
   const unreadIds = messages.filter((message) => message.sender_id !== userId).map((message) => message.id)
   if (unreadIds.length) {
@@ -250,6 +264,26 @@ export async function sendConversationMessage(conversationId: string, content: s
     content: normalized,
   }).select(messageColumns).single()
   if (error) throw error
+  return data as ChatMessage
+}
+
+export async function deleteMessageForMe(messageId: string) {
+  const userId = await requireAuthenticatedUserId()
+  const { data: membership, error: membershipError } = await supabase.from('messages').select('id,conversation_id').eq('id', messageId).maybeSingle()
+  if (membershipError) throw membershipError
+  if (!membership) throw new Error('Message not found.')
+  const { data: member, error: memberError } = await supabase.from('conversation_members').select('conversation_id').eq('conversation_id', membership.conversation_id).eq('user_id', userId).maybeSingle()
+  if (memberError) throw memberError
+  if (!member) throw new Error('You are not a member of this conversation.')
+  const { error } = await supabase.from('message_deletions').upsert({ message_id: messageId, user_id: userId }, { onConflict: 'message_id,user_id' })
+  if (error) throw error
+}
+
+export async function deleteMessageForEveryone(messageId: string) {
+  const userId = await requireAuthenticatedUserId()
+  const { data, error } = await supabase.from('messages').update({ is_deleted_for_everyone: true, content: '', media_url: null, media_type: null, updated_at: new Date().toISOString() }).eq('id', messageId).eq('sender_id', userId).select(messageColumns).maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('Only the sender can delete this message for everyone.')
   return data as ChatMessage
 }
 
