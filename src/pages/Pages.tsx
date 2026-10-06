@@ -17,6 +17,8 @@ import { filterProfiles, loadProfiles, loadProfilesPage } from '../utils/profile
 import { getOrCreateConversation } from '../utils/chatData'
 import { supabase } from '../utils/supabase'
 import { deletePostMedia, uploadPostMedia, validatePostMedia } from '../utils/mediaData'
+import { deleteProfileAvatar, profileAvatarPathFromUrl, uploadProfileAvatar, validateProfileAvatar } from '../utils/profileMediaData'
+import { fetchCurrentLocation, searchLocationSuggestions, type LocationSuggestion } from '../utils/locationData'
 import { validateChatMedia } from '../utils/chatMediaData'
 import { userFacingError } from '../utils/userFacingError'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
@@ -670,6 +672,10 @@ export function EditProfilePage() {
   const [bio, setBio] = useState('')
   const [location, setLocation] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([])
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
@@ -681,35 +687,147 @@ export function EditProfilePage() {
     setBio(profile.bio ?? '')
     setLocation(profile.location ?? '')
     setAvatarUrl(profile.avatar_url ?? '')
+    setAvatarFile(null)
   }, [profile])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    if (location.trim().length < 2) {
+      setLocationSuggestions([])
+      setIsLoadingSuggestions(false)
+      return () => controller.abort()
+    }
+    const timer = window.setTimeout(() => {
+      setIsLoadingSuggestions(true)
+      void searchLocationSuggestions(location, controller.signal)
+        .then((suggestions) => setLocationSuggestions(suggestions))
+        .catch((caught: unknown) => {
+          if ((caught as Error)?.name !== 'AbortError') setLocationSuggestions([])
+        })
+        .finally(() => setIsLoadingSuggestions(false))
+    }, 350)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [location])
+
+  function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null
+    setError('')
+    setSuccess(false)
+    if (!file) return
+    try {
+      validateProfileAvatar(file)
+      setAvatarFile(file)
+      setAvatarUrl(URL.createObjectURL(file))
+    } catch (caught) {
+      event.target.value = ''
+      setAvatarFile(null)
+      setError(userFacingError(caught, 'Could not select this profile photo.'))
+    }
+  }
+
+  function selectLocation(suggestion: LocationSuggestion) {
+    setLocation(suggestion.displayName)
+    setLocationSuggestions([])
+  }
+
+  async function useCurrentLocation() {
+    setIsFetchingLocation(true)
+    setError('')
+    setSuccess(false)
+    try {
+      const current = await fetchCurrentLocation()
+      setLocation(current.displayName)
+      setLocationSuggestions([])
+    } catch (caught) {
+      const message = caught instanceof GeolocationPositionError
+        ? caught.code === 1
+          ? 'Location permission was denied. Allow location access in your browser and try again.'
+          : caught.code === 3
+            ? 'Location took too long to fetch. Try again.'
+            : 'Could not fetch your current location.'
+        : userFacingError(caught, 'Could not fetch your current location.')
+      setError(message)
+    } finally {
+      setIsFetchingLocation(false)
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsSaving(true)
     setError('')
     setSuccess(false)
-    const result = await updateProfile({
-      display_name: displayName.trim() || null,
-      username: username.trim(),
-      bio: bio.trim() || null,
-      location: location.trim() || null,
-      avatar_url: avatarUrl.trim() || null,
-    })
-    setIsSaving(false)
-    if (result.error) {
-      setError(result.error)
-      return
+    let uploadedAvatarPath = ''
+    try {
+      let nextAvatarUrl = avatarUrl.trim() || null
+      if (avatarFile && profile) {
+        const uploaded = await uploadProfileAvatar(avatarFile, profile.id)
+        uploadedAvatarPath = uploaded.path
+        nextAvatarUrl = uploaded.publicUrl
+      }
+      const result = await updateProfile({
+        display_name: displayName.trim() || null,
+        username: username.trim(),
+        bio: bio.trim() || null,
+        location: location.trim() || null,
+        avatar_url: nextAvatarUrl,
+      })
+      if (result.error) {
+        if (uploadedAvatarPath) await deleteProfileAvatar(uploadedAvatarPath).catch(() => undefined)
+        setError(result.error)
+        return
+      }
+      if (uploadedAvatarPath) {
+        const oldPath = profileAvatarPathFromUrl(profile?.avatar_url)
+        if (oldPath && oldPath !== uploadedAvatarPath) await deleteProfileAvatar(oldPath).catch(() => undefined)
+      }
+      setAvatarFile(null)
+      setSuccess(true)
+    } catch (caught) {
+      if (uploadedAvatarPath) await deleteProfileAvatar(uploadedAvatarPath).catch(() => undefined)
+      setError(userFacingError(caught, 'Could not save your profile.'))
+    } finally {
+      setIsSaving(false)
     }
-    setSuccess(true)
   }
 
   if ((isProfileLoading || !profile) && !profileError) return <section className="page-stack page-stack--narrow"><Loading label="Loading your profile" /></section>
   if (profileError && !profile) return <section className="page-stack page-stack--narrow"><ErrorState title="Could not load your profile" description={profileError} /></section>
   if (!profile) return <section className="page-stack page-stack--narrow"><EmptyState title="Profile unavailable" description="Sign in again to load your profile." /></section>
 
-  return <section className="page-stack page-stack--narrow"><Button to="/profile" variant="quiet"><ArrowLeft size={16} />Profile</Button><PageHeading eyebrow="YOUR INTRODUCTION" title="Edit profile" description="Changes are saved to your account profile." /><form className="form-stack" onSubmit={submit}><Input label="Display name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} /><Input label="Username" value={username} onChange={(event) => setUsername(event.target.value)} required /><label className="field"><span className="field__label">About you</span><textarea className="field__control field__textarea" value={bio} onChange={(event) => setBio(event.target.value)} maxLength={160} /></label><Input label="City" value={location} onChange={(event) => setLocation(event.target.value)} /><Input label="Avatar URL" type="url" value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} />{error && <p className="field__error" role="alert">{error}</p>}{success && <p className="micro-note" role="status">Profile saved.</p>}<Button type="submit" disabled={isSaving || isProfileLoading}>{isSaving ? 'Saving…' : 'Save profile'} {!isSaving && <Check size={17} />}</Button></form></section>
+  return <section className="page-stack page-stack--narrow"><Button to="/profile" variant="quiet"><ArrowLeft size={16} />Profile</Button><PageHeading eyebrow="YOUR INTRODUCTION" title="Edit profile" description="Update your photo, introduction, and location." /><form className="form-stack" onSubmit={submit}>
+    <div className="edit-profile-avatar">
+      <Avatar name={displayName || username || 'Your profile'} image={avatarUrl || undefined} size="large" />
+      <div>
+        <span className="field__label">Profile photo</span>
+        <label className="button button--outline edit-profile-avatar__button" htmlFor="profile-avatar">Choose photo</label>
+        <input id="profile-avatar" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarChange} />
+        <span className="micro-note">JPG, PNG, WEBP or GIF · max 5 MB</span>
+      </div>
+    </div>
+    <Input label="Display name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+    <Input label="Username" value={username} onChange={(event) => setUsername(event.target.value)} required />
+    <label className="field"><span className="field__label">About you</span><textarea className="field__control field__textarea" value={bio} onChange={(event) => setBio(event.target.value)} maxLength={160} /></label>
+    <div className="field location-picker">
+      <span className="field__label">Location</span>
+      <div className="location-picker__input">
+        <Input aria-label="Location" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Search city or place" autoComplete="off" />
+        <Button type="button" variant="quiet" onClick={() => void useCurrentLocation()} disabled={isFetchingLocation} title="Use my current location">{isFetchingLocation ? 'Finding…' : <><MapPin size={16} />Use current</>}</Button>
+      </div>
+      {(isLoadingSuggestions || locationSuggestions.length > 0) && <div className="location-suggestions" role="listbox" aria-label="Location suggestions">
+        {isLoadingSuggestions && <span className="location-suggestions__status">Searching locations…</span>}
+        {locationSuggestions.map((suggestion, index) => <button type="button" className="location-suggestion" key={suggestion.displayName + index} onClick={() => selectLocation(suggestion)}><MapPin size={15} /><span>{suggestion.displayName}</span></button>)}
+      </div>}
+      <span className="micro-note">Type a place for suggestions, or use your current browser location.</span>
+    </div>
+    {error && <p className="field__error" role="alert">{error}</p>}
+    {success && <p className="micro-note" role="status">Profile saved.</p>}
+    <Button type="submit" disabled={isSaving || isProfileLoading}>{isSaving ? 'Saving…' : 'Save profile'} {!isSaving && <Check size={17} />}</Button>
+  </form></section>
 }
-
 export function StoriesPage() {
   return <section className="page-stack"><PageHeading eyebrow="LITTLE WINDOWS INTO TODAY" title="Stories" description="Short community moments, curated for this frontend preview." /><PreviewNotice /><div className="story-preview-grid">{previewUsers.map((user, index) => <Link to="/home" className={`story-preview story-preview--${user.tone}`} key={user.handle}><div className="story-preview__top"><Avatar name={user.name} initials={user.initials} tone={user.tone} /><span>{user.name}<small>{index + 1}h · sample story</small></span></div><div className="story-preview__center"><span>✳</span><p>{['A stitch, a story, and a slow morning.', 'There is always room for one more at the table.', 'A little color from the weekend gathering.'][index]}</p></div><span className="story-preview__bottom">VIEW SAMPLE STORY <ArrowRight size={14} /></span></Link>)}</div></section>
 }
