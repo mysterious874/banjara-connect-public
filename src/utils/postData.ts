@@ -14,8 +14,8 @@ async function attachAuthors(posts: PostRecord[]): Promise<FeedPost[]> {
   if (error) throw error
 
   const authorsById = new Map((authors as Pick<ProfileRecord, 'id' | 'username' | 'display_name' | 'avatar_url' | 'location'>[]).map((author) => [author.id, author]))
-  const withAuthors = posts.map((post) => ({ ...post, author: authorsById.get(post.user_id) ?? null })) as Array<FeedPost & { media?: PostMediaData[]; media_urls?: string[]; media_type?: string | null }>
-  return Promise.all(withAuthors.map(async (post) => {
+  const withAuthors = posts.map((post) => ({ ...post, author: authorsById.get(post.user_id) ?? null })) as Array<FeedPost & { media_urls?: string[]; media_type?: string | null }>
+  return await Promise.all(withAuthors.map(async (post) => {
     const paths = post.media_urls ?? []
     const media = await Promise.all(paths.map(async (path) => ({
       path,
@@ -24,7 +24,7 @@ async function attachAuthors(posts: PostRecord[]): Promise<FeedPost[]> {
       signedUrl: await createPostMediaUrl(path),
     })))
     return { ...post, media }
-  })) as FeedPost[]
+  }))
 }
 
 export async function loadPostsPage(
