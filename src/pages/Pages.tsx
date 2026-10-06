@@ -1608,6 +1608,27 @@ export function CommunityGroupPage() {
     }
   }
 
+  async function setMemberRole(userId: string, role: 'admin' | 'member') {
+    if (!groupId || !session?.user) return
+    const currentUser = members.find((member) => member.user_id === session.user.id)
+    if (currentUser?.role !== 'admin' || userId === session.user.id) return
+    setMemberAction(`role:${userId}`)
+    setMemberError('')
+    try {
+      const { error: roleError } = await supabase.rpc('set_community_group_member_role', {
+        p_group_id: groupId,
+        p_user_id: userId,
+        p_role: role,
+      })
+      if (roleError) throw roleError
+      await loadGroupMembers()
+    } catch (caught) {
+      setMemberError(userFacingError(caught, 'Could not update this member role.'))
+    } finally {
+      setMemberAction('')
+    }
+  }
+
   async function leaveGroup() {
     if (!groupId) return
     setMemberAction('leave')
@@ -1698,7 +1719,20 @@ export function CommunityGroupPage() {
         {memberError && <p className="field__error" role="alert">{memberError}</p>}
         {membersLoading && <Loading label="Loading members" />}
         {memberResults.length > 0 && <div className="community-group-member-results">{memberResults.map((profile) => <div className="community-group-member-row" key={profile.id}><Avatar name={profile.display_name || profile.username} image={profile.avatar_url ?? undefined} /><span><strong>{profile.display_name || profile.username}</strong><small>@{profile.username}</small></span><Button type="button" onClick={() => void addGroupMember(profile.id)} disabled={memberAction === profile.id}>{memberAction === profile.id ? '…' : 'Add'}</Button></div>)}</div>}
-        <div className="community-group-member-list">{members.map((member) => <div className="community-group-member-row" key={member.user_id}><Avatar name={member.display_name || member.username} image={member.avatar_url ?? undefined} /><span><strong>{member.display_name || member.username || 'Community member'}</strong><small>@{member.username || 'member'} · {member.role === 'admin' ? 'Admin' : 'Member'}</small></span>{member.role === 'admin' && <ShieldCheck size={16} aria-label="Admin" />}</div>)}</div>
+        <div className="community-group-member-list">{members.map((member) => {
+          const currentUser = members.find((item) => item.user_id === session?.user.id)
+          const isCurrentAdmin = currentUser?.role === 'admin'
+          const isSelf = member.user_id === session?.user.id
+          const rolePending = memberAction === `role:${member.user_id}`
+          return <div className="community-group-member-row" key={member.user_id}>
+            <Avatar name={member.display_name || member.username} image={member.avatar_url ?? undefined} />
+            <span><strong>{member.display_name || member.username || 'Community member'}</strong><small>@{member.username || 'member'} · {member.role === 'admin' ? 'Admin' : 'Member'}</small></span>
+            {member.role === 'admin' && <ShieldCheck size={16} aria-label="Admin" />}
+            {isCurrentAdmin && !isSelf && <Button type="button" variant="quiet" onClick={() => void setMemberRole(member.user_id, member.role === 'admin' ? 'member' : 'admin')} disabled={!!memberAction}>
+              {rolePending ? '…' : member.role === 'admin' ? 'Remove admin' : 'Make admin'}
+            </Button>}
+          </div>
+        })}</div>
         <Button type="button" variant="outline" onClick={() => void leaveGroup()} disabled={memberAction === 'leave'}>{memberAction === 'leave' ? 'Leaving…' : 'Leave community'}</Button>
       </div>
     </Modal>}
