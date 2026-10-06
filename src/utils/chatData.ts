@@ -28,6 +28,9 @@ export type ConversationSummary = {
 const messageColumns = 'id,conversation_id,sender_id,content,media_url,media_type,is_deleted_for_everyone,created_at,updated_at'
 const pendingConversationRequests = new Map<string, Promise<string>>()
 const conversationMessagePageSize = 50
+const conversationListCache = new Map<string, { expiresAt: number; value: ConversationSummary[] }>()
+const conversationListRequests = new Map<string, Promise<ConversationSummary[]>>()
+const CONVERSATION_LIST_CACHE_TTL_MS = 1500
 
 export async function getOrCreateConversation(targetUserId: string) {
   const userId = await requireAuthenticatedUserId()
@@ -98,6 +101,20 @@ export async function loadUnreadChatCount(): Promise<number> {
 
 export async function loadConversations(): Promise<ConversationSummary[]> {
   const userId = await requireAuthenticatedUserId()
+  const now = Date.now()
+  const cached = conversationListCache.get(userId)
+  if (cached && cached.expiresAt > now) return cached.value
+  const pending = conversationListRequests.get(userId)
+  if (pending) return pending
+  const request = loadConversationsUncached(userId).then((value) => {
+    conversationListCache.set(userId, { expiresAt: Date.now() + CONVERSATION_LIST_CACHE_TTL_MS, value })
+    return value
+  }).finally(() => conversationListRequests.delete(userId))
+  conversationListRequests.set(userId, request)
+  return request
+}
+
+async function loadConversationsUncached(userId: string): Promise<ConversationSummary[]> {
   const { data: ownMemberships, error: membershipError } = await supabase.from('conversation_members')
     .select('conversation_id').eq('user_id', userId)
   if (membershipError) throw membershipError
