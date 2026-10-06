@@ -5,6 +5,7 @@ import type { FeedPost } from '../types/app'
 import { useAuth } from '../hooks/AuthProvider'
 import { loadPostLikes, togglePostLike } from '../utils/socialData'
 import { supabase } from '../utils/supabase'
+import { deletePostMedia, type PostMediaData } from '../utils/mediaData'
 import { userFacingError } from '../utils/userFacingError'
 import { Avatar, Button, ConfirmationDialog } from './ui'
 
@@ -94,6 +95,8 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
     setIsDeletingPost(true)
     setPostError('')
     try {
+      const media = ((post as FeedPost & { media?: PostMediaData[] }).media ?? [])
+      await deletePostMedia(media.map((item) => item.path))
       const { data, error } = await supabase.from('posts')
         .delete()
         .eq('id', post.id)
@@ -117,7 +120,12 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
         {post.author ? <Link to={`/profile/${post.author.username || post.author.id}`} className="post-card__author">{authorContent}</Link> : <div className="post-card__author">{authorContent}</div>}
         {isOwner && <div className="post-card__options"><button type="button" className="icon-button post-card__more" aria-label={`More options for ${authorName}'s post`} aria-expanded={showPostOptions} onClick={() => setShowPostOptions((open) => !open)}><MoreHorizontal size={20} /></button>{showPostOptions && <div className="post-card__options-menu"><button type="button" onClick={() => { setEditContent(postContent); setIsEditing(true); setShowPostOptions(false) }}><Pencil size={15} />Edit post</button><button type="button" onClick={() => { setShowDeleteConfirmation(true); setShowPostOptions(false) }}><Trash2 size={15} />Delete post</button></div>}</div>}
       </div>
-      {isEditing ? <form className="post-edit-form" onSubmit={updatePost}><label className="visually-hidden" htmlFor={`post-edit-${post.id}`}>Edit your post</label><textarea id={`post-edit-${post.id}`} value={editContent} onChange={(event) => setEditContent(event.target.value)} maxLength={500} required /><div><Button type="button" variant="quiet" onClick={() => { setIsEditing(false); setEditContent(postContent) }} disabled={isSavingPost}><X size={15} />Cancel</Button><Button type="submit" disabled={isSavingPost || !editContent.trim()}><Check size={15} />{isSavingPost ? 'Saving…' : 'Save'}</Button></div></form> : <p className="post-card__text">{postContent}</p>}
+      {isEditing ? <form className="post-edit-form" onSubmit={updatePost}><label className="visually-hidden" htmlFor={`post-edit-${post.id}`}>Edit your post</label><textarea id={`post-edit-${post.id}`} value={editContent} onChange={(event) => setEditContent(event.target.value)} maxLength={500} required /><div><Button type="button" variant="quiet" onClick={() => { setIsEditing(false); setEditContent(postContent) }} disabled={isSavingPost}><X size={15} />Cancel</Button><Button type="submit" disabled={isSavingPost || !editContent.trim()}><Check size={15} />{isSavingPost ? 'Saving…' : 'Save'}</Button></div></form> : <p className="post-card__text">{postContent}</>}
+      {((post as FeedPost & { media?: PostMediaData[] }).media ?? []).map((media) => media.signedUrl ? (
+        media.type === 'video'
+          ? <video key={media.path} className="post-card__media" src={media.signedUrl} controls playsInline preload="metadata" />
+          : <img key={media.path} className="post-card__media" src={media.signedUrl} alt={media.name || 'Post media'} loading="lazy" />
+      ) : null)}
       <div className="post-card__meta"><span>{post.visibility ?? 'Community post'} · {new Date(post.created_at).toLocaleString()}</span><span>{isLikeLoading ? 'Loading likes…' : `${likeCount} likes`}</span></div>
       <div className="post-card__actions">
         <button type="button" className={`post-action${liked ? ' is-liked' : ''}`} disabled={isLikeLoading || isLikePending || !session} onClick={handleLike} aria-pressed={liked}>
