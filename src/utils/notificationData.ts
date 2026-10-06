@@ -15,6 +15,16 @@ export type NotificationRecord = {
   actor: Pick<ProfileRecord, 'username' | 'display_name' | 'avatar_url'> | null
 }
 
+export async function loadUnreadNotificationCount(): Promise<number> {
+  const userId = await requireAuthenticatedUserId()
+  const { count, error } = await supabase.from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('is_read', false)
+  if (error) throw error
+  return count ?? 0
+}
+
 export async function loadNotifications(): Promise<NotificationRecord[]> {
   const userId = await requireAuthenticatedUserId()
   const { data, error } = await supabase.from('notifications')
