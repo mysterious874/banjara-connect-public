@@ -1380,6 +1380,16 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   display: grid;
   gap: 12px;
 }
+.app-shell--stories .topbar,
+.app-shell--stories .desktop-nav,
+.app-shell--stories .bottom-nav {
+  display: none !important;
+}
+
+.app-shell--stories .route-content {
+  padding: 0;
+}
+
 .story-fullscreen {
   position: fixed;
   inset: 0;
@@ -1523,7 +1533,7 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   z-index: 5;
   left: 14px;
   right: 14px;
-  bottom: 14px;
+  bottom: max(14px, env(safe-area-inset-bottom));
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
@@ -1541,7 +1551,7 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   position: absolute;
   z-index: 5;
   right: 14px;
-  bottom: 14px;
+  bottom: max(14px, env(safe-area-inset-bottom));
   display: inline-flex;
   align-items: center;
   gap: 6px;
