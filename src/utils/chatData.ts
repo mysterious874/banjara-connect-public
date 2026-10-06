@@ -12,6 +12,7 @@ export type ChatMessage = {
   content: string
   media_url: string | null
   media_type: string | null
+  media_signed_url?: string | null
   is_deleted_for_everyone: boolean
   created_at: string
   updated_at: string
@@ -213,11 +214,10 @@ export async function loadConversationMessages(
   for (const chatMessage of messages) {
     if (chatMessage.media_url) {
       try {
-        chatMessage.media_url = await createChatMediaUrl(chatMessage.media_url)
+        chatMessage.media_signed_url = await createChatMediaUrl(chatMessage.media_url)
       } catch (mediaError) {
         if (import.meta.env.DEV) console.error('Could not create chat media URL.', mediaError)
-        chatMessage.media_url = null
-        chatMessage.media_type = null
+        chatMessage.media_signed_url = null
       }
     }
   }
@@ -289,7 +289,9 @@ export async function sendConversationMessage(conversationId: string, content: s
       updated_at: new Date().toISOString(),
     }).eq('id', created.id).eq('sender_id', senderId).select(messageColumns).single()
     if (updateError) throw updateError
-    return updated as ChatMessage
+    const result = updated as ChatMessage
+    result.media_signed_url = await createChatMediaUrl(media.path)
+    return result
   } catch (caught) {
     if (uploadedPath) {
       try {
