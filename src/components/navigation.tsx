@@ -3,6 +3,9 @@ import { Bell, Compass, Ellipsis, House, MessageCircle, Plus, Settings, UserRoun
 import { BrandLockup } from './brand'
 import { Avatar } from './ui'
 import { useAuth } from '../hooks/AuthProvider'
+import { useEffect, useState } from 'react'
+import { loadUnreadNotificationCount } from '../utils/notificationData'
+import { subscribeToPostgresChanges } from '../utils/realtimeData'
 
 const desktopItems = [
   { to: '/home', label: 'Home', icon: House },
@@ -25,9 +28,43 @@ const mobileItems = [
 ]
 
 export function Header() {
-  const { profile } = useAuth()
+  const { profile, session } = useAuth()
   const name = profile?.display_name || profile?.username || 'Your profile'
-  return <header className="topbar"><div className="topbar__inner"><BrandLockup /><div className="topbar__actions"><NavLink to="/notifications" className="icon-button topbar__notice" aria-label="Notifications"><Bell size={19} /><span className="notification-dot" /></NavLink><NavLink to="/profile" className="topbar__avatar" aria-label="Your profile"><Avatar name={name} image={profile?.avatar_url ?? undefined} size="small" /></NavLink></div></div></header>
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    if (!session?.user.id) {
+      setUnreadCount(0)
+      return () => { active = false }
+    }
+
+    const refresh = async () => {
+      try {
+        const count = await loadUnreadNotificationCount()
+        if (active) setUnreadCount(count)
+      } catch {
+        if (active) setUnreadCount(0)
+      }
+    }
+
+    void refresh()
+    const unsubscribe = subscribeToPostgresChanges({
+      topic: `notifications-badge:${session.user.id}`,
+      event: 'INSERT',
+      table: 'notifications',
+      filter: `user_id=eq.${session.user.id}`,
+    }, () => { void refresh() })
+
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [session?.user.id])
+
+  const badge = unreadCount > 99 ? '99+' : String(unreadCount)
+
+  return <header className="topbar"><div className="topbar__inner"><BrandLockup /><div className="topbar__actions"><NavLink to="/notifications" className="icon-button topbar__notice" aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}><Bell size={19} />{unreadCount > 0 && <span className="notification-badge">{badge}</span>}</NavLink><NavLink to="/profile" className="topbar__avatar" aria-label="Your profile"><Avatar name={name} image={profile?.avatar_url ?? undefined} size="small" /></NavLink></div></div></header>
 }
 
 function isActiveRoute(pathname: string, to: string) {
