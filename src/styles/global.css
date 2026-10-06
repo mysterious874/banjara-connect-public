@@ -1059,3 +1059,72 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   0% { transform: translateX(-110%); }
   100% { transform: translateX(290%); }
 }
+
+
+.edit-profile-avatar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.edit-profile-avatar > div {
+  display: grid;
+  gap: 7px;
+}
+.edit-profile-avatar__button {
+  width: fit-content;
+}
+.location-picker {
+  position: relative;
+}
+.location-picker__input {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+.location-picker__input > .field {
+  flex: 1;
+}
+.location-picker__input .button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+.location-suggestions {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% - 2px);
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgba(0,0,0,.12);
+}
+.location-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.location-suggestion:hover,
+.location-suggestion:focus-visible {
+  background: var(--surface-muted);
+}
+.location-suggestions__status {
+  padding: 9px 11px;
+  color: var(--muted);
+  font-size: .85rem;
+}
