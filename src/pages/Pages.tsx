@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Plus, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Plus, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
@@ -12,7 +12,7 @@ import { useAuth } from '../hooks/AuthProvider'
 import { usePreviewToast } from '../hooks/usePreviewToast'
 import { loadBlockState, loadBlockedUserIds, toggleBlock } from '../utils/blockData'
 import { loadPost, loadPostsPage } from '../utils/postData'
-import { filterProfiles, loadProfiles, loadProfilesPage } from '../utils/profileData'
+import { filterProfiles, loadProfiles, loadProfilesPage, searchProfilesByUsername } from '../utils/profileData'
 import { getOrCreateConversation } from '../utils/chatData'
 import { supabase } from '../utils/supabase'
 import { deletePostMedia, uploadPostMedia, validatePostMedia } from '../utils/mediaData'
@@ -168,12 +168,18 @@ export function HomePage() {
 export function ConnectPage() {
   const { session } = useAuth()
   const [people, setPeople] = useState<ProfileRecord[]>([])
+  const [searchResults, setSearchResults] = useState<ProfileRecord[]>([])
+  const [usernameQuery, setUsernameQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [isSearching, setIsSearching] = useState(false)
   const [error, setError] = useState('')
+  const [searchError, setSearchError] = useState('')
   useEffect(() => {
     let active = true
     if (!session?.user) {
       setPeople([])
+      setSearchResults([])
+      setUsernameQuery('')
       setError('')
       setIsLoading(false)
       return () => { active = false }
@@ -184,7 +190,35 @@ export function ConnectPage() {
     loadProfiles().then((nextPeople) => { if (active) setPeople(nextPeople) }).catch((caught: unknown) => { if (active) setError(userFacingError(caught, 'Could not load profiles.')) }).finally(() => { if (active) setIsLoading(false) })
     return () => { active = false }
   }, [session?.user.id])
-  return <section className="page-stack"><PageHeading eyebrow="FIND YOUR CIRCLE" title="Connect" description="Meet community members and discover the places, traditions, and ideas they care about." /><div className="connect-feature"><div className="connect-feature__icon"><Users size={23} /></div><div><span className="eyebrow">YOUR COMMUNITY</span><h2>Good things grow together.</h2><p>Discover members and shared interests.</p></div><Compass className="connect-feature__watermark" size={74} /></div><div className="section-heading"><h2>People you may know</h2></div>{isLoading ? <Loading label="Loading profiles" /> : error ? <ErrorState title="Could not load profiles" description={error} /> : people.length ? <div className="connect-list">{people.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title="No profiles to show" description="Other community profiles will appear here when available." />}</section>
+  useEffect(() => {
+    let active = true
+    const value = usernameQuery.trim()
+    setSearchError('')
+    if (value.length < 2) {
+      setSearchResults([])
+      setIsSearching(false)
+      return () => { active = false }
+    }
+    setIsSearching(true)
+    const timer = window.setTimeout(() => {
+      searchProfilesByUsername(value).then((results) => {
+        if (active) setSearchResults(results)
+      }).catch((caught: unknown) => {
+        if (active) {
+          setSearchResults([])
+          setSearchError(userFacingError(caught, 'Could not search usernames.'))
+        }
+      }).finally(() => {
+        if (active) setIsSearching(false)
+      })
+    }, 300)
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [session?.user.id, usernameQuery])
+  const showingSearch = usernameQuery.trim().length >= 2
+  return <section className="page-stack"><PageHeading eyebrow="FIND YOUR CIRCLE" title="Connect" description="Meet community members and discover the places, traditions, and ideas they care about." /><div className="connect-search"><Search size={17} aria-hidden="true" /><input type="search" value={usernameQuery} onChange={(event) => setUsernameQuery(event.target.value)} placeholder="Search by username" aria-label="Search by username" autoComplete="off" />{usernameQuery && <button type="button" aria-label="Clear username search" onClick={() => setUsernameQuery('')}><X size={16} /></button>}</div>{showingSearch && <section className="connect-search-results"><div className="section-heading"><h2>{isSearching ? 'Searching…' : `Results for @${usernameQuery.trim()}`}</h2></div>{searchError ? <p className="field__error" role="alert">{searchError}</p> : isSearching ? <Loading label="Searching usernames" /> : searchResults.length ? <div className="connect-list">{searchResults.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title="No username found" description="Try another username." />}</section>}<div className="connect-feature"><div className="connect-feature__icon"><Users size={23} /></div><div><span className="eyebrow">YOUR COMMUNITY</span><h2>Good things grow together.</h2><p>Discover members and shared interests.</p></div><Compass className="connect-feature__watermark" size={74} /></div><div className="section-heading"><h2>People you may know</h2></div>{isLoading ? <Loading label="Loading profiles" /> : error ? <ErrorState title="Could not load profiles" description={error} /> : people.length ? <div className="connect-list">{people.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title="No profiles to show" description="Other community profiles will appear here when available." />}</section>
 }
 
 export function CommunityPage() {
