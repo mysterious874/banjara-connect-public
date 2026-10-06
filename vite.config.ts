@@ -11,14 +11,14 @@ export default defineConfig({
       includeAssets: ['banjara-mark.svg', 'banjara-mark-maskable.svg'],
       manifest: {
         id: '/',
-        name: 'Connect',
-        short_name: 'Connect',
+        name: 'Banjara Connect',
+        short_name: 'Banjara Connect',
         description: 'Banjara Connect brings community stories, culture, and conversations together.',
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        theme_color: '#7b1e2b',
-        background_color: '#fbf4e8',
+        theme_color: '#7A263A',
+        background_color: '#FAF5EA',
         icons: [
           { src: '/banjara-mark.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           { src: '/banjara-mark-maskable.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
