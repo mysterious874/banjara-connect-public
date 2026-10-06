@@ -1977,4 +1977,17 @@ a{color:inherit}:focus-visible{outline-color:var(--bc-gold)}
 .chat-screen[class*="chat-screen--theme-"] .chat-compose-area .micro-note { color: var(--chat-muted, var(--bc-muted)); }
 
 /* Home header 4px lower */
-.app-shell:not(.app-shell--chat):not(.app-shell--assistant) .topbar { transform: translateY(4px); }
+.app-shell:not(.app-shell--chat):not(.app-shell--assistant) .topbar {
+  transform: translateY(4px);
+}
+.app-shell:not(.app-shell--chat):not(.app-shell--assistant) .topbar::before {
+  position: absolute;
+  z-index: -1;
+  top: -4px;
+  right: 0;
+  left: 0;
+  height: 4px;
+  background: inherit;
+  border-top: 1px solid var(--bc-line);
+  content: '';
+}
