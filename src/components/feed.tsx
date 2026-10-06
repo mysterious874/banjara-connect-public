@@ -137,6 +137,30 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
       </div>
       {likeError && <p className="field__error" role="alert">{likeError}</p>}
       {postError && <p className="field__error" role="alert">{postError}</p>}
+      {showShareDialog && <div className="share-dialog-backdrop" role="presentation" onClick={() => !isShareSending && setShowShareDialog(false)}>
+        <div className="share-dialog" role="dialog" aria-modal="true" aria-labelledby={`share-post-title-${post.id}`} onClick={(event) => event.stopPropagation()}>
+          <div className="share-dialog__head">
+            <div><span className="eyebrow">SEND TO YOUR CIRCLE</span><h2 id={`share-post-title-${post.id}`}>Share post</h2></div>
+            <button type="button" className="icon-button" aria-label="Close share dialog" onClick={() => setShowShareDialog(false)} disabled={isShareSending}><X size={19} /></button>
+          </div>
+          <div className="share-dialog__post"><strong>{authorName}</strong><p>{postContent || 'Photo/video post'}</p></div>
+          {isShareLoading ? <Loading label="Loading conversations" /> : conversations.length ? <div className="share-dialog__list">{conversations.map((conversation) => {
+            const name = conversation.member.display_name || conversation.member.username || 'Community member'
+            const selected = selectedConversationIds.includes(conversation.id)
+            return <button type="button" className={`share-conversation${selected ? ' is-selected' : ''}`} key={conversation.id} onClick={() => toggleShareConversation(conversation.id)} disabled={isShareSending}>
+              <Avatar name={name} image={conversation.member.avatar_url ?? undefined} />
+              <span><strong>{name}</strong><small>{conversation.lastMessage?.content || 'Conversation'}</small></span>
+              <span className="share-conversation__check">{selected ? '✓' : ''}</span>
+            </button>
+          })}</div> : <EmptyState title="No conversations yet" description="Start a chat with a community member first, then you can share posts here." />}
+          {shareError && <p className="field__error" role="alert">{shareError}</p>}
+          {shareSuccess && <p className="micro-note" role="status">{shareSuccess}</p>}
+          <div className="share-dialog__footer">
+            <Button type="button" variant="quiet" onClick={() => setShowShareDialog(false)} disabled={isShareSending}>Close</Button>
+            <Button type="button" onClick={() => void sharePost()} disabled={!selectedConversationIds.length || isShareSending || isShareLoading}>{isShareSending ? 'Sending…' : `Send${selectedConversationIds.length ? ` · ${selectedConversationIds.length}` : ''}`} <Send size={15} /></Button>
+          </div>
+        </div>
+      </div>}
       <ConfirmationDialog open={showDeleteConfirmation} title="Delete this post?" description="This removes your post from the community. This action cannot be undone." confirmLabel={isDeletingPost ? 'Deleting…' : 'Delete post'} onClose={() => { if (!isDeletingPost) setShowDeleteConfirmation(false) }} onConfirm={() => void deletePost()} />
     </article>
   )
