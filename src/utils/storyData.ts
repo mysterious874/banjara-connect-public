@@ -35,8 +35,7 @@ export async function uploadStoryMedia(file: File, userId: string, storyId: stri
     upsert: false,
   })
   if (error) throw error
-  const { data } = supabase.storage.from(BANJARA_STORIES_BUCKET).getPublicUrl(path)
-  return { path, publicUrl: data.publicUrl }
+  return { path }
 }
 
 export async function deleteStoryMedia(paths: string[]) {
@@ -61,10 +60,25 @@ export async function loadActiveStories() {
     .in('id', userIds)
   if (profileError) throw profileError
   const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
-  return rows.map((item) => ({
-    ...item,
-    media_type: item.media_type === 'video' ? 'video' : item.media_type === 'image' ? 'image' : null,
-    author: byId.get(item.user_id) ?? null,
+  return await Promise.all(rows.map(async (item) => {
+    let mediaUrl = item.media_url
+    if (mediaUrl) {
+      try {
+        const { data: signed, error: signedError } = await supabase.storage
+          .from(BANJARA_STORIES_BUCKET)
+          .createSignedUrl(mediaUrl, 60 * 60)
+        if (signedError) throw signedError
+        mediaUrl = signed.signedUrl
+      } catch {
+        mediaUrl = null
+      }
+    }
+    return {
+      ...item,
+      media_url: mediaUrl,
+      media_type: item.media_type === 'video' ? 'video' : item.media_type === 'image' ? 'image' : null,
+      author: byId.get(item.user_id) ?? null,
+    }
   })) as StoryRecord[]
 }
 
@@ -83,7 +97,7 @@ export async function createStory(userId: string, content: string, mediaFile?: F
       const uploaded = await uploadStoryMedia(mediaFile, userId, data.id)
       uploadedPath = uploaded.path
       const { error: updateError } = await supabase.from('stories').update({
-        media_url: uploaded.publicUrl,
+        media_url: uploaded.path,
       }).eq('id', data.id).eq('user_id', userId)
       if (updateError) throw updateError
     }
@@ -100,7 +114,9 @@ export async function deleteStory(story: StoryRecord) {
   if (error) throw error
   if (story.media_url) {
     const marker = `/storage/v1/object/public/${BANJARA_STORIES_BUCKET}/`
-    const index = story.media_url.indexOf(marker)
-    if (index >= 0) await deleteStoryMedia([decodeURIComponent(story.media_url.slice(index + marker.length))])
+    const path = story.media_url.includes(marker)
+      ? decodeURIComponent(story.media_url.slice(story.media_url.indexOf(marker) + marker.length))
+      : story.media_url
+    await deleteStoryMedia([path])
   }
 }
