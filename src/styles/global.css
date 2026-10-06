@@ -1679,3 +1679,40 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
 .chat-message-text .chat-shared-link { color: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
 .chat-bubble--them .chat-message-text .chat-shared-link { color: var(--bc-maroon); }
 .chat-bubble--you .chat-message-text .chat-shared-link { color: #fff; }
+
+
+.community-group-screen .chat-screen__profile {
+  cursor:default;
+}
+
+.community-group-message__sender {
+  display:block;
+  margin-bottom:4px;
+  font-size:11px;
+}
+
+.community-group-message__delete {
+  display:block;
+  margin-top:5px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:var(--bc-muted);
+  font:inherit;
+  font-size:10px;
+  cursor:pointer;
+}
+
+.community-group-message__delete:hover {
+  color:var(--bc-maroon);
+}
+
+.community-group-card {
+  color:inherit;
+  text-decoration:none;
+  cursor:pointer;
+}
+
+.community-group-card:hover {
+  transform:translateY(-1px);
+}
