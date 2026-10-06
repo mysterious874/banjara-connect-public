@@ -1533,6 +1533,79 @@ export function CommunityGroupPage() {
     setIsLoading(true)
     setError('')
     setRealtimeError('')
+    let groupMessageRefreshPending = false
+    let groupMessageRefreshQueued = false
+    let groupMemberRefreshPending = false
+    let groupMemberRefreshQueued = false
+
+    const refreshGroupMessages = async () => {
+      if (groupMessageRefreshPending) {
+        groupMessageRefreshQueued = true
+        return
+      }
+      groupMessageRefreshPending = true
+      do {
+        groupMessageRefreshQueued = false
+        try {
+          const { data: latest, error: latestError } = await supabase
+            .from('community_group_messages')
+            .select('id,group_id,sender_id,content,media_url,media_type,created_at')
+            .eq('group_id', groupId)
+            .order('created_at', { ascending: false })
+            .limit(100)
+          if (latestError) throw latestError
+          if (!active) break
+          const incoming = ((latest ?? []) as CommunityGroupMessage[]).reverse()
+          for (const item of incoming) {
+            if (item.media_url) {
+              try { item.media_signed_url = await createGroupMediaUrl(item.media_url) } catch { item.media_signed_url = null }
+            }
+          }
+          setMessages((current) => {
+            const byId = new Map(current.map((item) => [item.id, item]))
+            for (const item of incoming) byId.set(item.id, { ...byId.get(item.id), ...item })
+            return [...byId.values()].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          })
+          const ids = [...new Set(incoming.map((row) => row.sender_id))]
+          if (ids.length) {
+            const { data: latestProfiles, error: profileError } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
+            if (profileError) throw profileError
+            if (active) setProfiles((current) => ({ ...current, ...Object.fromEntries((latestProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])) }))
+          }
+        } catch (caught) {
+          if (active) setRealtimeError(userFacingError(caught, 'Live group messages could not be refreshed.'))
+        }
+      } while (active && groupMessageRefreshQueued)
+      groupMessageRefreshPending = false
+    }
+
+    const refreshGroupMembers = async () => {
+      if (groupMemberRefreshPending) {
+        groupMemberRefreshQueued = true
+        return
+      }
+      groupMemberRefreshPending = true
+      do {
+        groupMemberRefreshQueued = false
+        try {
+          if (!session?.user || !active) break
+          const { data: membership, error: membershipError } = await supabase.from('community_group_members').select('role').eq('group_id', groupId).eq('user_id', session.user.id).maybeSingle()
+          if (membershipError) throw membershipError
+          if (!membership) {
+            if (active) {
+              setError('You are no longer a member of this community.')
+              setGroup(null)
+            }
+            break
+          }
+          await loadGroupMembers()
+        } catch (caught) {
+          if (active) setRealtimeError(userFacingError(caught, 'Live group members could not be refreshed.'))
+        }
+      } while (active && groupMemberRefreshQueued)
+      groupMemberRefreshPending = false
+    }
+
     void (async () => {
       try {
         if (!session?.user || !groupId) throw new Error('Community group could not be found.')
@@ -1585,33 +1658,7 @@ export function CommunityGroupPage() {
           table: 'community_group_messages',
           filter: `group_id=eq.${groupId}`,
         }, () => {
-          void (async () => {
-            const { data: latest, error: latestError } = await supabase
-              .from('community_group_messages')
-              .select('id,group_id,sender_id,content,media_url,media_type,created_at')
-              .eq('group_id', groupId)
-              .order('created_at', { ascending: false })
-              .limit(100)
-            if (latestError || !active) return
-            const incoming = ((latest ?? []) as CommunityGroupMessage[]).reverse()
-            for (const item of incoming) {
-              if (item.media_url) {
-                try { item.media_signed_url = await createGroupMediaUrl(item.media_url) } catch { item.media_signed_url = null }
-              }
-            }
-            setMessages((current) => {
-              const byId = new Map(current.map((item) => [item.id, item]))
-              for (const item of incoming) byId.set(item.id, { ...byId.get(item.id), ...item })
-              return [...byId.values()].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-            })
-            const ids = [...new Set(incoming.map((row) => row.sender_id))]
-            if (ids.length) {
-              const { data: latestProfiles } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
-              if (active) setProfiles((current) => ({ ...current, ...Object.fromEntries((latestProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])) }))
-            }
-          })().catch((caught: unknown) => {
-            if (active) setRealtimeError(userFacingError(caught, 'Live group messages could not be refreshed.'))
-          })
+          void refreshGroupMessages()
         }, (status) => {
           if (active) setRealtimeError(status === 'SUBSCRIBED' ? '' : `Live group updates are unavailable (${status.toLowerCase().replace('_', ' ')}).`)
         })
@@ -1622,18 +1669,7 @@ export function CommunityGroupPage() {
           table: 'community_group_members',
           filter: `group_id=eq.${groupId}`,
         }, () => {
-          void (async () => {
-            if (!session?.user || !active) return
-            const { data: membership } = await supabase.from('community_group_members').select('role').eq('group_id', groupId).eq('user_id', session.user.id).maybeSingle()
-            if (!membership) {
-              setError('You are no longer a member of this community.')
-              setGroup(null)
-              return
-            }
-            await loadGroupMembers()
-          })().catch((caught: unknown) => {
-            if (active) setRealtimeError(userFacingError(caught, 'Live group members could not be refreshed.'))
-          })
+          void refreshGroupMembers()
         }, (status) => {
           if (active && status !== 'SUBSCRIBED') setRealtimeError(`Live member updates are unavailable (${status.toLowerCase().replace('_', ' ')}).`)
         })
