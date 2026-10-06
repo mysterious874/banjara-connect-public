@@ -10,7 +10,7 @@ import { userFacingError } from '../utils/userFacingError'
 import { loadConversations, sendConversationMessage, type ConversationSummary } from '../utils/chatData'
 import { Avatar, Button, ConfirmationDialog, EmptyState, Loading } from './ui'
 
-export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () => void }) {
+export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost; onDeleted?: () => void; initialLikeState?: { count: number; liked: boolean } }) {
   const { session } = useAuth()
   const [likeCount, setLikeCount] = useState(0)
   const [liked, setLiked] = useState(false)
@@ -47,6 +47,12 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
       setIsLikeLoading(false)
       return () => { active = false }
     }
+    if (initialLikeState) {
+      setLikeCount(initialLikeState.count)
+      setLiked(initialLikeState.liked)
+      setIsLikeLoading(false)
+      return () => { active = false }
+    }
     setIsLikeLoading(true)
     setLikeError('')
     loadPostLikes(post.id).then((state) => {
@@ -59,7 +65,7 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
       if (active) setIsLikeLoading(false)
     })
     return () => { active = false }
-  }, [post.id, session?.user.id])
+  }, [initialLikeState, post.id, session?.user.id])
 
   async function handleLike() {
     if (!session?.user || isLikeLoading || isLikePending) return
