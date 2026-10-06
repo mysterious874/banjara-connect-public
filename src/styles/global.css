@@ -1368,3 +1368,197 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
     overflow-y: auto;
   }
 }
+
+.story-card--button {
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.story-page-thumbs {
+  display: grid;
+  gap: 12px;
+}
+.story-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+}
+.story-fullscreen__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 8, 18, .88);
+  backdrop-filter: blur(10px);
+}
+.story-fullscreen__card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 430px);
+  height: min(94vh, 820px);
+  overflow: hidden;
+  border-radius: 14px;
+  background: #090d15;
+  box-shadow: 0 24px 80px rgba(0,0,0,.5);
+  color: #fff;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+}
+.story-fullscreen__progress {
+  position: absolute;
+  z-index: 5;
+  top: 8px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  gap: 4px;
+}
+.story-fullscreen__progress-segment {
+  height: 3px;
+  flex: 1;
+  border-radius: 99px;
+  background: rgba(255,255,255,.3);
+}
+.story-fullscreen__progress-segment.is-complete,
+.story-fullscreen__progress-segment.is-active {
+  background: #fff;
+}
+.story-fullscreen__head {
+  position: absolute;
+  z-index: 4;
+  top: 18px;
+  left: 14px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.story-fullscreen__head .post-card__author {
+  color: #fff;
+}
+.story-fullscreen__head .post-card__author span span {
+  color: rgba(255,255,255,.72);
+}
+.story-fullscreen__close {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,.35);
+  color: #fff;
+  cursor: pointer;
+}
+.story-fullscreen__content {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  background: #090d15;
+}
+.story-fullscreen__asset {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.story-fullscreen__text {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 56px 34px 90px;
+  text-align: center;
+  font-size: clamp(1.5rem, 5vw, 2.3rem);
+  line-height: 1.35;
+  white-space: pre-wrap;
+  background: linear-gradient(145deg, #6b3b55, #172b49);
+}
+.story-fullscreen__caption {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  padding: 10px 13px;
+  border-radius: 12px;
+  background: rgba(0,0,0,.55);
+  color: #fff;
+  white-space: pre-wrap;
+}
+.story-fullscreen__prev,
+.story-fullscreen__next {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,.32);
+  color: #fff;
+  cursor: pointer;
+}
+.story-fullscreen__prev { left: 10px; }
+.story-fullscreen__next { right: 10px; }
+.story-fullscreen__prev:disabled,
+.story-fullscreen__next:disabled {
+  opacity: .25;
+  cursor: default;
+}
+.story-fullscreen__reply {
+  position: absolute;
+  z-index: 5;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.story-fullscreen__reply input {
+  min-height: 44px;
+  border-color: rgba(255,255,255,.38);
+  background: rgba(0,0,0,.38);
+  color: #fff;
+}
+.story-fullscreen__reply input::placeholder {
+  color: rgba(255,255,255,.72);
+}
+.story-fullscreen__delete {
+  position: absolute;
+  z-index: 5;
+  right: 14px;
+  bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(0,0,0,.5);
+  color: #fff;
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .story-fullscreen {
+    padding: 0;
+  }
+  .story-fullscreen__card {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+  .story-fullscreen__prev,
+  .story-fullscreen__next {
+    display: none;
+  }
+}
