@@ -1503,7 +1503,10 @@ export function CommunityGroupPage() {
         setGroup(groupRow)
         setMessages(nextMessages)
         setProfiles(Object.fromEntries((senderProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])))
-        setMembers(((memberRows ?? []) as Array<{ user_id: string; role: string }>).map((member) => ({ user_id: member.user_id, role: member.role, username: '', display_name: null, avatar_url: null })))
+        setMembers(((memberRows ?? []) as Array<{ user_id: string; role: string }>).map((member) => {
+          const profile = (senderProfiles ?? []).find((item) => item.id === member.user_id) as ProfileRecord | undefined
+          return { user_id: member.user_id, role: member.role, username: profile?.username ?? '', display_name: profile?.display_name ?? null, avatar_url: profile?.avatar_url ?? null }
+        }))
         unsubscribe = subscribeToPostgresChanges({
           topic: `community-group:${groupId}`,
           event: '*',
