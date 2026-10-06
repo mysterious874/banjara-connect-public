@@ -1819,7 +1819,7 @@ export function CommunityGroupPage() {
     setGroupSaving(true)
     setMemberError('')
     try {
-      const { error: deleteError } = await supabase.from('community_groups').delete().eq('id', groupId)
+      const { error: deleteError } = await supabase.rpc('delete_community_group', { p_group_id: groupId })
       if (deleteError) throw deleteError
       window.location.href = '/community'
     } catch (caught) {
