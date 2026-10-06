@@ -222,13 +222,71 @@ export function ConnectPage() {
 }
 
 export function CommunityPage() {
-  const [view, setView] = useState('Discover')
-  const communities = [
-    { name: 'Threads & Traditions', detail: 'Textile craft, family stories, and the skills passed between generations.', members: '24 members', tone: 'maroon' },
-    { name: 'Gathering Table', detail: 'Recipes, regional food, and the memories that make a meal.', members: '18 members', tone: 'orange' },
-    { name: 'Songs We Carry', detail: 'Music, dance, and songs from across the Banjara community.', members: '31 members', tone: 'cream' },
-  ]
-  return <section className="page-stack"><PageHeading eyebrow="SHARED INTERESTS, SHARED ROOTS" title="Community" description="Find people gathering around the things they care about." /><PreviewNotice /><Tabs label="Community preview tabs" items={['Discover', 'My Communities', 'Featured']} value={view} onChange={setView} />{view === 'My Communities' ? <EmptyState title="No joined communities" description="Your preview memberships are not saved between visits." /> : <div className="community-preview-grid">{(view === 'Featured' ? communities.slice(0, 2) : communities).map((community) => <CommunityPreviewCard key={community.name} {...community} />)}</div>}<Link to="/community/history" className="community-heritage-link"><span className="community-heritage-link__icon"><BookOpen size={20} /></span><span><strong>Banjara History &amp; Heritage</strong><small>Explore history, language, textile, performance and regional perspectives.</small></span><ChevronRight size={18} /></Link><div className="section-heading"><h2>Upcoming gatherings</h2><span className="local-label">SAMPLE EVENTS</span></div><div className="event-preview"><span className="event-preview__date"><strong>18</strong><small>OCT</small></span><span><strong>Stories from the loom</strong><small>Community circle · Ahmedabad · local preview</small></span><ChevronRight size={17} /></div></section>
+  const { profile, session } = useAuth()
+  const [posts, setPosts] = useState<FeedPost[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [offset, setOffset] = useState(0)
+  const [error, setError] = useState('')
+
+  async function loadCommunityPosts(nextOffset = 0, append = false) {
+    if (!session?.user) return
+    if (append) setIsLoadingMore(true)
+    else setIsLoading(true)
+    setError('')
+    try {
+      const blockedIds = await loadBlockedUserIds()
+      const page = await loadPostsPage({ excludeUserIds: blockedIds, offset: nextOffset })
+      setPosts((current) => {
+        if (!append) return page.posts
+        const seen = new Set(current.map((post) => post.id))
+        return [...current, ...page.posts.filter((post) => !seen.has(post.id))]
+      })
+      setHasMore(page.hasMore)
+      setOffset(page.nextOffset)
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not load community posts.'))
+    } finally {
+      if (append) setIsLoadingMore(false)
+      else setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    setPosts([])
+    setOffset(0)
+    setHasMore(false)
+    void loadCommunityPosts()
+  }, [session?.user.id])
+
+  return <section className="page-stack page-stack--narrow">
+    <PageHeading eyebrow="SHARED STORIES, SHARED ROOTS" title="Community" description="A place for Banjara Connect members to share stories, photos, thoughts and moments." />
+
+    <div className="community-action-card">
+      <div className="post-card__author">
+        <Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} />
+        <span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><small>Share something with the community</small></span>
+      </div>
+      <Button to="/create">Create a post <Send size={15} /></Button>
+    </div>
+
+    <div className="section-heading">
+      <div><span className="eyebrow">COMMUNITY FEED</span><h2>What people are sharing</h2></div>
+      <button type="button" className="button button--quiet" onClick={() => void loadCommunityPosts()} disabled={isLoading}>Refresh</button>
+    </div>
+
+    {isLoading ? <Loading label="Loading community posts" /> : error && !posts.length ? <ErrorState title="Could not load community" description={error} /> : posts.length ? <div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div> : <EmptyState title="The community is quiet" description="Be the first to share a story, photo or thought with the community." action={<Button to="/create">Create the first post</Button>} />}
+
+    {error && posts.length > 0 && <p className="field__error" role="alert">{error}</p>}
+    {hasMore && <Button variant="outline" onClick={() => void loadCommunityPosts(offset, true)} disabled={isLoadingMore}>{isLoadingMore ? 'Loading more posts…' : 'Load more posts'}</Button>}
+
+    <Link to="/community/history" className="community-heritage-link">
+      <span className="community-heritage-link__icon"><BookOpen size={20} /></span>
+      <span><strong>Banjara History &amp; Heritage</strong><small>Explore history, language, textile, performance and regional perspectives.</small></span>
+      <ChevronRight size={18} />
+    </Link>
+  </section>
 }
 
 export function SearchPage() {
