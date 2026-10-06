@@ -230,6 +230,23 @@ export function CommunityPage() {
   const [groupName, setGroupName] = useState('')
   const [groupDescription, setGroupDescription] = useState('')
   const [groupSaving, setGroupSaving] = useState(false)
+  const [selectedGroupMedia, setSelectedGroupMedia] = useState<File | null>(null)
+  const [isSendingGroupMedia, setIsSendingGroupMedia] = useState(false)
+  const groupMediaInputRef = useRef<HTMLInputElement | null>(null)
+  const [groupUnreadCount, setGroupUnreadCount] = useState(0)
+  const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(false)
+  const [isLoadingOlderGroupMessages, setIsLoadingOlderGroupMessages] = useState(false)
+  const isGroupAdmin = Boolean(session?.user && group && (group.created_by === session.user.id || members.some((member) => member.user_id === session.user.id && member.role === 'admin')))
+  const [reportsOpen, setReportsOpen] = useState(false)
+  const [reports, setReports] = useState<Array<{ id: string; reporter_id: string; reported_user_id: string | null; group_message_id: string | null; reason: string; details: string | null; status: string; created_at: string; resolved_at: string | null }>>([])
+  const [reportsLoading, setReportsLoading] = useState(false)
+  const [reportAction, setReportAction] = useState('')
+  const [reportTarget, setReportTarget] = useState<{ messageId?: string; userId: string; label: string } | null>(null)
+  const [reportReason, setReportReason] = useState('Spam or unwanted content')
+  const [reportDetails, setReportDetails] = useState('')
+  const [reportSaving, setReportSaving] = useState(false)
+  const [reportError, setReportError] = useState('')
+
   const [groupError, setGroupError] = useState('')
 
   async function loadGroups() {
@@ -1794,6 +1811,79 @@ export function CommunityGroupPage() {
       window.location.href = '/community'
     } catch (caught) {
       setMemberError(userFacingError(caught, 'Could not leave this community.'))
+    } finally {
+      setMemberAction('')
+    }
+  }
+
+  async function loadGroupReports() {
+    if (!groupId || !isGroupAdmin) return
+    setReportsLoading(true)
+    setMemberError('')
+    try {
+      const { data, error: reportsError } = await supabase.rpc('load_community_group_reports', { p_group_id: groupId })
+      if (reportsError) throw reportsError
+      setReports((data ?? []) as Array<{ id: string; reporter_id: string; reported_user_id: string | null; group_message_id: string | null; reason: string; details: string | null; status: string; created_at: string; resolved_at: string | null }>)
+      setReportsOpen(true)
+    } catch (caught) {
+      setMemberError(userFacingError(caught, 'Could not load community reports.'))
+    } finally {
+      setReportsLoading(false)
+    }
+  }
+
+  async function updateGroupReport(reportId: string, status: 'dismissed' | 'resolved') {
+    if (!groupId || !isGroupAdmin || reportAction) return
+    setReportAction(reportId)
+    setMemberError('')
+    try {
+      const { error: updateError } = await supabase.rpc('update_community_group_report', { p_report_id: reportId, p_status: status })
+      if (updateError) throw updateError
+      setReports((current) => current.map((report) => report.id === reportId ? { ...report, status, resolved_at: new Date().toISOString() } : report))
+    } catch (caught) {
+      setMemberError(userFacingError(caught, 'Could not update this report.'))
+    } finally {
+      setReportAction('')
+    }
+  }
+
+  async function submitGroupReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!groupId || !session?.user || !reportTarget || reportSaving) return
+    setReportSaving(true)
+    setReportError('')
+    try {
+      const { error: reportSubmitError } = await supabase.rpc('report_community_group_content', {
+        p_group_id: groupId,
+        p_group_message_id: reportTarget.messageId ?? null,
+        p_reported_user_id: reportTarget.userId,
+        p_reason: reportReason,
+        p_details: reportDetails.trim() || null,
+      })
+      if (reportSubmitError) throw reportSubmitError
+      setReportTarget(null)
+      setReportDetails('')
+      setReportReason('Spam or unwanted content')
+      setReportError('')
+    } catch (caught) {
+      setReportError(userFacingError(caught, 'Could not submit this report.'))
+    } finally {
+      setReportSaving(false)
+    }
+  }
+
+  async function removeGroupMember(userId: string) {
+    if (!groupId || !session?.user) return
+    const currentUser = members.find((member) => member.user_id === session.user.id)
+    if (currentUser?.role !== 'admin' || userId === session.user.id) return
+    setMemberAction(userId)
+    setMemberError('')
+    try {
+      const { error: removeError } = await supabase.rpc('remove_community_group_member', { p_group_id: groupId, p_user_id: userId })
+      if (removeError) throw removeError
+      await loadGroupMembers()
+    } catch (caught) {
+      setMemberError(userFacingError(caught, 'Could not remove this member.'))
     } finally {
       setMemberAction('')
     }
