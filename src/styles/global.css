@@ -1982,7 +1982,7 @@ a{color:inherit}:focus-visible{outline-color:var(--bc-gold)}
 }
 .app-shell:not(.app-shell--chat):not(.app-shell--assistant) .topbar::before {
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   top: -4px;
   right: 0;
   left: 0;
