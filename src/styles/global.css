@@ -1971,3 +1971,75 @@ body {
 .preview-notice__dot { background: var(--bc-orange); }
 a { color: inherit; }
 :focus-visible { outline-color: var(--bc-orange); }
+
+
+/* Theme 4 contrast corrections — keep the dark Banjara palette readable */
+body, .app-shell, .route-content, .page-stack, .page-heading, .home-intro,
+.section-heading, .feed-heading, .aside-section__heading, .settings-group,
+.modal, .bottom-sheet, .toast { color: var(--bc-text); }
+
+.page-heading p, .home-intro p, .micro-note, .post-card__meta,
+.post-card__author > span > span, .user-card__copy > span, .aside-about,
+.state-block, .state-block p { color: #cbbebb; }
+
+.post-card__author strong, .user-card__copy strong, .section-heading h2,
+.feed-heading h2, .aside-section__heading h2, .settings-group h2,
+.page-heading h1, .home-intro h1, .connect-feature h2 { color: #fff5f2; }
+
+.post-card__text, .connect-feature p { color: #d8cac7; }
+
+.field__label, .check-row, .form-label, label { color: #eadedb; }
+.field__error { color: #ff7d8d; }
+
+.field__control, .search-bar, .connect-search { color: #f7f1ed; }
+.field__control::placeholder, .search-bar input::placeholder,
+.connect-search input::placeholder { color: #a99895; }
+
+.search-bar button, .connect-search button { color: #ffd9df; }
+
+.post-action, .tabs__item, .desktop-nav__item, .bottom-nav__item { color: #cdbfbc; }
+.post-action:hover, .post-action.is-liked, .tabs__item.is-active,
+.desktop-nav__item.is-active, .bottom-nav__item.is-active { color: #fff; }
+
+.story-card, .preview-state > span { color: #d2c4c1; }
+.community-note p { color: #e0d1cc; }
+.community-note .eyebrow { color: #ffb15f; }
+
+.connect-search-results, .connect-list .user-card, .user-card { color: var(--bc-text); }
+
+.location-suggestions, .share-dialog, .share-dialog__post, .share-conversation,
+.story-create-box, .story-list-panel, .story-user-row, .story-viewer {
+  color: var(--bc-text);
+  background: var(--bc-paper);
+  border-color: var(--bc-line);
+}
+
+.location-suggestion, .share-conversation, .story-user-row {
+  color: #f7f1ed;
+  background: transparent;
+}
+
+.location-suggestion:hover, .location-suggestion:focus-visible,
+.share-conversation:hover, .share-conversation:focus-visible,
+.story-user-row:hover, .story-user-row.is-selected {
+  color: #fff;
+  background: var(--bc-soft);
+}
+
+.location-suggestions__status, .share-conversation small, .story-user-row small {
+  color: #b9aaa7;
+}
+
+.share-dialog__footer, .story-reply {
+  background: var(--bc-paper);
+  border-color: var(--bc-line);
+}
+
+.share-conversation.is-selected {
+  border-color: var(--bc-orange);
+  background: var(--bc-soft);
+}
+
+.share-conversation__check { color: #ffd9df; border-color: #76545b; }
+.story-viewer__head { border-bottom-color: var(--bc-line); }
+.edit-profile-avatar { background: var(--bc-paper); border-color: var(--bc-line); }
