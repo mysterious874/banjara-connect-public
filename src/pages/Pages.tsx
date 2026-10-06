@@ -1459,6 +1459,13 @@ export function CommunityGroupPage() {
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
   const [realtimeError, setRealtimeError] = useState('')
+  const [members, setMembers] = useState<Array<{ user_id: string; role: string; username: string; display_name: string | null; avatar_url: string | null }>>([])
+  const [membersOpen, setMembersOpen] = useState(false)
+  const [memberQuery, setMemberQuery] = useState('')
+  const [memberResults, setMemberResults] = useState<ProfileRecord[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
+  const [memberAction, setMemberAction] = useState('')
+  const [memberError, setMemberError] = useState('')
 
   useEffect(() => {
     let active = true
@@ -1477,15 +1484,17 @@ export function CommunityGroupPage() {
           .maybeSingle()
         if (membershipError) throw membershipError
         if (!membership) throw new Error('You are not a member of this community.')
-        const [{ data: groupRow, error: groupError }, { data: rows, error: messagesError }] = await Promise.all([
+        const [{ data: groupRow, error: groupError }, { data: rows, error: messagesError }, { data: memberRows, error: membersError }] = await Promise.all([
           supabase.from('community_groups').select('id,name,description,created_by').eq('id', groupId).maybeSingle(),
           supabase.from('community_group_messages').select('id,group_id,sender_id,content,created_at').eq('group_id', groupId).order('created_at', { ascending: true }).limit(100),
+          supabase.from('community_group_members').select('user_id,role').eq('group_id', groupId).order('joined_at', { ascending: true }),
         ])
         if (groupError) throw groupError
         if (messagesError) throw messagesError
+        if (membersError) throw membersError
         if (!groupRow) throw new Error('This community no longer exists.')
         const nextMessages = (rows ?? []) as CommunityGroupMessage[]
-        const senderIds = [...new Set(nextMessages.map((row) => row.sender_id))]
+        const senderIds = [...new Set([...nextMessages.map((row) => row.sender_id), ...((memberRows ?? []) as Array<{ user_id: string }>).map((row) => row.user_id)])]
         const { data: senderProfiles, error: profilesError } = senderIds.length
           ? await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', senderIds)
           : { data: [], error: null }
@@ -1494,6 +1503,7 @@ export function CommunityGroupPage() {
         setGroup(groupRow)
         setMessages(nextMessages)
         setProfiles(Object.fromEntries((senderProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])))
+        setMembers(((memberRows ?? []) as Array<{ user_id: string; role: string }>).map((member) => ({ user_id: member.user_id, role: member.role, username: '', display_name: null, avatar_url: null })))
         unsubscribe = subscribeToPostgresChanges({
           topic: `community-group:${groupId}`,
           event: '*',
@@ -1530,6 +1540,85 @@ export function CommunityGroupPage() {
       unsubscribe?.()
     }
   }, [groupId, session?.user.id])
+
+  async function loadGroupMembers() {
+    if (!groupId) return
+    setMembersLoading(true)
+    setMemberError('')
+    try {
+      const { data: memberRows, error: memberLoadError } = await supabase
+        .from('community_group_members')
+        .select('user_id,role')
+        .eq('group_id', groupId)
+        .order('joined_at', { ascending: true })
+      if (memberLoadError) throw memberLoadError
+      const ids = (memberRows ?? []).map((row) => row.user_id)
+      const { data: memberProfiles, error: profileError } = ids.length
+        ? await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
+        : { data: [], error: null }
+      if (profileError) throw profileError
+      const byId = Object.fromEntries((memberProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord]))
+      setMembers((memberRows ?? []).map((row) => {
+        const profile = byId[row.user_id]
+        return { user_id: row.user_id, role: row.role, username: profile?.username ?? '', display_name: profile?.display_name ?? null, avatar_url: profile?.avatar_url ?? null }
+      }))
+    } catch (caught) {
+      setMemberError(userFacingError(caught, 'Could not load members.'))
+    } finally {
+      setMembersLoading(false)
+    }
+  }
+
+  async function searchGroupMembers(value: string) {
+    setMemberQuery(value)
+    setMemberError('')
+    if (value.trim().length < 2) {
+      setMemberResults([])
+      return
+    }
+    setMembersLoading(true)
+    try {
+      const results = await searchProfilesByUsername(value)
+      const memberIds = new Set(members.map((member) => member.user_id))
+      setMemberResults(results.filter((profile) => !memberIds.has(profile.id)).slice(0, 10))
+    } catch (caught) {
+      setMemberError(userFacingError(caught, 'Could not search members.'))
+    } finally {
+      setMembersLoading(false)
+    }
+  }
+
+  async function addGroupMember(userId: string) {
+    if (!groupId) return
+    setMemberAction(userId)
+    setMemberError('')
+    try {
+      const { error: addError } = await supabase.rpc('add_community_group_member', { p_group_id: groupId, p_user_id: userId })
+      if (addError) throw addError
+      setMemberResults((current) => current.filter((profile) => profile.id !== userId))
+      await loadGroupMembers()
+      setMemberQuery('')
+    } catch (caught) {
+      setMemberError(userFacingError(caught, 'Could not add this member.'))
+    } finally {
+      setMemberAction('')
+    }
+  }
+
+  async function leaveGroup() {
+    if (!groupId) return
+    setMemberAction('leave')
+    setMemberError('')
+    try {
+      const { error: leaveError } = await supabase.rpc('leave_community_group', { p_group_id: groupId })
+      if (leaveError) throw leaveError
+      window.location.href = '/community'
+    } catch (caught) {
+      setMemberError(userFacingError(caught, 'Could not leave this community.'))
+    } finally {
+      setMemberAction('')
+    }
+  }
 
   async function sendGroupMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -1570,11 +1659,11 @@ export function CommunityGroupPage() {
   return <section className="chat-screen community-group-screen">
     <header className="chat-screen__head">
       <Button to="/community" variant="quiet" iconOnly aria-label="Back to community"><ArrowLeft size={18} /></Button>
-      <div className="chat-screen__profile">
+      <button type="button" className="chat-screen__profile community-group-header-button" onClick={() => { setMembersOpen(true); void loadGroupMembers() }}>
         <span className="community-group-card__icon"><Users size={20} /></span>
-        <span className="chat-screen__identity"><strong>{group.name}</strong><small>{group.description || 'Banjara Connect community'}</small></span>
-      </div>
-      <span />
+        <span className="chat-screen__identity"><strong>{group.name}</strong><small>{members.length} members · tap for members</small></span>
+      </button>
+      <button type="button" className="icon-button" aria-label="Leave community" onClick={() => void leaveGroup()} disabled={memberAction === 'leave'}>{memberAction === 'leave' ? '…' : <ArrowRight size={17} />}</button>
     </header>
     <div className="chat-messages">
       {messages.length ? messages.map((item) => {
@@ -1599,6 +1688,17 @@ export function CommunityGroupPage() {
         <Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send group message">{isSending ? '…' : <Send size={17} />}</Button>
       </form>
     </div>
+  {membersOpen && <Modal title={group.name} onClose={() => { setMembersOpen(false); setMemberQuery(''); setMemberResults([]); setMemberError('') }}>
+      <div className="community-group-members-panel">
+        <div className="community-group-members-title"><strong>Members</strong><span>{members.length}</span></div>
+        <Input aria-label="Search username to add" placeholder="Search username to add" value={memberQuery} onChange={(event) => void searchGroupMembers(event.target.value)} />
+        {memberError && <p className="field__error" role="alert">{memberError}</p>}
+        {membersLoading && <Loading label="Loading members" />}
+        {memberResults.length > 0 && <div className="community-group-member-results">{memberResults.map((profile) => <div className="community-group-member-row" key={profile.id}><Avatar name={profile.display_name || profile.username} image={profile.avatar_url ?? undefined} /><span><strong>{profile.display_name || profile.username}</strong><small>@{profile.username}</small></span><Button type="button" onClick={() => void addGroupMember(profile.id)} disabled={memberAction === profile.id}>{memberAction === profile.id ? '…' : 'Add'}</Button></div>)}</div>}
+        <div className="community-group-member-list">{members.map((member) => <div className="community-group-member-row" key={member.user_id}><Avatar name={member.display_name || member.username} image={member.avatar_url ?? undefined} /><span><strong>{member.display_name || member.username || 'Community member'}</strong><small>@{member.username || 'member'} · {member.role === 'admin' ? 'Admin' : 'Member'}</small></span>{member.role === 'admin' && <ShieldCheck size={16} aria-label="Admin" />}</div>)}</div>
+        <Button type="button" variant="outline" onClick={() => void leaveGroup()} disabled={memberAction === 'leave'}>{memberAction === 'leave' ? 'Leaving…' : 'Leave community'}</Button>
+      </div>
+    </Modal>}
   </section>
 }
 
