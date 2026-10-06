@@ -39,10 +39,20 @@ export type PostRecord = {
   content: string
   created_at: string
   visibility: string | null
+  media_urls?: string[]
+  media_type?: string | null
+}
+
+export type PostMedia = {
+  path: string
+  type: 'image' | 'video'
+  mimeType: string
+  signedUrl: string
 }
 
 export type FeedPost = PostRecord & {
   author: Pick<ProfileRecord, 'id' | 'username' | 'display_name' | 'avatar_url' | 'location'> | null
+  media: PostMedia[]
 }
 
 export type ToastApi = {
