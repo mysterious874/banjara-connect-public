@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Bookmark, Check, Heart, MapPin, MessageCircle, MoreHorizontal, Pencil, Send, Trash2, X } from 'lucide-react'
 import type { FeedPost } from '../types/app'
@@ -32,6 +32,9 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
   const [isShareSending, setIsShareSending] = useState(false)
   const [shareError, setShareError] = useState('')
   const [shareSuccess, setShareSuccess] = useState('')
+  const [previewMedia, setPreviewMedia] = useState<PostMediaData | null>(null)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressTriggered = useRef(false)
   const isOwner = session?.user.id === post.user_id
   const authorName = post.author?.display_name || post.author?.username || 'Community member'
   const authorContent = <><Avatar name={authorName} image={post.author?.avatar_url ?? undefined} /><span><strong>{authorName}</strong><span>{post.author?.location && <><MapPin size={12} />{post.author.location} · </>}{new Date(post.created_at).toLocaleString()}</span></span></>
@@ -153,6 +156,28 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
     }
   }
 
+  function clearMediaLongPress() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  function startMediaLongPress(media: PostMediaData) {
+    clearMediaLongPress()
+    longPressTriggered.current = false
+    longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true
+      setPreviewMedia(media)
+    }, 450)
+  }
+
+  function cancelMediaLongPress() {
+    clearMediaLongPress()
+  }
+
+  useEffect(() => () => clearMediaLongPress(), [])
+
   async function deletePost() {
     if (!session?.user || !isOwner || isDeletingPost) return
     setIsDeletingPost(true)
@@ -185,10 +210,28 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
       </div>
       {isEditing ? <form className="post-edit-form" onSubmit={updatePost}><label className="visually-hidden" htmlFor={`post-edit-${post.id}`}>Edit your post</label><textarea id={`post-edit-${post.id}`} value={editContent} onChange={(event) => setEditContent(event.target.value)} maxLength={500} required /><div><Button type="button" variant="quiet" onClick={() => { setIsEditing(false); setEditContent(postContent) }} disabled={isSavingPost}><X size={15} />Cancel</Button><Button type="submit" disabled={isSavingPost || !editContent.trim()}><Check size={15} />{isSavingPost ? 'Saving…' : 'Save'}</Button></div></form> : <p className="post-card__text">{postContent}</p>}
       {((post as FeedPost & { media?: PostMediaData[] }).media ?? []).map((media) => media.signedUrl ? (
-        media.type === 'video'
-          ? <video key={media.path} className="post-card__media post-card__video" src={media.signedUrl} controls playsInline preload="metadata" />
-          : <img key={media.path} className="post-card__media" src={media.signedUrl} alt="Post media" loading="lazy" />
+        <div
+          key={media.path}
+          className={`post-card__media-hold${longPressTriggered.current ? ' is-long-pressing' : ''}`}
+          onPointerDown={() => startMediaLongPress(media)}
+          onPointerUp={cancelMediaLongPress}
+          onPointerCancel={cancelMediaLongPress}
+          onPointerLeave={cancelMediaLongPress}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          {media.type === 'video'
+            ? <video className="post-card__media post-card__video" src={media.signedUrl} controls playsInline preload="metadata" />
+            : <img className="post-card__media" src={media.signedUrl} alt="Post media" loading="lazy" />}
+        </div>
       ) : null)}
+      {previewMedia?.signedUrl && <div className="media-preview-backdrop" role="presentation" onClick={() => setPreviewMedia(null)}>
+        <div className="media-preview-dialog" role="dialog" aria-modal="true" aria-label="Media preview" onClick={(event) => event.stopPropagation()}>
+          <button type="button" className="media-preview-close" aria-label="Close media preview" onClick={() => setPreviewMedia(null)}><X size={22} /></button>
+          {previewMedia.type === 'video'
+            ? <video className="media-preview-content" src={previewMedia.signedUrl} controls autoPlay playsInline />
+            : <img className="media-preview-content" src={previewMedia.signedUrl} alt="Post media preview" />}
+        </div>
+      </div>}
       <div className="post-card__meta"><span>{post.visibility ?? 'Community post'} · {new Date(post.created_at).toLocaleString()}</span><span>{isLikeLoading ? 'Loading likes…' : `${likeCount} likes`}</span></div>
       <div className="post-card__actions">
         <button type="button" className={`post-action${liked ? ' is-liked' : ''}`} disabled={isLikeLoading || isLikePending || !session} onClick={handleLike} aria-pressed={liked}>
