@@ -138,6 +138,11 @@ async function loadConversationSummaryMessages(conversationId: string, userId: s
   return { lastMessage, unreadCount }
 }
 
+export async function loadUnreadChatCount(): Promise<number> {
+  const conversations = await loadConversations()
+  return conversations.reduce((total, conversation) => total + conversation.unreadCount, 0)
+}
+
 export async function loadConversations(): Promise<ConversationSummary[]> {
   const userId = await requireAuthenticatedUserId()
   const { data: ownMemberships, error: membershipError } = await supabase.from('conversation_members')
