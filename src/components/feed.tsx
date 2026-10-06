@@ -124,7 +124,7 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
       {((post as FeedPost & { media?: PostMediaData[] }).media ?? []).map((media) => media.signedUrl ? (
         media.type === 'video'
           ? <video key={media.path} className="post-card__media" src={media.signedUrl} controls playsInline preload="metadata" />
-          : <img key={media.path} className="post-card__media" src={media.signedUrl} alt={media.name || 'Post media'} loading="lazy" />
+          : <img key={media.path} className="post-card__media" src={media.signedUrl} alt="Post media" loading="lazy" />
       ) : null)}
       <div className="post-card__meta"><span>{post.visibility ?? 'Community post'} · {new Date(post.created_at).toLocaleString()}</span><span>{isLikeLoading ? 'Loading likes…' : `${likeCount} likes`}</span></div>
       <div className="post-card__actions">
