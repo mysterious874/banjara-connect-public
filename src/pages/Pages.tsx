@@ -829,6 +829,7 @@ export function EditProfilePage() {
   </form></section>
 }
 export function StoriesPage() {
+  const navigate = useNavigate()
   const { session, profile } = useAuth()
   const [stories, setStories] = useState<StoryRecord[]>([])
   const [selectedStory, setSelectedStory] = useState<StoryRecord | null>(null)
@@ -840,6 +841,10 @@ export function StoriesPage() {
   const [error, setError] = useState('')
   const [replyMessage, setReplyMessage] = useState('')
   const [success, setSuccess] = useState('')
+  const storyTimer = useRef<number | null>(null)
+
+  const grouped = Array.from(new Map(stories.map((story) => [story.user_id, story])).values())
+  const activeIndex = selectedStory ? grouped.findIndex((story) => story.user_id === selectedStory.user_id) : -1
 
   async function refreshStories() {
     setIsLoading(true)
@@ -847,7 +852,10 @@ export function StoriesPage() {
     try {
       const next = await loadActiveStories()
       setStories(next)
-      setSelectedStory((current) => current && next.some((item) => item.id === current.id) ? next.find((item) => item.id === current.id) ?? null : next[0] ?? null)
+      setSelectedStory((current) => {
+        if (current) return next.find((item) => item.user_id === current.user_id) ?? next[0] ?? null
+        return next[0] ?? null
+      })
     } catch (caught) {
       setError(userFacingError(caught, 'Could not load stories.'))
     } finally {
@@ -857,7 +865,36 @@ export function StoriesPage() {
 
   useEffect(() => {
     void refreshStories()
+    return () => {
+      if (storyTimer.current) window.clearTimeout(storyTimer.current)
+    }
   }, [session?.user.id])
+
+  useEffect(() => {
+    if (!selectedStory || grouped.length <= 1) return
+    if (storyTimer.current) window.clearTimeout(storyTimer.current)
+    storyTimer.current = window.setTimeout(() => {
+      if (activeIndex >= 0 && activeIndex < grouped.length - 1) {
+        setSelectedStory(grouped[activeIndex + 1])
+      } else {
+        navigate('/home')
+      }
+    }, selectedStory.media_type === 'video' ? 8000 : 5000)
+    return () => {
+      if (storyTimer.current) window.clearTimeout(storyTimer.current)
+    }
+  }, [selectedStory?.id, activeIndex, grouped.length, navigate])
+
+  useEffect(() => {
+    if (!selectedStory) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') navigate('/home')
+      if (event.key === 'ArrowRight' && activeIndex < grouped.length - 1) setSelectedStory(grouped[activeIndex + 1])
+      if (event.key === 'ArrowLeft' && activeIndex > 0) setSelectedStory(grouped[activeIndex - 1])
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectedStory?.id, activeIndex, grouped.length, navigate])
 
   function handleStoryFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -897,8 +934,11 @@ export function StoriesPage() {
     if (!session?.user.id || story.user_id !== session.user.id) return
     try {
       await deleteStory(story)
-      setStories((current) => current.filter((item) => item.id !== story.id))
-      setSelectedStory((current) => current?.id === story.id ? null : current)
+      const remaining = stories.filter((item) => item.id !== story.id)
+      setStories(remaining)
+      const nextGrouped = Array.from(new Map(remaining.map((item) => [item.user_id, item])).values())
+      const nextIndex = Math.min(activeIndex, nextGrouped.length - 1)
+      setSelectedStory(nextGrouped[nextIndex] ?? null)
     } catch (caught) {
       setError(userFacingError(caught, 'Could not delete this story.'))
     }
@@ -913,7 +953,7 @@ export function StoriesPage() {
       const conversation = await getOrCreateConversation(selectedStory.user_id)
       await sendConversationMessage(conversation.id, `↩️ Replied to ${selectedStory.author?.display_name || selectedStory.author?.username || 'your'} story:\n\n${replyMessage.trim()}\n\nStory: /stories`)
       setReplyMessage('')
-      setSuccess('Message sent to the story owner.')
+      setSuccess('Message sent')
     } catch (caught) {
       setError(userFacingError(caught, 'Could not send your story reply.'))
     } finally {
@@ -921,9 +961,12 @@ export function StoriesPage() {
     }
   }
 
-  const grouped = Array.from(new Map(stories.map((story) => [story.user_id, story])).values())
-  const ownStory = stories.find((story) => story.user_id === session?.user.id)
-  const activeStory = selectedStory
+  const openViewer = (story: StoryRecord) => {
+    setSelectedStory(story)
+    setReplyMessage('')
+    setSuccess('')
+  }
+
   return <section className="page-stack">
     <PageHeading eyebrow="LITTLE WINDOWS INTO TODAY" title="Stories" description="Share a photo, video, or message. Stories disappear after 24 hours." />
     <form className="story-create-box" onSubmit={publishStory}>
@@ -934,21 +977,29 @@ export function StoriesPage() {
     </form>
     {error && <p className="field__error" role="alert">{error}</p>}
     {success && <p className="micro-note" role="status">{success}</p>}
-    {isLoading ? <Loading label="Loading stories" /> : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="stories-page-layout">
-      <div className="story-list-panel"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div>{grouped.map((story) => {
-        const name = story.author?.display_name || story.author?.username || 'Community member'
-        const selected = activeStory?.user_id === story.user_id
-        return <button type="button" key={story.user_id} className={`story-user-row${selected ? ' is-selected' : ''}`} onClick={() => { setSelectedStory(story); setReplyMessage(''); setSuccess('') }}>
-          <span className="story-user-row__ring"><Avatar name={name} image={story.author?.avatar_url ?? undefined} size="large" /></span>
-          <span><strong>{name}</strong><small>{new Date(story.created_at).toLocaleTimeString()}</small></span>
-          {story.user_id === session?.user.id && <span className="local-label">You</span>}
-        </button>
-      })}</div>
-      {activeStory && <article className="story-viewer">
-        <div className="story-viewer__head"><div className="post-card__author"><Avatar name={activeStory.author?.display_name || activeStory.author?.username || 'Community member'} image={activeStory.author?.avatar_url ?? undefined} /><span><strong>{activeStory.author?.display_name || activeStory.author?.username || 'Community member'}</strong><span>{new Date(activeStory.created_at).toLocaleString()}</span></span></div>{activeStory.user_id === session?.user.id && <Button variant="quiet" onClick={() => void removeStory(activeStory)}><Trash2 size={15} />Delete</Button>}</div>
-        <div className="story-viewer__media">{activeStory.media_url && activeStory.media_type === 'video' && <video src={activeStory.media_url} controls autoPlay playsInline className="story-viewer__asset" />}{activeStory.media_url && activeStory.media_type === 'image' && <img src={activeStory.media_url} alt="Story" className="story-viewer__asset" />}{activeStory.content && <p className="story-viewer__caption">{activeStory.content}</p>}</div>
-        {activeStory.user_id !== session?.user.id && <form className="story-reply" onSubmit={replyToStory}><Input aria-label="Send message" placeholder="Send message…" value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /><Button type="submit" iconOnly aria-label="Send message" disabled={!replyMessage.trim() || isReplying}>{isReplying ? '…' : <Send size={17} />}</Button></form>}
-      </article>}
+    {isLoading ? <Loading label="Loading stories" /> : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="story-page-thumbs"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div><div className="stories-rail__items">{grouped.map((story) => {
+      const name = story.author?.display_name || story.author?.username || 'Community member'
+      return <button type="button" key={story.user_id} className="story-card story-card--button" onClick={() => openViewer(story)}><span className="story-card__ring"><Avatar name={name} image={story.author?.avatar_url ?? undefined} size="large" /></span><span className="story-card__name">{name}</span></button>
+    })}</div></div>}
+    {selectedStory && grouped.length > 0 && <div className="story-fullscreen" role="dialog" aria-modal="true" aria-label="Story viewer">
+      <div className="story-fullscreen__backdrop" onClick={() => navigate('/home')} />
+      <div className="story-fullscreen__card">
+        <div className="story-fullscreen__progress">{grouped.map((story, index) => <span key={story.user_id} className={`story-fullscreen__progress-segment${index < activeIndex ? ' is-complete' : index === activeIndex ? ' is-active' : ''}`} />)}</div>
+        <div className="story-fullscreen__head">
+          <div className="post-card__author"><Avatar name={selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'} image={selectedStory.author?.avatar_url ?? undefined} /><span><strong>{selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'}</strong><span>{new Date(selectedStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span></div>
+          <button type="button" className="story-fullscreen__close" onClick={() => navigate('/home')} aria-label="Close story"><X size={22} /></button>
+        </div>
+        <button type="button" className="story-fullscreen__prev" onClick={() => activeIndex > 0 && setSelectedStory(grouped[activeIndex - 1])} disabled={activeIndex <= 0} aria-label="Previous story"><ArrowLeft size={25} /></button>
+        <div className="story-fullscreen__content">
+          {selectedStory.media_url && selectedStory.media_type === 'video' && <video src={selectedStory.media_url} controls autoPlay playsInline className="story-fullscreen__asset" />}
+          {selectedStory.media_url && selectedStory.media_type === 'image' && <img src={selectedStory.media_url} alt="Story" className="story-fullscreen__asset" />}
+          {!selectedStory.media_url && <div className="story-fullscreen__text">{selectedStory.content}</div>}
+          {selectedStory.media_url && selectedStory.content && <div className="story-fullscreen__caption">{selectedStory.content}</div>}
+        </div>
+        <button type="button" className="story-fullscreen__next" onClick={() => activeIndex < grouped.length - 1 ? setSelectedStory(grouped[activeIndex + 1]) : navigate('/home')} aria-label="Next story"><ArrowRight size={25} /></button>
+        {selectedStory.user_id !== session?.user.id && <form className="story-fullscreen__reply" onSubmit={replyToStory}><Input aria-label="Reply to story" placeholder="Send message…" value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /><Button type="submit" iconOnly aria-label="Send message" disabled={!replyMessage.trim() || isReplying}>{isReplying ? '…' : <Send size={17} />}</Button></form>}
+        {selectedStory.user_id === session?.user.id && <button type="button" className="story-fullscreen__delete" onClick={() => void removeStory(selectedStory)}><Trash2 size={16} /> Delete story</button>}
+      </div>
     </div>}
   </section>
 }
