@@ -2043,3 +2043,94 @@ body, .app-shell, .route-content, .page-stack, .page-heading, .home-intro,
 .share-conversation__check { color: #ffd9df; border-color: #76545b; }
 .story-viewer__head { border-bottom-color: var(--bc-line); }
 .edit-profile-avatar { background: var(--bc-paper); border-color: var(--bc-line); }
+
+
+/* Theme 4 light-surface contrast fixes */
+.location-suggestions,
+.location-suggestion,
+.share-dialog,
+.story-create-box,
+.story-list-panel,
+.story-viewer,
+.community-group-member-row,
+.auth-card {
+  color: #241c19;
+}
+
+.location-suggestions *,
+.location-suggestion *,
+.share-dialog *,
+.story-create-box *,
+.story-list-panel *,
+.story-viewer *,
+.community-group-member-row *,
+.auth-card * {
+  color: inherit;
+}
+
+.location-suggestion,
+.share-conversation,
+.story-user-row {
+  color: #172033;
+}
+
+.location-suggestion:hover,
+.location-suggestion:focus-visible,
+.share-conversation:hover,
+.share-conversation:focus-visible,
+.story-user-row:hover,
+.story-user-row.is-selected {
+  color: #0f4c81;
+}
+
+.location-suggestions__status,
+.share-conversation small,
+.story-user-row small,
+.community-group-member-row small {
+  color: #66758a;
+}
+
+.share-dialog__footer {
+  color: #172033;
+}
+
+.story-viewer__caption {
+  color: #172033;
+}
+
+.community-group-card,
+.community-action-card {
+  color: #241c19;
+}
+
+.community-group-card *,
+.community-action-card * {
+  color: inherit;
+}
+
+.community-group-card small,
+.community-action-card small,
+.community-group-card .micro-note,
+.community-action-card .micro-note {
+  color: #667066;
+}
+
+.create-post-box {
+  color: #241c19;
+}
+
+.create-post-box *,
+.create-post-box textarea,
+.create-post-box input {
+  color: #241c19;
+}
+
+.chat-bubble--them,
+.chat-screen .chat-bubble--them {
+  color: #241c19;
+}
+
+.chat-bubble--them .chat-message-text .chat-shared-link {
+  color: #8f1d32;
+}
+
