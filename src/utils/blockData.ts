@@ -41,7 +41,7 @@ export async function toggleBlock(targetUserId: string, currentlyBlocked: boolea
   const { error } = await supabase.from('blocks').insert({ blocker_id: userId, blocked_id: targetUserId })
   if (error?.code === '23505') {
     const state = await loadBlockState(targetUserId)
-    if (state.blocked) return true
+    if (state.blocked) { blockedIdsCache = null; return true }
   }
   if (error) throw error
   blockedIdsCache = null
