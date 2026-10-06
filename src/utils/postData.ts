@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type { FeedPost, ProfileRecord, PostRecord } from '../types/app'
-import { createPostMediaUrl, type PostMediaData } from './mediaData'
+import { createPostMediaUrl } from './mediaData'
 
 const postColumns = 'id,user_id,content,created_at,visibility,media_urls,media_type'
 
