@@ -16,6 +16,7 @@ import { loadPost, loadPostsPage } from '../utils/postData'
 import { filterProfiles, loadProfiles, loadProfilesPage } from '../utils/profileData'
 import { getOrCreateConversation } from '../utils/chatData'
 import { supabase } from '../utils/supabase'
+import { deletePostMedia, uploadPostMedia, validatePostMedia } from '../utils/mediaData'
 import { userFacingError } from '../utils/userFacingError'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, type NotificationRecord } from '../utils/notificationData'
@@ -241,12 +242,29 @@ export function SearchPage() {
 }
 
 export function CreatePostPage() {
-  const { session } = useAuth()
+  const { session, profile } = useAuth()
   const navigate = useNavigate()
   const [text, setText] = useState('')
-  const { profile } = useAuth()
+  const [mediaFile, setMediaFile] = useState<File | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
+
+  function handleMediaChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null
+    setError('')
+    if (!file) {
+      setMediaFile(null)
+      return
+    }
+    try {
+      validatePostMedia(file)
+      setMediaFile(file)
+    } catch (caught) {
+      event.target.value = ''
+      setMediaFile(null)
+      setError(userFacingError(caught, 'This media file could not be selected.'))
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -254,28 +272,62 @@ export function CreatePostPage() {
       setError('Sign in before creating a post.')
       return
     }
+    if (!text.trim() && !mediaFile) {
+      setError('Add some text or choose a photo/video.')
+      return
+    }
     setIsSaving(true)
     setError('')
+    let uploadedPath = ''
     try {
       const { data, error: insertError } = await supabase.from('posts').insert({
         user_id: session.user.id,
         content: text.trim(),
+        media_urls: [],
+        media_type: mediaFile?.type.startsWith('video/') ? 'video' : mediaFile ? 'image' : null,
       }).select('id').single()
-      if (insertError) {
-        setError(userFacingError(insertError, 'Could not create your post.'))
-        return
+      if (insertError) throw insertError
+
+      if (mediaFile) {
+        const uploaded = await uploadPostMedia(mediaFile, session.user.id, data.id)
+        uploadedPath = uploaded.path
+        const { error: updateError } = await supabase.from('posts')
+          .update({ media_urls: [uploaded.path], media_type: uploaded.type })
+          .eq('id', data.id)
+          .eq('user_id', session.user.id)
+        if (updateError) {
+          await deletePostMedia([uploaded.path]).catch(() => undefined)
+          await supabase.from('posts').delete().eq('id', data.id).eq('user_id', session.user.id)
+          throw updateError
+        }
       }
+
       navigate(`/posts/${data.id}`, { replace: true })
     } catch (caught) {
+      if (uploadedPath) await deletePostMedia([uploadedPath]).catch(() => undefined)
       setError(userFacingError(caught, 'Could not create your post.'))
     } finally {
       setIsSaving(false)
     }
   }
 
-  return <section className="page-stack page-stack--narrow"><PageHeading eyebrow="MAKE SOMETHING TOGETHER" title="Create a post" description="Share a thought with your community." /><form className="create-post-box" onSubmit={submit}><div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><span>Sharing with the community</span></span></div><label className="visually-hidden" htmlFor="post-text">Write your post</label><textarea id="post-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="What would you like to share?" maxLength={500} required /><div className="media-unavailable" role="note"><strong>Photo and video posts are not available yet.</strong><span>Only text posts are supported until media storage is configured.</span></div><div className="create-post-box__footer"><span>{text.length}/500</span><Button type="submit" disabled={!text.trim() || isSaving}>{isSaving ? 'Publishing…' : 'Publish post'} {!isSaving && <Send size={16} />}</Button></div>{error && <p className="field__error" role="alert">{error}</p>}</form></section>
+  return <section className="page-stack page-stack--narrow">
+    <PageHeading eyebrow="MAKE SOMETHING TOGETHER" title="Create a post" description="Share a thought, photo, or video with your community." />
+    <form className="create-post-box" onSubmit={submit}>
+      <div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><span>Sharing with the community</span></span></div>
+      <label className="visually-hidden" htmlFor="post-text">Write your post</label>
+      <textarea id="post-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="What would you like to share?" maxLength={500} />
+      <div className="create-post-media-picker">
+        <label className="button button--outline" htmlFor="post-media">Add photo or video</label>
+        <input id="post-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} />
+        {mediaFile && <span className="micro-note">{mediaFile.name} · {(mediaFile.size / (1024 * 1024)).toFixed(1)} MB</span>}
+        <span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span>
+      </div>
+      <div className="create-post-box__footer"><span>{text.length}/500</span><Button type="submit" disabled={(!text.trim() && !mediaFile) || isSaving}>{isSaving ? 'Publishing…' : 'Publish post'} {!isSaving && <Send size={16} />}</Button></div>
+      {error && <p className="field__error" role="alert">{error}</p>}
+    </form>
+  </section>
 }
-
 export function PostDetailsPage() {
   const navigate = useNavigate()
   const { postId = '' } = useParams()
