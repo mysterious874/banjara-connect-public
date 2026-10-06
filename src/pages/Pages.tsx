@@ -1921,7 +1921,7 @@ export function CommunityGroupPage() {
             {!mine && <strong className="community-group-message__sender">{senderName}</strong>}
             {item.media_signed_url && item.media_type === 'image' && <img className="chat-message-media" src={item.media_signed_url} alt="Shared photo" loading="lazy" />}
             {item.media_signed_url && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={item.media_signed_url} controls playsInline preload="metadata" />}
-            {item.content && <p className="chat-message-text">{item.content}</p>
+            {item.content && <p className="chat-message-text">{item.content}</p>}
             <span>{new Date(item.created_at).toLocaleTimeString()}</span>
             {(mine || isGroupAdmin) && <button type="button" className="community-group-message__delete" onClick={() => void deleteGroupMessage(item.id)} aria-label={mine ? 'Delete message' : 'Delete message as admin'}>{mine ? 'Delete' : 'Delete · Admin'}</button>}
             {!mine && <button type="button" className="community-group-message__delete" onClick={() => { setReportTarget({ messageId: item.id, userId: item.sender_id, label: senderName }); setReportError('') }} aria-label="Report message"><Flag size={13} /> Report</button>}
