@@ -1160,7 +1160,7 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
 .share-dialog-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 130000;
   display: grid;
   place-items: center;
   padding: 20px;
@@ -1168,8 +1168,10 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
 }
 .share-dialog {
   width: min(100%, 520px);
-  max-height: min(80vh, 680px);
-  overflow: auto;
+  max-height: min(86vh, 720px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   padding: 20px;
   border: 1px solid #d6dfeb;
   border-radius: 18px;
@@ -1204,6 +1206,7 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
 .share-dialog__list {
   display: grid;
   gap: 6px;
+  min-height: 0;
   max-height: 390px;
   overflow-y: auto;
 }
@@ -1258,9 +1261,11 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   background: #dcecff;
 }
 .share-dialog__footer {
+  flex: none;
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid #e4eaf1;
+  background: #fff;
 }
 @media (max-width: 560px) {
   .share-dialog-backdrop {
@@ -1268,9 +1273,18 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
     padding: 0;
   }
   .share-dialog {
-    max-height: 86vh;
+    width: 100%;
+    max-height: calc(100vh - 12px);
     border-radius: 18px 18px 0 0;
     padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+  .share-dialog__list {
+    max-height: min(48vh, 390px);
+  }
+  .share-dialog__footer {
+    position: sticky;
+    bottom: 0;
   }
 }
 
