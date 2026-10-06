@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './authenticatedUser'
+import { loadBlockedUserIds } from './blockData'
 import { createChatMediaUrl, deleteChatMedia, uploadChatMedia } from './chatMediaData'
 import type { ProfileRecord } from '../types/app'
 import { subscribeToPostgresChanges, type RealtimeSubscriptionStatus } from './realtimeData'
@@ -67,21 +68,21 @@ async function loadConversationSummaryMessages(conversationId: string, userId: s
     let page = (data ?? []) as ChatMessage[]
     if (page.length) {
       const ids = page.map((message) => message.id)
-      const incomingIds = page.filter((message) => message.sender_id !== userId).map((message) => message.id)
-      const [{ data: hidden, error: hiddenError }, { data: readRows, error: readsError }] = await Promise.all([
-        supabase.from('message_deletions').select('message_id').eq('user_id', userId).in('message_id', ids),
-        incomingIds.length
-          ? supabase.from('message_reads').select('message_id').eq('user_id', userId).in('message_id', incomingIds)
-          : Promise.resolve({ data: [], error: null }),
-      ])
+      const { data: hidden, error: hiddenError } = await supabase.from('message_deletions').select('message_id').eq('user_id', userId).in('message_id', ids)
       if (hiddenError) throw hiddenError
-      if (readsError) throw readsError
       const hiddenIds = new Set((hidden ?? []).map((row) => row.message_id as string))
       page = page.filter((message) => !hiddenIds.has(message.id))
-      const readIds = new Set((readRows ?? []).map((row) => row.message_id))
-      unreadCount += page.filter((message) => message.sender_id !== userId && !readIds.has(message.id)).length
     }
     if (offset === 0) lastMessage = page[0] ?? null
+
+    const incomingIds = page.filter((message) => message.sender_id !== userId).map((message) => message.id)
+    if (incomingIds.length) {
+      const { data: readRows, error: readsError } = await supabase.from('message_reads')
+        .select('message_id').eq('user_id', userId).in('message_id', incomingIds)
+      if (readsError) throw readsError
+      const readIds = new Set((readRows ?? []).map((row) => row.message_id))
+      unreadCount += incomingIds.filter((id) => !readIds.has(id)).length
+    }
 
     if (page.length < pageSize) break
     offset += pageSize
@@ -103,18 +104,15 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   const conversationIds = [...new Set((ownMemberships ?? []).map((row) => row.conversation_id as string))]
   if (!conversationIds.length) return []
 
-  const [{ data: members, error: membersError }, blockedIdsRows] = await Promise.all([
-    supabase.from('conversation_members')
-      .select('conversation_id,user_id').in('conversation_id', conversationIds),
-    supabase.from('blocks').select('blocked_id').eq('blocker_id', userId),
-  ])
+  const { data: members, error: membersError } = await supabase.from('conversation_members')
+    .select('conversation_id,user_id').in('conversation_id', conversationIds)
   if (membersError) throw membersError
 
-  const blockedIds = new Set((blockedIdsRows ?? []).map((row) => row.blocked_id as string))
   const otherUsers = new Map<string, string>()
   for (const member of members ?? []) {
     if (member.user_id !== userId && conversationIds.includes(member.conversation_id)) otherUsers.set(member.conversation_id, member.user_id)
   }
+  const blockedIds = new Set(await loadBlockedUserIds())
   for (const [conversationId, peerId] of otherUsers) {
     if (blockedIds.has(peerId)) otherUsers.delete(conversationId)
   }
@@ -123,11 +121,12 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   const otherUserIds = [...new Set(otherUsers.values())]
   if (!otherUserIds.length) return []
 
-  // These summaries are independent. Fetch them concurrently so a long chat list
-  // does not wait through several serial batches of network round-trips.
-  const summaryMessages = await Promise.all(
-    visibleConversationIds.map((id) => loadConversationSummaryMessages(id, userId)),
-  )
+  const summaryMessages: Array<{ lastMessage: ChatMessage | null; unreadCount: number }> = []
+  for (let offset = 0; offset < visibleConversationIds.length; offset += 5) {
+    const batch = await Promise.all(visibleConversationIds.slice(offset, offset + 5)
+      .map((id) => loadConversationSummaryMessages(id, userId)))
+    summaryMessages.push(...batch)
+  }
   const { data: profiles, error: profilesError } = await supabase.from('profiles')
     .select('id,username,display_name,avatar_url').in('id', otherUserIds)
   if (profilesError) throw profilesError
