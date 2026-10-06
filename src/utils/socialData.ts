@@ -14,11 +14,13 @@ export type CommentRecord = {
 
 export async function loadPostLikes(postId: string) {
   const userId = await requireAuthenticatedUserId()
-  const { data, count, error } = await supabase.from('post_likes')
-    .select('user_id', { count: 'exact' })
-    .eq('post_id', postId)
-  if (error) throw error
-  return { count: count ?? data.length, liked: data.some((like) => like.user_id === userId) }
+  const [{ count, error: countError }, { data: ownLike, error: ownLikeError }] = await Promise.all([
+    supabase.from('post_likes').select('id', { count: 'exact', head: true }).eq('post_id', postId),
+    supabase.from('post_likes').select('user_id').eq('post_id', postId).eq('user_id', userId).maybeSingle(),
+  ])
+  if (countError) throw countError
+  if (ownLikeError) throw ownLikeError
+  return { count: count ?? 0, liked: Boolean(ownLike) }
 }
 
 export async function togglePostLike(postId: string, currentlyLiked: boolean) {
@@ -33,13 +35,16 @@ export async function togglePostLike(postId: string, currentlyLiked: boolean) {
   return loadPostLikes(postId)
 }
 
-export async function loadComments(postId: string): Promise<CommentRecord[]> {
+export async function loadComments(postId: string, offset = 0, limit = 50): Promise<{ comments: CommentRecord[]; hasMore: boolean }> {
   const { data, error } = await supabase.from('comments')
     .select('id,post_id,user_id,content,parent_id,created_at')
     .eq('post_id', postId)
     .order('created_at', { ascending: true })
+    .range(offset, offset + limit)
   if (error) throw error
-  const comments = data ?? []
+  const fetched = data ?? []
+  const hasMore = fetched.length > limit
+  const comments = fetched.slice(0, limit)
   if (!comments.length) return []
 
   const userIds = [...new Set(comments.map((comment) => comment.user_id))]
@@ -48,7 +53,10 @@ export async function loadComments(postId: string): Promise<CommentRecord[]> {
     .in('id', userIds)
   if (profileError) throw profileError
   const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
-  return comments.map((comment) => ({ ...comment, author: profileMap.get(comment.user_id) ?? null })) as CommentRecord[]
+  return {
+    comments: comments.map((comment) => ({ ...comment, author: profileMap.get(comment.user_id) ?? null })) as CommentRecord[],
+    hasMore,
+  }
 }
 
 export async function createComment(postId: string, content: string, parentId: string | null = null) {
