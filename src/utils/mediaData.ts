@@ -62,10 +62,18 @@ export async function uploadPostMedia(file: File, userId: string, postId: string
   }
 }
 
-export async function createPostMediaUrl(path: string) {
-  const { data, error } = await supabase.storage.from(BANJARA_MEDIA_BUCKET).createSignedUrl(path, 60 * 60)
+export async function createPostMediaUrls(paths: string[]) {
+  if (!paths.length) return new Map<string, string>()
+  const { data, error } = await supabase.storage.from(BANJARA_MEDIA_BUCKET).createSignedUrls(paths, 60 * 60)
   if (error) throw error
-  return data.signedUrl
+  return new Map((data ?? []).map((item) => [item.path, item.signedUrl]))
+}
+
+export async function createPostMediaUrl(path: string) {
+  const urls = await createPostMediaUrls([path])
+  const signedUrl = urls.get(path)
+  if (!signedUrl) throw new Error('Could not create media URL.')
+  return signedUrl
 }
 
 export async function deletePostMedia(paths: string[]) {
