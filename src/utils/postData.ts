@@ -1,7 +1,8 @@
 import { supabase } from './supabase'
 import type { FeedPost, ProfileRecord, PostRecord } from '../types/app'
+import { createPostMediaUrl, type PostMediaData } from './mediaData'
 
-const postColumns = 'id,user_id,content,created_at,visibility'
+const postColumns = 'id,user_id,content,created_at,visibility,media_urls,media_type'
 
 async function attachAuthors(posts: PostRecord[]): Promise<FeedPost[]> {
   const userIds = [...new Set(posts.map((post) => post.user_id))]
@@ -13,7 +14,17 @@ async function attachAuthors(posts: PostRecord[]): Promise<FeedPost[]> {
   if (error) throw error
 
   const authorsById = new Map((authors as Pick<ProfileRecord, 'id' | 'username' | 'display_name' | 'avatar_url' | 'location'>[]).map((author) => [author.id, author]))
-  return posts.map((post) => ({ ...post, author: authorsById.get(post.user_id) ?? null }))
+  const withAuthors = posts.map((post) => ({ ...post, author: authorsById.get(post.user_id) ?? null })) as Array<FeedPost & { media?: PostMediaData[]; media_urls?: string[]; media_type?: string | null }>
+  return Promise.all(withAuthors.map(async (post) => {
+    const paths = post.media_urls ?? []
+    const media = await Promise.all(paths.map(async (path) => ({
+      path,
+      type: post.media_type === 'video' ? 'video' as const : 'image' as const,
+      mimeType: post.media_type === 'video' ? 'video/*' : 'image/*',
+      signedUrl: await createPostMediaUrl(path),
+    })))
+    return { ...post, media }
+  })) as FeedPost[]
 }
 
 export async function loadPostsPage(
