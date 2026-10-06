@@ -59,15 +59,88 @@ export function LoginPage() {
     }
   }
 
-  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><span className="eyebrow">WELCOME BACK</span><h1>Come on in.</h1><p className="auth-card__intro">Your people and their stories are right here.</p><form className="form-stack" onSubmit={submit}><Input label="Mobile number" type="tel" autoComplete="username" placeholder="Enter your mobile number" value={mobile} onChange={(event) => setMobile(event.target.value)} required /><Input label="Password" type="password" autoComplete="current-password" placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} required />{error && <p className="field__error" role="alert">{error}</p>}<p className="micro-note auth-card__forgot" role="note">Password recovery is unavailable for mobile-only accounts.</p><Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Continue'} {!isSubmitting && <ArrowRight size={17} />}</Button></form><div className="auth-card__divider"><span>NEW TO THE COMMUNITY?</span></div><p className="micro-note" role="note">New account registration is temporarily unavailable. Please try again later.</p></div></main>
+  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><span className="eyebrow">WELCOME BACK</span><h1>Come on in.</h1><p className="auth-card__intro">Your people and their stories are right here.</p><form className="form-stack" onSubmit={submit}><Input label="Mobile number" type="tel" autoComplete="username" placeholder="Enter your mobile number" value={mobile} onChange={(event) => setMobile(event.target.value)} required /><Input label="Password" type="password" autoComplete="current-password" placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} required />{error && <p className="field__error" role="alert">{error}</p>}<p className="micro-note auth-card__forgot" role="note">Password recovery is unavailable for mobile-only accounts.</p><Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Continue'} {!isSubmitting && <ArrowRight size={17} />}</Button></form><div className="auth-card__divider"><span>NEW TO THE COMMUNITY?</span></div><p className="micro-note" role="note">Create your account with your mobile number and password.</p><Button to="/signup" variant="outline" className="button--full">Create account</Button></div></main>
 }
 
 export function SignupPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
+  const [mobile, setMobile] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   useEffect(() => {
     if (session) navigate('/home', { replace: true })
   }, [navigate, session])
 
-  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><span className="eyebrow">WELCOME TO THE COMMUNITY</span><h1>Sign-up is temporarily unavailable.</h1><p className="auth-card__intro">New account registration is temporarily unavailable. Please try again later.</p><p className="micro-note">Existing members can continue to sign in.</p><Button to="/login" variant="outline" className="button--full">Back to sign in</Button></div></main>
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+
+    const normalizedPhone = normalizeMobileNumber(mobile)
+    if (!normalizedPhone) {
+      setError('Enter a valid mobile number.')
+      return
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.')
+      return
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+
+    const authEmail = mobileAuthEmail(normalizedPhone)
+    setIsSubmitting(true)
+
+    try {
+      const { data, error: authError } = await supabase.auth.signUp({
+        email: authEmail,
+        password,
+        options: {
+          data: {
+            display_name: 'Banjara member',
+          },
+        },
+      })
+
+      if (authError) {
+        setError(userFacingError(authError, 'Could not create your account. Please try again.'))
+        return
+      }
+
+      if (!data.user) {
+        setError('Could not create your account. Please try again.')
+        return
+      }
+
+      if (data.session) {
+        const username = `member-${data.user.id.slice(0, 8)}`
+        const { error: profileError } = await supabase.from('profiles').upsert({
+          id: data.user.id,
+          username,
+          display_name: 'Banjara member',
+        }, { onConflict: 'id' })
+
+        if (profileError) {
+          setError(userFacingError(profileError, 'Account created, but your profile could not be prepared. Please sign in again.'))
+          return
+        }
+
+        navigate('/home', { replace: true })
+        return
+      }
+
+      setError('Account created. Please complete the verification step before signing in.')
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not create your account. Please try again.'))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return <main className="auth-page"><div className="auth-page__brand"><BrandLockup /></div><div className="auth-card"><span className="eyebrow">JOIN THE COMMUNITY</span><h1>Create your account.</h1><p className="auth-card__intro">Use your mobile number and choose a password to join Banjara Connect.</p><form className="form-stack" onSubmit={submit}><Input label="Mobile number" type="tel" autoComplete="tel" placeholder="Enter your mobile number" value={mobile} onChange={(event) => setMobile(event.target.value)} required /><Input label="Password" type="password" autoComplete="new-password" placeholder="Create a password" minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} required /><Input label="Confirm password" type="password" autoComplete="new-password" placeholder="Re-enter your password" minLength={6} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />{error && <p className="field__error" role="alert">{error}</p>}<Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Creating account…' : 'Create account'} {!isSubmitting && <ArrowRight size={17} />}</Button></form><div className="auth-card__divider"><span>ALREADY A MEMBER?</span></div><Button to="/login" variant="outline" className="button--full">Back to sign in</Button></div></main>
 }
