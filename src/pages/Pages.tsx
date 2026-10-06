@@ -1691,7 +1691,7 @@ export function CommunityGroupPage() {
         <Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send group message">{isSending ? '…' : <Send size={17} />}</Button>
       </form>
     </div>
-  {membersOpen && <Modal title={group.name} onClose={() => { setMembersOpen(false); setMemberQuery(''); setMemberResults([]); setMemberError('') }}>
+  {membersOpen && <Modal open={membersOpen} title={group.name} onClose={() => { setMembersOpen(false); setMemberQuery(''); setMemberResults([]); setMemberError('') }}>
       <div className="community-group-members-panel">
         <div className="community-group-members-title"><strong>Members</strong><span>{members.length}</span></div>
         <Input aria-label="Search username to add" placeholder="Search username to add" value={memberQuery} onChange={(event) => void searchGroupMembers(event.target.value)} />
