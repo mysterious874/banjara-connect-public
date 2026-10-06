@@ -7,7 +7,7 @@ import { loadPostLikes, togglePostLike } from '../utils/socialData'
 import { supabase } from '../utils/supabase'
 import { deletePostMedia, type PostMediaData } from '../utils/mediaData'
 import { userFacingError } from '../utils/userFacingError'
-import { Avatar, Button, ConfirmationDialog } from './ui'
+import { Avatar, Button, ConfirmationDialog, EmptyState, Loading } from './ui'
 
 export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () => void }) {
   const { session } = useAuth()
