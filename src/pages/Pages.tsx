@@ -967,19 +967,22 @@ export function StoriesPage() {
   }
 
   return <section className="page-stack">
-    <PageHeading eyebrow="LITTLE WINDOWS INTO TODAY" title="Stories" description="Share a photo, video, or message. Stories disappear after 24 hours." />
-    <form className="story-create-box" onSubmit={publishStory}>
-      <div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>Your story</strong><span>Visible for 24 hours</span></span></div>
-      <textarea aria-label="Story message" value={storyText} onChange={(event) => setStoryText(event.target.value)} placeholder="Add a message to your story (optional)" maxLength={500} />
-      <div className="story-create-box__media"><label className="button button--outline" htmlFor="story-media">Add photo or video</label><input id="story-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleStoryFile} />{storyFile && <span className="micro-note">{storyFile.name} · {(storyFile.size / (1024 * 1024)).toFixed(1)} MB</span>}<span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span></div>
-      <Button type="submit" disabled={isPublishing || (!storyText.trim() && !storyFile)}>{isPublishing ? 'Publishing…' : 'Post story'} <Send size={15} /></Button>
-    </form>
-    {error && <p className="field__error" role="alert">{error}</p>}
-    {success && <p className="micro-note" role="status">{success}</p>}
-    {isLoading ? <Loading label="Loading stories" /> : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="story-page-thumbs"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div><div className="stories-rail__items">{grouped.map((story) => {
-      const name = story.author?.display_name || story.author?.username || 'Community member'
-      return <button type="button" key={story.user_id} className="story-card story-card--button" onClick={() => openViewer(story)}><span className="story-card__ring"><Avatar name={name} image={story.author?.avatar_url ?? undefined} size="large" /></span><span className="story-card__name">{name}</span></button>
-    })}</div></div>}
+    {!isLoading && !selectedStory && <>
+          <PageHeading eyebrow="LITTLE WINDOWS INTO TODAY" title="Stories" description="Share a photo, video, or message. Stories disappear after 24 hours." />
+          <form className="story-create-box" onSubmit={publishStory}>
+            <div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>Your story</strong><span>Visible for 24 hours</span></span></div>
+            <textarea aria-label="Story message" value={storyText} onChange={(event) => setStoryText(event.target.value)} placeholder="Add a message to your story (optional)" maxLength={500} />
+            <div className="story-create-box__media"><label className="button button--outline" htmlFor="story-media">Add photo or video</label><input id="story-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleStoryFile} />{storyFile && <span className="micro-note">{storyFile.name} · {(storyFile.size / (1024 * 1024)).toFixed(1)} MB</span>}<span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span></div>
+            <Button type="submit" disabled={isPublishing || (!storyText.trim() && !storyFile)}>{isPublishing ? 'Publishing…' : 'Post story'} <Send size={15} /></Button>
+          </form>
+          {error && <p className="field__error" role="alert">{error}</p>}
+          {success && <p className="micro-note" role="status">{success}</p>}
+          {isLoading ? <Loading label="Loading stories" /> : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="story-page-thumbs"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div><div className="stories-rail__items">{grouped.map((story) => {
+            const name = story.author?.display_name || story.author?.username || 'Community member'
+            return <button type="button" key={story.user_id} className="story-card story-card--button" onClick={() => openViewer(story)}><span className="story-card__ring"><Avatar name={name} image={story.author?.avatar_url ?? undefined} size="large" /></span><span className="story-card__name">{name}</span></button>
+          })}</div></div>}
+      
+    </>}
     {selectedStory && grouped.length > 0 && <div className="story-fullscreen" role="dialog" aria-modal="true" aria-label="Story viewer">
       <div className="story-fullscreen__backdrop" onClick={() => navigate('/home')} />
       <div className="story-fullscreen__card">
