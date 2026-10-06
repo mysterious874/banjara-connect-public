@@ -34,6 +34,23 @@ const DeveloperPage = lazy(() => import('./pages/DeveloperPage').then(({ Develop
 const NotFoundPage = lazy(() => import('./pages/Pages').then(({ NotFoundPage }) => ({ default: NotFoundPage })))
 
 export default function App() {
+  useEffect(() => {
+    const applyTheme = () => {
+      const saved = window.localStorage.getItem('banjara-theme') || 'light'
+      const dark = saved === 'dark' || (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      document.documentElement.dataset.theme = saved
+      document.documentElement.classList.toggle('theme-dark', dark)
+    }
+    applyTheme()
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    media.addEventListener?.('change', applyTheme)
+    window.addEventListener('banjara-theme-change', applyTheme)
+    return () => {
+      media.removeEventListener?.('change', applyTheme)
+      window.removeEventListener('banjara-theme-change', applyTheme)
+    }
+  }, [])
+
   const [showLaunchIntro, setShowLaunchIntro] = useState(false)
 
   useEffect(() => {
