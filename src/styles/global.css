@@ -2014,3 +2014,9 @@ button, input, textarea, select { font-size: 16px; }
 .user-card__copy strong { font-size: 12px; }
 .user-card__copy > span { font-size: 11px; }
 .aside-about { font-size: 11px; }
+
+
+/* Fine header alignment: keep header position unchanged, move only its contents down 1px. */
+.topbar__inner > * {
+  transform: translateY(1px);
+}
