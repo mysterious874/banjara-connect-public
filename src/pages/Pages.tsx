@@ -1233,7 +1233,8 @@ export function ChatConversationPage() {
   function handleMessageContextMenu(event: MouseEvent, messageId: string) {
     event.preventDefault()
     clearLongPressTimer()
-    toggleMessageSelection(messageId)
+    suppressNextMessageClick.current = true
+    setSelectedMessageIds((current) => current.includes(messageId) ? current : [...current, messageId])
   }
 
   function cancelMessageSelection() {
