@@ -23,6 +23,22 @@ export async function loadPostLikes(postId: string) {
   return { count: count ?? 0, liked: Boolean(ownLike) }
 }
 
+export async function loadPostLikesBatch(postIds: string[]) {
+  const userId = await requireAuthenticatedUserId()
+  if (!postIds.length) return new Map<string, { count: number; liked: boolean }>()
+  const { data, error } = await supabase.from('post_likes').select('post_id,user_id').in('post_id', postIds)
+  if (error) throw error
+  const results = new Map<string, { count: number; liked: boolean }>()
+  for (const postId of postIds) results.set(postId, { count: 0, liked: false })
+  for (const like of data ?? []) {
+    const current = results.get(like.post_id) ?? { count: 0, liked: false }
+    current.count += 1
+    if (like.user_id === userId) current.liked = true
+    results.set(like.post_id, current)
+  }
+  return results
+}
+
 export async function togglePostLike(postId: string, currentlyLiked: boolean) {
   const userId = await requireAuthenticatedUserId()
   if (currentlyLiked) {
