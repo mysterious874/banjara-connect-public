@@ -7,6 +7,7 @@ import { loadPostLikes, togglePostLike } from '../utils/socialData'
 import { supabase } from '../utils/supabase'
 import { deletePostMedia, type PostMediaData } from '../utils/mediaData'
 import { userFacingError } from '../utils/userFacingError'
+import { loadConversations, sendConversationMessage, type ConversationSummary } from '../utils/chatData'
 import { Avatar, Button, ConfirmationDialog, EmptyState, Loading } from './ui'
 
 export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () => void }) {
@@ -24,6 +25,13 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
   const [showPostOptions, setShowPostOptions] = useState(false)
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
   const [postError, setPostError] = useState('')
+  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [selectedConversationIds, setSelectedConversationIds] = useState<string[]>([])
+  const [isShareLoading, setIsShareLoading] = useState(false)
+  const [isShareSending, setIsShareSending] = useState(false)
+  const [shareError, setShareError] = useState('')
+  const [shareSuccess, setShareSuccess] = useState('')
   const isOwner = session?.user.id === post.user_id
   const authorName = post.author?.display_name || post.author?.username || 'Community member'
   const authorContent = <><Avatar name={authorName} image={post.author?.avatar_url ?? undefined} /><span><strong>{authorName}</strong><span>{post.author?.location && <><MapPin size={12} />{post.author.location} · </>}{new Date(post.created_at).toLocaleString()}</span></span></>
@@ -90,6 +98,61 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
     }
   }
 
+  useEffect(() => {
+    if (!showShareDialog) return
+    let active = true
+    setIsShareLoading(true)
+    setShareError('')
+    setShareSuccess('')
+    setSelectedConversationIds([])
+    loadConversations()
+      .then((items) => {
+        if (active) setConversations(items)
+      })
+      .catch((caught: unknown) => {
+        if (active) setShareError(userFacingError(caught, 'Could not load conversations.'))
+      })
+      .finally(() => {
+        if (active) setIsShareLoading(false)
+      })
+    return () => { active = false }
+  }, [showShareDialog])
+
+  function toggleShareConversation(conversationId: string) {
+    setSelectedConversationIds((current) =>
+      current.includes(conversationId)
+        ? current.filter((id) => id !== conversationId)
+        : [...current, conversationId],
+    )
+  }
+
+  async function sharePost() {
+    if (!session?.user || !selectedConversationIds.length || isShareSending) return
+    setIsShareSending(true)
+    setShareError('')
+    setShareSuccess('')
+    try {
+      const message = [
+        `📌 Shared post from ${authorName}`,
+        '',
+        postContent.trim() || 'Photo/video post',
+        '',
+        `/posts/${post.id}`,
+      ].join('\\n')
+      let sent = 0
+      for (const conversationId of selectedConversationIds) {
+        await sendConversationMessage(conversationId, message)
+        sent += 1
+      }
+      setShareSuccess(`Post shared to ${sent} conversation${sent === 1 ? '' : 's'}.`)
+      setSelectedConversationIds([])
+    } catch (caught) {
+      setShareError(userFacingError(caught, 'Could not share this post.'))
+    } finally {
+      setIsShareSending(false)
+    }
+  }
+
   async function deletePost() {
     if (!session?.user || !isOwner || isDeletingPost) return
     setIsDeletingPost(true)
@@ -132,7 +195,7 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
           <Heart size={19} fill={liked ? 'currentColor' : 'none'} /><span>{isLikePending ? 'Saving…' : liked ? 'Liked' : 'Like'}</span>
         </button>
         <Link className="post-action" to={`/posts/${post.id}/comments`}><MessageCircle size={19} /><span>Comment</span></Link>
-        <button type="button" className="post-action" disabled title="Sharing is not connected yet"><Send size={18} /><span>Share</span></button>
+        <button type="button" className="post-action" disabled={!session || isShareSending} onClick={() => setShowShareDialog(true)}><Send size={18} /><span>Share</span></button>
         <button type="button" className="post-action post-action--save" disabled title="Saving posts is not connected yet" aria-label="Save post unavailable"><Bookmark size={18} /></button>
       </div>
       {likeError && <p className="field__error" role="alert">{likeError}</p>}
