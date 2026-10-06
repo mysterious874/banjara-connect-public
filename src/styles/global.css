@@ -1991,3 +1991,26 @@ a{color:inherit}:focus-visible{outline-color:var(--bc-gold)}
   border-top: 1px solid var(--bc-line);
   content: '';
 }
+
+
+/* Accessibility readability pass — typography only */
+body { font-size: 16px; }
+button, input, textarea, select { font-size: 16px; }
+.button { font-size: 14px; }
+.text-link { font-size: 13px; }
+.eyebrow { font-size: 11px; }
+.micro-note { font-size: 12px; }
+.field__label { font-size: 13px; }
+.field__error { font-size: 12px; }
+.search-bar input { font-size: 14px; }
+.search-bar button { font-size: 12px; }
+.home-intro p, .page-heading p { font-size: 13px; }
+.story-card__name { font-size: 11px; }
+.post-card__author strong { font-size: 13px; }
+.post-card__author > span > span { font-size: 11px; }
+.post-card__text { font-size: 13px; }
+.post-card__meta { font-size: 11px; }
+.post-action { font-size: 11px; }
+.user-card__copy strong { font-size: 12px; }
+.user-card__copy > span { font-size: 11px; }
+.aside-about { font-size: 11px; }
