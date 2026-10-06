@@ -235,6 +235,10 @@ export function CommunityPage() {
   const [reportDetails, setReportDetails] = useState('')
   const [reportSaving, setReportSaving] = useState(false)
   const [reportError, setReportError] = useState('')
+  const [reportsOpen, setReportsOpen] = useState(false)
+  const [reports, setReports] = useState<Array<{ id: string; reporter_id: string; reported_user_id: string | null; group_message_id: string | null; reason: string; details: string | null; status: string; created_at: string; resolved_at: string | null }>>([])
+  const [reportsLoading, setReportsLoading] = useState(false)
+  const [reportAction, setReportAction] = useState('')
   const isGroupAdmin = Boolean(session?.user && group && (group.created_by === session.user.id || members.some((member) => member.user_id === session.user.id && member.role === 'admin')))
   const [groupUnreadCount, setGroupUnreadCount] = useState(0)
   const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(false)
@@ -1850,6 +1854,7 @@ export function CommunityGroupPage() {
         <span className="community-group-card__icon"><Users size={20} /></span>
         <span className="chat-screen__identity"><strong>{group.name}</strong><small>{members.length} members · tap for members</small></span>
       </button>
+      {isGroupAdmin && <Button type="button" variant="quiet" onClick={() => void loadGroupReports()} disabled={reportsLoading}>{reportsLoading ? '…' : 'Reports'}</Button>}
       <button type="button" className="icon-button" aria-label="Leave community" onClick={() => void leaveGroup()} disabled={memberAction === 'leave'}>{memberAction === 'leave' ? '…' : <ArrowRight size={17} />}</button>
     </header>
     {members.find((member) => member.user_id === session?.user.id)?.role === 'admin' && <div className="community-group-admin-bar">
@@ -1863,6 +1868,22 @@ export function CommunityGroupPage() {
         {memberError && <p className="field__error" role="alert">{memberError}</p>}
         <Button type="submit" disabled={groupSaving}>{groupSaving ? 'Saving…' : 'Save changes'}</Button>
       </form>
+    </Modal>
+    <Modal open={reportsOpen} title="Community reports" onClose={() => setReportsOpen(false)}>
+      <div className="community-group-members-panel">
+        {reports.length === 0 ? <p className="micro-note">No reports for this community.</p> : reports.map((report) => <div className="community-group-member-row" key={report.id}>
+          <span>
+            <strong>{report.reason}</strong>
+            <small>{report.status} · {new Date(report.created_at).toLocaleString()}</small>
+            {report.details && <small>{report.details}</small>}
+          </span>
+          {report.status === 'pending' && <span className="community-group-member-actions">
+            <Button type="button" variant="quiet" onClick={() => void updateGroupReport(report.id, 'dismissed')} disabled={!!reportAction}>{reportAction === report.id ? '…' : 'Dismiss'}</Button>
+            <Button type="button" onClick={() => void updateGroupReport(report.id, 'resolved')} disabled={!!reportAction}>Resolve</Button>
+          </span>}
+        </div>)}
+        {memberError && <p className="field__error" role="alert">{memberError}</p>}
+      </div>
     </Modal>
     <Modal open={!!reportTarget} title={reportTarget ? 'Report ' + reportTarget.label : 'Report'} onClose={() => { if (!reportSaving) { setReportTarget(null); setReportError('') } }}>
       <form className="form-stack" onSubmit={submitGroupReport}>
