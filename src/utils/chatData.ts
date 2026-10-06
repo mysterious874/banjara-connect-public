@@ -294,7 +294,7 @@ export function subscribeToConversation(
 ) {
   return subscribeToPostgresChanges({
     topic: `conversation:${conversationId}`,
-    event: 'INSERT',
+    event: '*',
     table: 'messages',
     filter: `conversation_id=eq.${conversationId}`,
   }, onMessage, onStatus)
