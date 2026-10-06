@@ -1923,3 +1923,6 @@ a{color:inherit}:focus-visible{outline-color:var(--bc-gold)}
 .chat-screen[class*="chat-screen--theme-"] .chat-compose-area { background: var(--chat-compose, #fff); border-color: var(--chat-line, var(--bc-line)); }
 .chat-screen[class*="chat-screen--theme-"] .chat-compose-area .field__control { background: var(--chat-input, transparent); }
 .chat-screen[class*="chat-screen--theme-"] .chat-compose-area .micro-note { color: var(--chat-muted, var(--bc-muted)); }
+
+/* Home header 4px lower */
+.app-shell:not(.app-shell--chat):not(.app-shell--assistant) .topbar { transform: translateY(4px); }
