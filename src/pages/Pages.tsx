@@ -6,7 +6,7 @@ import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
 import { PwaInstallControl } from '../components/PwaInstall'
 import { StoriesRail } from '../components/stories'
-import { Avatar, Button, ConfirmationDialog, EmptyState, ErrorState, Input, Loading, Tabs } from '../components/ui'
+import { Avatar, Button, ConfirmationDialog, EmptyState, ErrorState, Input, Loading } from '../components/ui'
 import { UserCard } from '../components/users'
 import { useAuth } from '../hooks/AuthProvider'
 import { usePreviewToast } from '../hooks/usePreviewToast'
@@ -47,12 +47,6 @@ function PageHeading({ eyebrow, title, description, action }: { eyebrow?: string
 
 function PreviewNotice({ children = 'FRONTEND PREVIEW · LOCAL SAMPLE CONTENT' }: { children?: ReactNode }) {
   return <div className="preview-notice"><span className="preview-notice__dot" />{children}</div>
-}
-
-function CommunityPreviewCard({ name, detail, members, tone }: { name: string; detail: string; members: string; tone: string }) {
-  const [joined, setJoined] = useState(false)
-  const { notify } = usePreviewToast()
-  return <article className="community-preview-card"><span className={`community-preview-card__icon community-preview-card__icon--${tone}`}><Users size={19} /></span><h3>{name}</h3><p>{detail}</p><span className="community-preview-card__members">{members} · sample community</span><Button variant={joined ? 'quiet' : 'outline'} onClick={() => { setJoined(!joined); notify('Community membership is only a local preview.') }}>{joined ? 'Joined in preview' : 'Explore community'}</Button></article>
 }
 
 export function HomePage() {
