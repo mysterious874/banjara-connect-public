@@ -1547,7 +1547,8 @@ export function CommunityGroupPage() {
         if (!active) return
         const latestMessage = nextMessages[nextMessages.length - 1]
         if (latestMessage) {
-          await supabase.rpc('mark_community_group_read', { p_group_id: groupId, p_message_id: latestMessage.id })
+          const { error: markReadError } = await supabase.rpc('mark_community_group_read', { p_group_id: groupId, p_message_id: latestMessage.id })
+          if (markReadError && import.meta.env.DEV) console.error('Could not mark community group as read.', markReadError)
         }
         setGroup(groupRow)
         setMessages(nextMessages)
@@ -1586,7 +1587,9 @@ export function CommunityGroupPage() {
               const { data: latestProfiles } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
               if (active) setProfiles((current) => ({ ...current, ...Object.fromEntries((latestProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])) }))
             }
-          })()
+          })().catch((caught: unknown) => {
+            if (active) setRealtimeError(userFacingError(caught, 'Live group messages could not be refreshed.'))
+          })
         }, (status) => {
           if (active) setRealtimeError(status === 'SUBSCRIBED' ? '' : `Live group updates are unavailable (${status.toLowerCase().replace('_', ' ')}).`)
         })
@@ -1606,7 +1609,9 @@ export function CommunityGroupPage() {
               return
             }
             await loadGroupMembers()
-          })()
+          })().catch((caught: unknown) => {
+            if (active) setRealtimeError(userFacingError(caught, 'Live group members could not be refreshed.'))
+          })
         }, (status) => {
           if (active && status !== 'SUBSCRIBED') setRealtimeError(`Live member updates are unavailable (${status.toLowerCase().replace('_', ' ')}).`)
         })
