@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './authenticatedUser'
 import { loadBlockedUserIds } from './blockData'
+import { createChatMediaUrl, deleteChatMedia, type ChatMediaData } from './chatMediaData'
 import type { ProfileRecord } from '../types/app'
 import { subscribeToPostgresChanges, type RealtimeSubscriptionStatus } from './realtimeData'
 
@@ -209,6 +210,17 @@ export async function loadConversationMessages(
     page = page.filter((message) => !hiddenIds.has(message.id))
   }
   const messages = page.reverse()
+  for (const chatMessage of messages) {
+    if (chatMessage.media_url) {
+      try {
+        chatMessage.media_url = await createChatMediaUrl(chatMessage.media_url)
+      } catch (mediaError) {
+        if (import.meta.env.DEV) console.error('Could not create chat media URL.', mediaError)
+        chatMessage.media_url = null
+        chatMessage.media_type = null
+      }
+    }
+  }
   const unreadIds = messages.filter((message) => message.sender_id !== userId).map((message) => message.id)
   if (unreadIds.length) {
     const { data: existingReads, error: readError } = await supabase.from('message_reads').select('message_id')
@@ -249,21 +261,40 @@ export async function loadConversationPeer(conversationId: string) {
   return profile
 }
 
-export async function sendConversationMessage(conversationId: string, content: string) {
+export async function sendConversationMessage(conversationId: string, content: string, media?: ChatMediaData) {
   const normalized = content.trim()
-  if (!normalized) throw new Error('Message cannot be empty.')
+  if (!normalized && !media) throw new Error('Message cannot be empty.')
   const senderId = await requireAuthenticatedUserId()
   const { data: membership, error: membershipError } = await supabase.from('conversation_members')
     .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', senderId).maybeSingle()
   if (membershipError) throw membershipError
   if (!membership) throw new Error('You are not a member of this conversation.')
+
   const { data, error } = await supabase.from('messages').insert({
     conversation_id: conversationId,
     sender_id: senderId,
     content: normalized,
   }).select(messageColumns).single()
   if (error) throw error
-  return data as ChatMessage
+  const created = data as ChatMessage
+  if (!media) return created
+
+  try {
+    const { error: updateError, data: updated } = await supabase.from('messages').update({
+      media_url: media.path,
+      media_type: media.type,
+      updated_at: new Date().toISOString(),
+    }).eq('id', created.id).eq('sender_id', senderId).select(messageColumns).single()
+    if (updateError) throw updateError
+    return updated as ChatMessage
+  } catch (caught) {
+    try {
+      await supabase.from('messages').delete().eq('id', created.id).eq('sender_id', senderId)
+    } catch (cleanupError) {
+      if (import.meta.env.DEV) console.error('Could not clean up failed chat media message.', cleanupError)
+    }
+    throw caught
+  }
 }
 
 export async function deleteMessageForMe(messageId: string) {
@@ -280,9 +311,28 @@ export async function deleteMessageForMe(messageId: string) {
 
 export async function deleteMessageForEveryone(messageId: string) {
   const userId = await requireAuthenticatedUserId()
-  const { data, error } = await supabase.from('messages').update({ is_deleted_for_everyone: true, content: '', media_url: null, media_type: null, updated_at: new Date().toISOString() }).eq('id', messageId).eq('sender_id', userId).select(messageColumns).maybeSingle()
+  const { data: existing, error: existingError } = await supabase.from('messages')
+    .select('id,media_url').eq('id', messageId).eq('sender_id', userId).maybeSingle()
+  if (existingError) throw existingError
+  if (!existing) throw new Error('Only the sender can delete this message for everyone.')
+
+  const { data, error } = await supabase.from('messages').update({
+    is_deleted_for_everyone: true,
+    content: '',
+    media_url: null,
+    media_type: null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', messageId).eq('sender_id', userId).select(messageColumns).maybeSingle()
   if (error) throw error
   if (!data) throw new Error('Only the sender can delete this message for everyone.')
+
+  if (existing.media_url) {
+    try {
+      await deleteChatMedia([existing.media_url])
+    } catch (mediaError) {
+      if (import.meta.env.DEV) console.error('Could not delete chat media object.', mediaError)
+    }
+  }
   return data as ChatMessage
 }
 
