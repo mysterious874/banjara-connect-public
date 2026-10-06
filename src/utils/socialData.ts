@@ -15,7 +15,7 @@ export type CommentRecord = {
 export async function loadPostLikes(postId: string) {
   const userId = await requireAuthenticatedUserId()
   const [{ count, error: countError }, { data: ownLike, error: ownLikeError }] = await Promise.all([
-    supabase.from('post_likes').select('id', { count: 'exact', head: true }).eq('post_id', postId),
+    supabase.from('post_likes').select('post_id', { count: 'exact', head: true }).eq('post_id', postId),
     supabase.from('post_likes').select('user_id').eq('post_id', postId).eq('user_id', userId).maybeSingle(),
   ])
   if (countError) throw countError
