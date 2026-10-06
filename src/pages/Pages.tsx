@@ -22,7 +22,7 @@ import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
-import { loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
+import { deleteMessageForEveryone, deleteMessageForMe, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
 import { createComment, deleteComment, loadCommentLikes, loadComments, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 
 function PageHeading({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
@@ -778,6 +778,7 @@ export function ChatConversationPage() {
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
   const [realtimeError, setRealtimeError] = useState('')
+  const [pendingDeleteId, setPendingDeleteId] = useState('')
 
   useEffect(() => {
     let active = true
@@ -857,6 +858,25 @@ export function ChatConversationPage() {
     }
   }
 
+  async function handleDeleteMessage(item: ChatMessage, mode: 'me' | 'everyone') {
+    if (pendingDeleteId) return
+    setPendingDeleteId(item.id)
+    setError('')
+    try {
+      if (mode === 'everyone') {
+        await deleteMessageForEveryone(item.id)
+        setMessages((current) => current.map((message) => message.id === item.id ? { ...message, content: '', media_url: null, media_type: null, is_deleted_for_everyone: true } : message))
+      } else {
+        await deleteMessageForMe(item.id)
+        setMessages((current) => current.filter((message) => message.id !== item.id))
+      }
+    } catch (caught) {
+      setError(userFacingError(caught, mode === 'everyone' ? 'Could not delete this message for everyone.' : 'Could not delete this message for you.'))
+    } finally {
+      setPendingDeleteId('')
+    }
+  }
+
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!message.trim() || isSending) return
@@ -877,7 +897,7 @@ export function ChatConversationPage() {
   if (error && !person) return <section className="page-stack"><ErrorState title="Could not load conversation" description={error} /></section>
   if (!person) return <section className="page-stack"><EmptyState title="Conversation unavailable" description="This conversation could not be found." action={<Button to="/chat" variant="outline">Back to chats</Button>} /></section>
   const personName = person.display_name || person.username
-  return <section className="chat-screen"><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>Conversation</small></span><span /></header><div className="chat-messages">{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; return <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}`} key={item.id}>{item.content}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area"><form className="chat-disabled-compose" onSubmit={sendMessage}><Input aria-label="Message" placeholder="Write a message" value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send message">{isSending ? '…' : <Send size={17} />}</Button></form></div></section>
+  return <section className="chat-screen"><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>Conversation</small></span><span /></header><div className="chat-messages">{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}`}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : item.content}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div>{!item.is_deleted_for_everyone && <div className="chat-message-actions"><button type="button" disabled={pendingDeleteId === item.id} onClick={() => void handleDeleteMessage(item, 'me')}>Delete for me</button>{mine && <button type="button" disabled={pendingDeleteId === item.id} onClick={() => void handleDeleteMessage(item, 'everyone')}>Delete for everyone</button>}</div>}</div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area"><form className="chat-disabled-compose" onSubmit={sendMessage}><Input aria-label="Message" placeholder="Write a message" value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send message">{isSending ? '…' : <Send size={17} />}</Button></form></div></section>
 }
 
 export function NotificationsPage() {
