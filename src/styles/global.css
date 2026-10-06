@@ -892,3 +892,59 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
 .chat-message-actions button:hover { opacity: 1; text-decoration: underline; }
 .chat-message-actions button:disabled { cursor: wait; opacity: .45; }
 .chat-bubble em { opacity: .7; }
+
+
+/* WhatsApp-style long-press message selection */
+.chat-message-row--selected {
+  position: relative;
+}
+.chat-bubble {
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.chat-bubble--selected {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  filter: brightness(.96);
+}
+.chat-selection-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #ddd);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.08);
+}
+.chat-selection-toolbar strong {
+  margin-right: auto;
+}
+.chat-selection-toolbar button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chat-selection-toolbar button:hover {
+  text-decoration: underline;
+}
+.chat-selection-toolbar button:disabled {
+  opacity: .45;
+  cursor: wait;
+}
+.chat-selection-toolbar__close {
+  font-size: 22px !important;
+  line-height: 1;
+  font-weight: 400 !important;
+}
