@@ -30,8 +30,8 @@ import { createComment, deleteComment, loadCommentLikes, loadComments, toggleCom
 
 function renderChatMessageContent(content: string) {
   return content.split('\n').map((line, index, lines) => {
-    const postMatch = line.trim().match(/^\\/posts\\/([0-9a-f-]+)$/i)
-    const storyMatch = line.trim().match(/^\\/stories(?:\\?story=([0-9a-f-]+))?$/i)
+    const postMatch = line.trim().match(/^\/posts\/([0-9a-f-]+)$/i)
+    const storyMatch = line.trim().match(/^\/stories(?:\?story=([0-9a-f-]+))?$/i)
     const contentNode = postMatch
       ? <Link className="chat-shared-link" to={`/posts/${postMatch[1]}`}>Open shared post</Link>
       : storyMatch
