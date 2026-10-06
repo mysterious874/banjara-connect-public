@@ -45,7 +45,7 @@ export async function loadComments(postId: string, offset = 0, limit = 50): Prom
   const fetched = data ?? []
   const hasMore = fetched.length > limit
   const comments = fetched.slice(0, limit)
-  if (!comments.length) return []
+  if (!comments.length) return { comments: [], hasMore: false }
 
   const userIds = [...new Set(comments.map((comment) => comment.user_id))]
   const { data: profiles, error: profileError } = await supabase.from('profiles')
