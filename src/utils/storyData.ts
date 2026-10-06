@@ -14,6 +14,7 @@ export type StoryRecord = {
   user_id: string
   content: string
   media_url: string | null
+  media_path?: string | null
   media_type: 'image' | 'video' | null
   created_at: string
   expires_at: string
@@ -61,7 +62,8 @@ export async function loadActiveStories() {
   if (profileError) throw profileError
   const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
   return await Promise.all(rows.map(async (item) => {
-    let mediaUrl = item.media_url
+    const mediaPath = item.media_url
+    let mediaUrl = mediaPath
     if (mediaUrl) {
       try {
         const { data: signed, error: signedError } = await supabase.storage
@@ -76,6 +78,7 @@ export async function loadActiveStories() {
     return {
       ...item,
       media_url: mediaUrl,
+      media_path: mediaPath,
       media_type: item.media_type === 'video' ? 'video' : item.media_type === 'image' ? 'image' : null,
       author: byId.get(item.user_id) ?? null,
     }
@@ -112,11 +115,12 @@ export async function createStory(userId: string, content: string, mediaFile?: F
 export async function deleteStory(story: StoryRecord) {
   const { error } = await supabase.from('stories').delete().eq('id', story.id).eq('user_id', story.user_id)
   if (error) throw error
-  if (story.media_url) {
+  const storedPath = story.media_path ?? story.media_url
+  if (storedPath) {
     const marker = `/storage/v1/object/public/${BANJARA_STORIES_BUCKET}/`
-    const path = story.media_url.includes(marker)
-      ? decodeURIComponent(story.media_url.slice(story.media_url.indexOf(marker) + marker.length))
-      : story.media_url
+    const path = storedPath.includes(marker)
+      ? decodeURIComponent(storedPath.slice(storedPath.indexOf(marker) + marker.length))
+      : storedPath
     await deleteStoryMedia([path])
   }
 }
