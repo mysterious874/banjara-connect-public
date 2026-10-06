@@ -36,14 +36,14 @@ export async function getOrCreateConversation(targetUserId: string) {
   const pendingRequest = pendingConversationRequests.get(requestKey)
   if (pendingRequest) return pendingRequest
 
-  const request = createOrFindConversation(userId, targetUserId).finally(() => {
+  const request = createOrFindConversation(targetUserId).finally(() => {
     pendingConversationRequests.delete(requestKey)
   })
   pendingConversationRequests.set(requestKey, request)
   return request
 }
 
-async function createOrFindConversation(userId: string, targetUserId: string) {
+async function createOrFindConversation(targetUserId: string) {
   const { data, error } = await supabase.rpc('get_or_create_direct_conversation', {
     p_target_user_id: targetUserId,
   })
