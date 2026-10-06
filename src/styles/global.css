@@ -1248,3 +1248,123 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
     padding: 16px;
   }
 }
+
+.story-create-box {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #dbe5f0;
+  border-radius: 16px;
+  background: #fff;
+}
+.story-create-box textarea {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+}
+.story-create-box__media {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.stories-page-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 18px;
+}
+.story-list-panel,
+.story-viewer {
+  border: 1px solid #dbe5f0;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+}
+.story-list-panel {
+  padding: 12px;
+}
+.story-user-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #172033;
+  text-align: left;
+  cursor: pointer;
+}
+.story-user-row:hover,
+.story-user-row.is-selected {
+  background: #eef5ff;
+}
+.story-user-row__ring {
+  display: block;
+  padding: 2px;
+  border: 2px solid #4f8dcc;
+  border-radius: 50%;
+}
+.story-user-row strong,
+.story-user-row small {
+  display: block;
+}
+.story-user-row small {
+  margin-top: 2px;
+  color: #66758a;
+}
+.story-viewer {
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+.story-viewer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid #e4eaf1;
+}
+.story-viewer__media {
+  flex: 1;
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  padding: 18px;
+  background: #101827;
+}
+.story-viewer__asset {
+  display: block;
+  width: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+}
+.story-viewer__caption {
+  width: min(100%, 620px);
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.94);
+  color: #172033;
+  white-space: pre-wrap;
+}
+.story-reply {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #e4eaf1;
+}
+@media (max-width: 760px) {
+  .stories-page-layout {
+    grid-template-columns: 1fr;
+  }
+  .story-list-panel {
+    max-height: 250px;
+    overflow-y: auto;
+  }
+}
