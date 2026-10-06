@@ -192,7 +192,6 @@ export async function loadConversationMessages(
 
   let query = supabase.from('messages').select(messageColumns)
     .eq('conversation_id', conversationId)
-    .eq('is_deleted_for_everyone', false)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(conversationMessagePageSize)
