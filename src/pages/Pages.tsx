@@ -22,7 +22,7 @@ import { validateChatMedia } from '../utils/chatMediaData'
 import { createStory, deleteStory, loadActiveStories, validateStoryMedia, type StoryRecord } from '../utils/storyData'
 import { userFacingError } from '../utils/userFacingError'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
-import { loadNotifications, markNotificationRead, type NotificationRecord } from '../utils/notificationData'
+import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
 import { deleteMessageForEveryone, deleteMessageForMe, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
@@ -1328,6 +1328,12 @@ export function NotificationsPage() {
           if (active) {
             setNotifications(rows)
             setError('')
+          }
+          if (rows.some((row) => !row.is_read)) {
+            await markAllNotificationsRead()
+            if (active) {
+              setNotifications((current) => current.map((item) => ({ ...item, is_read: true })))
+            }
           }
         } catch (caught) {
           if (active) setError(userFacingError(caught, 'Could not load notifications.'))
