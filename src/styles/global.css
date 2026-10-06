@@ -1,11 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 :root {
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   color: #241c19;
   background: #fbf4e8;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  font-weight: 500;
   --bc-maroon: #7b1e2b;
   --bc-maroon-dark: #54121c;
   --bc-orange: #d8782f;
