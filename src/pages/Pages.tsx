@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Pencil, Plus, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
@@ -249,7 +249,7 @@ export function CreatePostPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
 
-  function handleMediaChange(event: React.ChangeEvent<HTMLInputElement>) {
+  function handleMediaChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null
     setError('')
     if (!file) {
