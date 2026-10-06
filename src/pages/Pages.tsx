@@ -1617,7 +1617,7 @@ export function CommunityGroupPage() {
           unsubscribeMessages()
           unsubscribeMembers()
         }
-
+      } catch (caught) {
         if (active) setError(userFacingError(caught, 'Could not load this community.'))
       } finally {
         if (active) setIsLoading(false)
