@@ -6,7 +6,7 @@ import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
 import { PwaInstallControl } from '../components/PwaInstall'
 import { StoriesRail } from '../components/stories'
-import { Avatar, Button, ConfirmationDialog, EmptyState, ErrorState, Input, Loading } from '../components/ui'
+import { Avatar, Button, ConfirmationDialog, EmptyState, ErrorState, Input, Loading, Modal } from '../components/ui'
 import { UserCard } from '../components/users'
 import { useAuth } from '../hooks/AuthProvider'
 import { usePreviewToast } from '../hooks/usePreviewToast'
@@ -223,63 +223,106 @@ export function CommunityPage() {
   const [hasMore, setHasMore] = useState(false)
   const [offset, setOffset] = useState(0)
   const [error, setError] = useState('')
+  const [groups, setGroups] = useState<Array<{ id: string; name: string; description: string; member_count: number }>>([])
+  const [groupsLoading, setGroupsLoading] = useState(true)
+  const [groupModalOpen, setGroupModalOpen] = useState(false)
+  const [groupName, setGroupName] = useState('')
+  const [groupDescription, setGroupDescription] = useState('')
+  const [groupSaving, setGroupSaving] = useState(false)
+  const [groupError, setGroupError] = useState('')
+
+  async function loadGroups() {
+    if (!session?.user) return
+    setGroupsLoading(true)
+    try {
+      const { data: memberships, error: membershipError } = await supabase.from('community_group_members').select('group_id').eq('user_id', session.user.id)
+      if (membershipError) throw membershipError
+      const ids = (memberships ?? []).map((row) => row.group_id)
+      if (!ids.length) { setGroups([]); return }
+      const { data, error: groupsError } = await supabase.from('community_groups').select('id,name,description').in('id', ids).order('created_at', { ascending: false })
+      if (groupsError) throw groupsError
+      const { data: members, error: membersError } = await supabase.from('community_group_members').select('group_id').in('group_id', ids)
+      if (membersError) throw membersError
+      const counts = new Map<string, number>()
+      for (const member of members ?? []) counts.set(member.group_id, (counts.get(member.group_id) ?? 0) + 1)
+      setGroups((data ?? []).map((group) => ({ ...group, member_count: counts.get(group.id) ?? 0 })))
+    } catch (caught) {
+      setGroupError(userFacingError(caught, 'Could not load your communities.'))
+    } finally {
+      setGroupsLoading(false)
+    }
+  }
+
+  async function createGroup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!session?.user) return
+    if (groupName.trim().length < 2) { setGroupError('Community name must be at least 2 characters.'); return }
+    setGroupSaving(true)
+    setGroupError('')
+    try {
+      const { data, error: createError } = await supabase.rpc('create_community_group', { p_name: groupName.trim(), p_description: groupDescription.trim() })
+      if (createError) throw createError
+      setGroupName('')
+      setGroupDescription('')
+      setGroupModalOpen(false)
+      await loadGroups()
+      if (!data) throw new Error('Community was created but no ID was returned.')
+    } catch (caught) {
+      setGroupError(userFacingError(caught, 'Could not create this community.'))
+    } finally {
+      setGroupSaving(false)
+    }
+  }
 
   async function loadCommunityPosts(nextOffset = 0, append = false) {
     if (!session?.user) return
-    if (append) setIsLoadingMore(true)
-    else setIsLoading(true)
+    if (append) setIsLoadingMore(true); else setIsLoading(true)
     setError('')
     try {
       const blockedIds = await loadBlockedUserIds()
       const page = await loadPostsPage({ excludeUserIds: blockedIds, offset: nextOffset })
-      setPosts((current) => {
-        if (!append) return page.posts
-        const seen = new Set(current.map((post) => post.id))
-        return [...current, ...page.posts.filter((post) => !seen.has(post.id))]
-      })
+      setPosts((current) => append ? [...current, ...page.posts.filter((post) => !current.some((item) => item.id === post.id))] : page.posts)
       setHasMore(page.hasMore)
       setOffset(page.nextOffset)
     } catch (caught) {
       setError(userFacingError(caught, 'Could not load community posts.'))
     } finally {
-      if (append) setIsLoadingMore(false)
-      else setIsLoading(false)
+      if (append) setIsLoadingMore(false); else setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    setPosts([])
-    setOffset(0)
-    setHasMore(false)
+    setPosts([]); setOffset(0); setHasMore(false)
     void loadCommunityPosts()
+    void loadGroups()
   }, [session?.user.id])
 
   return <section className="page-stack page-stack--narrow">
-    <PageHeading eyebrow="SHARED STORIES, SHARED ROOTS" title="Community" description="A place for Banjara Connect members to share stories, photos, thoughts and moments." />
+    <PageHeading eyebrow="SHARED STORIES, SHARED ROOTS" title="Community" description="Share stories, join groups and connect around the things that matter to you." />
 
-    <div className="community-action-card">
-      <div className="post-card__author">
-        <Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} />
-        <span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><small>Share something with the community</small></span>
-      </div>
-      <Button to="/create">Create a post <Send size={15} /></Button>
+    <div className="community-groups-head">
+      <div><span className="eyebrow">YOUR COMMUNITIES</span><h2>Groups</h2></div>
+      <Button onClick={() => { setGroupError(''); setGroupModalOpen(true) }}><Plus size={16} />Create community</Button>
     </div>
 
-    <div className="section-heading">
-      <div><span className="eyebrow">COMMUNITY FEED</span><h2>What people are sharing</h2></div>
-      <button type="button" className="button button--quiet" onClick={() => void loadCommunityPosts()} disabled={isLoading}>Refresh</button>
-    </div>
+    {groupsLoading ? <Loading label="Loading your groups" /> : groups.length ? <div className="community-groups-list">{groups.map((group) => <div className="community-group-card" key={group.id}><span className="community-group-card__icon"><Users size={20} /></span><div><strong>{group.name}</strong><p>{group.description || 'A Banjara Connect community group.'}</p><small>{group.member_count} {group.member_count === 1 ? 'member' : 'members'}</small></div><ChevronRight size={18} /></div>)}</div> : <div className="community-groups-empty"><Users size={22} /><div><strong>No communities yet</strong><p>Create a group for your friends, family, region, interests or local circle.</p></div></div>}
 
+    <div className="community-action-card"><div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><small>Share something with the community</small></span></div><Button to="/create">Create a post <Send size={15} /></Button></div>
+
+    <div className="section-heading"><div><span className="eyebrow">COMMUNITY FEED</span><h2>What people are sharing</h2></div><button type="button" className="button button--quiet" onClick={() => void loadCommunityPosts()} disabled={isLoading}>Refresh</button></div>
     {isLoading ? <Loading label="Loading community posts" /> : error && !posts.length ? <ErrorState title="Could not load community" description={error} /> : posts.length ? <div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div> : <EmptyState title="The community is quiet" description="Be the first to share a story, photo or thought with the community." action={<Button to="/create">Create the first post</Button>} />}
-
     {error && posts.length > 0 && <p className="field__error" role="alert">{error}</p>}
     {hasMore && <Button variant="outline" onClick={() => void loadCommunityPosts(offset, true)} disabled={isLoadingMore}>{isLoadingMore ? 'Loading more posts…' : 'Load more posts'}</Button>}
+    <Link to="/community/history" className="community-heritage-link"><span className="community-heritage-link__icon"><BookOpen size={20} /></span><span><strong>Banjara History &amp; Heritage</strong><small>Explore history, language, textile, performance and regional perspectives.</small></span><ChevronRight size={18} /></Link>
 
-    <Link to="/community/history" className="community-heritage-link">
-      <span className="community-heritage-link__icon"><BookOpen size={20} /></span>
-      <span><strong>Banjara History &amp; Heritage</strong><small>Explore history, language, textile, performance and regional perspectives.</small></span>
-      <ChevronRight size={18} />
-    </Link>
+    <Modal open={groupModalOpen} title="Create a community" onClose={() => !groupSaving && setGroupModalOpen(false)}>
+      <form className="dialog-copy" onSubmit={createGroup}>
+        <Input label="Community name" value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="e.g. Mumbai Banjara Friends" maxLength={80} autoFocus required />
+        <label className="field"><span className="field__label">Description</span><textarea className="field__control" value={groupDescription} onChange={(event) => setGroupDescription(event.target.value)} placeholder="What is this group about?" maxLength={500} rows={4} /></label>
+        {groupError && <p className="field__error" role="alert">{groupError}</p>}
+        <div className="dialog-copy__actions"><Button type="button" variant="quiet" onClick={() => setGroupModalOpen(false)} disabled={groupSaving}>Cancel</Button><Button type="submit" disabled={groupSaving}>{groupSaving ? 'Creating…' : 'Create community'} <Plus size={16} /></Button></div>
+      </form>
+    </Modal>
   </section>
 }
 
