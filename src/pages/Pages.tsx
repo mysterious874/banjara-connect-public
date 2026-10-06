@@ -1466,6 +1466,11 @@ export function CommunityGroupPage() {
   const [membersLoading, setMembersLoading] = useState(false)
   const [memberAction, setMemberAction] = useState('')
   const [memberError, setMemberError] = useState('')
+  const [groupEditOpen, setGroupEditOpen] = useState(false)
+  const [groupDeleteOpen, setGroupDeleteOpen] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [groupSaving, setGroupSaving] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -1629,6 +1634,49 @@ export function CommunityGroupPage() {
     }
   }
 
+  async function saveGroupDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!groupId || !session?.user || members.find((member) => member.user_id === session.user.id)?.role !== 'admin') return
+    const name = editName.trim()
+    if (name.length < 2) {
+      setMemberError('Community name must be at least 2 characters.')
+      return
+    }
+    setGroupSaving(true)
+    setMemberError('')
+    try {
+      const { data, error: updateError } = await supabase
+        .from('community_groups')
+        .update({ name, description: editDescription.trim() })
+        .eq('id', groupId)
+        .select('id,name,description,created_by')
+        .single()
+      if (updateError) throw updateError
+      setGroup(data)
+      setGroupEditOpen(false)
+    } catch (caught) {
+      setMemberError(userFacingError(caught, 'Could not update this community.'))
+    } finally {
+      setGroupSaving(false)
+    }
+  }
+
+  async function deleteGroup() {
+    if (!groupId || !session?.user) return
+    if (members.find((member) => member.user_id === session.user.id)?.role !== 'admin') return
+    setGroupSaving(true)
+    setMemberError('')
+    try {
+      const { error: deleteError } = await supabase.from('community_groups').delete().eq('id', groupId)
+      if (deleteError) throw deleteError
+      window.location.href = '/community'
+    } catch (caught) {
+      setMemberError(userFacingError(caught, 'Could not delete this community.'))
+      setGroupSaving(false)
+      setGroupDeleteOpen(false)
+    }
+  }
+
   async function leaveGroup() {
     if (!groupId) return
     setMemberAction('leave')
@@ -1689,6 +1737,20 @@ export function CommunityGroupPage() {
       </button>
       <button type="button" className="icon-button" aria-label="Leave community" onClick={() => void leaveGroup()} disabled={memberAction === 'leave'}>{memberAction === 'leave' ? '…' : <ArrowRight size={17} />}</button>
     </header>
+    {members.find((member) => member.user_id === session?.user.id)?.role === 'admin' && <div className="community-group-admin-bar">
+      <Button variant="quiet" onClick={() => { setEditName(group.name); setEditDescription(group.description || ''); setMemberError(''); setGroupEditOpen(true) }}>Edit community</Button>
+      <Button variant="danger" onClick={() => { setMemberError(''); setGroupDeleteOpen(true) }}>Delete community</Button>
+    </div>}
+    <Modal open={groupEditOpen} title="Edit community" onClose={() => setGroupEditOpen(false)}>
+      <form className="form-stack" onSubmit={saveGroupDetails}>
+        <Input label="Community name" value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={80} required />
+        <label className="field"><span className="field__label">Description</span><textarea className="field__control field__textarea" value={editDescription} onChange={(event) => setEditDescription(event.target.value)} maxLength={500} /></label>
+        {memberError && <p className="field__error" role="alert">{memberError}</p>}
+        <Button type="submit" disabled={groupSaving}>{groupSaving ? 'Saving…' : 'Save changes'}</Button>
+      </form>
+    </Modal>
+    <ConfirmationDialog open={groupDeleteOpen} title="Delete this community?" description="This permanently deletes the group, its members and its messages. This action cannot be undone." confirmLabel={groupSaving ? 'Deleting…' : 'Delete community'} onClose={() => { if (!groupSaving) setGroupDeleteOpen(false) }} onConfirm={() => void deleteGroup()} />
+
     <div className="chat-messages">
       {messages.length ? messages.map((item) => {
         const mine = item.sender_id === session?.user.id
