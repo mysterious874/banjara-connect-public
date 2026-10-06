@@ -328,7 +328,6 @@ export function CommunityPage() {
     {isLoading ? <Loading label="Loading community posts" /> : error && !posts.length ? <ErrorState title="Could not load community" description={error} /> : posts.length ? <div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div> : <EmptyState title="The community is quiet" description="Be the first to share a story, photo or thought with the community." action={<Button to="/create">Create the first post</Button>} />}
     {error && posts.length > 0 && <p className="field__error" role="alert">{error}</p>}
     {hasMore && <Button variant="outline" onClick={() => void loadCommunityPosts(offset, true)} disabled={isLoadingMore}>{isLoadingMore ? 'Loading more posts…' : 'Load more posts'}</Button>}
-    <Link to="/community/history" className="community-heritage-link"><span className="community-heritage-link__icon"><BookOpen size={20} /></span><span><strong>Banjara History &amp; Heritage</strong><small>Explore history, language, textile, performance and regional perspectives.</small></span><ChevronRight size={18} /></Link>
 
     <Modal open={groupModalOpen} title="Create a community" onClose={() => !groupSaving && setGroupModalOpen(false)}>
       <form className="dialog-copy" onSubmit={createGroup}>
@@ -2310,7 +2309,7 @@ export function AssistantPage() {
 
 const settingsGroups = [
   { heading: 'Your account', items: [{ to: '/edit-profile', icon: UserRound, title: 'Edit profile', detail: 'Name, username, and introduction' }, { to: '/settings/security', icon: KeyRound, title: 'Change password', detail: 'Verify your current password before updating' }, { to: '/settings/privacy', icon: ShieldCheck, title: 'Privacy & security', detail: 'Visibility and account safety' }, { to: '/settings/blocked', icon: LockKeyhole, title: 'Blocked users', detail: 'Manage profiles you have blocked' }] },
-  { heading: 'More', items: [{ to: '/report', icon: CircleHelp, title: 'Report a concern', detail: 'Tell us what needs attention' }, { to: '/settings/delete-account', icon: UserRound, title: 'Account deletion', detail: 'Preview account options' }, { to: '/about', icon: Compass, title: 'About Banjara Connect', detail: 'The idea behind this community' }] },
+  { heading: 'More', items: [{ to: '/community/history', icon: BookOpen, title: 'Banjara History & Heritage', detail: 'Explore history, language, textile, performance and regional perspectives' }, { to: '/report', icon: CircleHelp, title: 'Report a concern', detail: 'Tell us what needs attention' }, { to: '/settings/delete-account', icon: UserRound, title: 'Account deletion', detail: 'Preview account options' }, { to: '/about', icon: Compass, title: 'About Banjara Connect', detail: 'The idea behind this community' }] },
 ]
 
 export function SettingsPage() {
