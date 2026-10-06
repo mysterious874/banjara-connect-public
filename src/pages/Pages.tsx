@@ -2317,6 +2317,7 @@ const settingsGroups = [
 
 export function SettingsPage() {
   const { signOut } = useAuth()
+  const [theme, setTheme] = useState(() => window.localStorage.getItem('banjara-theme') || 'light')
   const navigate = useNavigate()
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [error, setError] = useState('')
@@ -2338,7 +2339,22 @@ export function SettingsPage() {
     }
   }
 
-  return <section className="page-stack"><PageHeading eyebrow="MAKE IT YOURS" title="Settings" description="Manage your account and preferences." />{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}<PwaInstallControl />{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
+  function changeTheme(nextTheme: string) {
+    setTheme(nextTheme)
+    window.localStorage.setItem('banjara-theme', nextTheme)
+    window.dispatchEvent(new Event('banjara-theme-change'))
+  }
+
+  return <section className="page-stack"><PageHeading eyebrow="MAKE IT YOURS" title="Settings" description="Manage your account and preferences." />
+    <section className="settings-group settings-group--appearance"><h2>Appearance</h2>
+      <div className="theme-control"><div><strong>App theme</strong><small>Choose how Banjara Connect looks on this device.</small></div>
+        <div className="theme-control__choices">
+          <button type="button" className={theme === 'light' ? 'is-active' : ''} onClick={() => changeTheme('light')}>☀️ Light</button>
+          <button type="button" className={theme === 'dark' ? 'is-active' : ''} onClick={() => changeTheme('dark')}>🌙 Dark</button>
+          <button type="button" className={theme === 'system' ? 'is-active' : ''} onClick={() => changeTheme('system')}>⚙️ System</button>
+        </div>
+      </div>
+    </section>{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}<PwaInstallControl />{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
 }
 
 export function ChangePasswordPage() {
