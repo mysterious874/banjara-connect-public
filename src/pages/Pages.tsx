@@ -305,7 +305,7 @@ export function CommunityPage() {
       <Button onClick={() => { setGroupError(''); setGroupModalOpen(true) }}><Plus size={16} />Create community</Button>
     </div>
 
-    {groupsLoading ? <Loading label="Loading your groups" /> : groups.length ? <div className="community-groups-list">{groups.map((group) => <div className="community-group-card" key={group.id}><span className="community-group-card__icon"><Users size={20} /></span><div><strong>{group.name}</strong><p>{group.description || 'A Banjara Connect community group.'}</p><small>{group.member_count} {group.member_count === 1 ? 'member' : 'members'}</small></div><ChevronRight size={18} /></div>)}</div> : <div className="community-groups-empty"><Users size={22} /><div><strong>No communities yet</strong><p>Create a group for your friends, family, region, interests or local circle.</p></div></div>}
+    {groupsLoading ? <Loading label="Loading your groups" /> : groups.length ? <div className="community-groups-list">{groups.map((group) => <Link to={`/community/groups/${group.id}`} className="community-group-card" key={group.id}><span className="community-group-card__icon"><Users size={20} /></span><div><strong>{group.name}</strong><p>{group.description || 'A Banjara Connect community group.'}</p><small>{group.member_count} {group.member_count === 1 ? 'member' : 'members'}</small></div><ChevronRight size={18} /></Link>)}</div> : <div className="community-groups-empty"><Users size={22} /><div><strong>No communities yet</strong><p>Create a group for your friends, family, region, interests or local circle.</p></div></div>}
 
     <div className="community-action-card"><div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><small>Share something with the community</small></span></div><Button to="/create">Create a post <Send size={15} /></Button></div>
 
@@ -1437,6 +1437,169 @@ export function ChatConversationPage() {
   }
   if (selectedMessageIds.length > 0) toggleMessageSelection(item.id)
 }}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" />}{item.content && <p className="chat-message-text">{renderChatMessageContent(item.content)}</p>}</>}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{isSendingMedia && <div className="chat-media-sending" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending photo/video…</strong><small>You can continue chatting while it sends</small><span className="chat-media-sending__track"><span /></span></span></div>}{selectedMedia && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" onClick={() => mediaInputRef.current?.click()} disabled={isSendingMedia}><Paperclip size={18} /></Button><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form><p className="micro-note">Photos and videos up to 50 MB</p></div></section>
+}
+
+
+type CommunityGroupMessage = {
+  id: string
+  group_id: string
+  sender_id: string
+  content: string
+  created_at: string
+}
+
+export function CommunityGroupPage() {
+  const { groupId = '' } = useParams()
+  const { session } = useAuth()
+  const [group, setGroup] = useState<{ id: string; name: string; description: string; created_by: string } | null>(null)
+  const [messages, setMessages] = useState<CommunityGroupMessage[]>([])
+  const [profiles, setProfiles] = useState<Record<string, ProfileRecord>>({})
+  const [message, setMessage] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSending, setIsSending] = useState(false)
+  const [error, setError] = useState('')
+  const [realtimeError, setRealtimeError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    let unsubscribe: (() => void) | null = null
+    setIsLoading(true)
+    setError('')
+    setRealtimeError('')
+    void (async () => {
+      try {
+        if (!session?.user || !groupId) throw new Error('Community group could not be found.')
+        const { data: membership, error: membershipError } = await supabase
+          .from('community_group_members')
+          .select('group_id')
+          .eq('group_id', groupId)
+          .eq('user_id', session.user.id)
+          .maybeSingle()
+        if (membershipError) throw membershipError
+        if (!membership) throw new Error('You are not a member of this community.')
+        const [{ data: groupRow, error: groupError }, { data: rows, error: messagesError }] = await Promise.all([
+          supabase.from('community_groups').select('id,name,description,created_by').eq('id', groupId).maybeSingle(),
+          supabase.from('community_group_messages').select('id,group_id,sender_id,content,created_at').eq('group_id', groupId).order('created_at', { ascending: true }).limit(100),
+        ])
+        if (groupError) throw groupError
+        if (messagesError) throw messagesError
+        if (!groupRow) throw new Error('This community no longer exists.')
+        const nextMessages = (rows ?? []) as CommunityGroupMessage[]
+        const senderIds = [...new Set(nextMessages.map((row) => row.sender_id))]
+        const { data: senderProfiles, error: profilesError } = senderIds.length
+          ? await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', senderIds)
+          : { data: [], error: null }
+        if (profilesError) throw profilesError
+        if (!active) return
+        setGroup(groupRow)
+        setMessages(nextMessages)
+        setProfiles(Object.fromEntries((senderProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])))
+        unsubscribe = subscribeToPostgresChanges({
+          topic: `community-group:${groupId}`,
+          event: '*',
+          table: 'community_group_messages',
+          filter: `group_id=eq.${groupId}`,
+        }, () => {
+          void (async () => {
+            const { data: latest, error: latestError } = await supabase
+              .from('community_group_messages')
+              .select('id,group_id,sender_id,content,created_at')
+              .eq('group_id', groupId)
+              .order('created_at', { ascending: true })
+              .limit(100)
+            if (latestError || !active) return
+            const next = (latest ?? []) as CommunityGroupMessage[]
+            setMessages(next)
+            const ids = [...new Set(next.map((row) => row.sender_id))]
+            if (ids.length) {
+              const { data: latestProfiles } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
+              if (active) setProfiles(Object.fromEntries((latestProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])))
+            }
+          })()
+        }, (status) => {
+          if (active) setRealtimeError(status === 'SUBSCRIBED' ? '' : `Live group updates are unavailable (${status.toLowerCase().replace('_', ' ')}).`)
+        })
+      } catch (caught) {
+        if (active) setError(userFacingError(caught, 'Could not load this community.'))
+      } finally {
+        if (active) setIsLoading(false)
+      }
+    })()
+    return () => {
+      active = false
+      unsubscribe?.()
+    }
+  }, [groupId, session?.user.id])
+
+  async function sendGroupMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const textToSend = message.trim()
+    if (!textToSend || isSending || !session?.user || !groupId) return
+    setIsSending(true)
+    setError('')
+    try {
+      const { data, error: sendError } = await supabase.from('community_group_messages')
+        .insert({ group_id: groupId, sender_id: session.user.id, content: textToSend })
+        .select('id,group_id,sender_id,content,created_at')
+        .single()
+      if (sendError) throw sendError
+      setMessages((current) => current.some((item) => item.id === data.id) ? current : [...current, data as CommunityGroupMessage])
+      setMessage('')
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not send this message.'))
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  async function deleteGroupMessage(messageId: string) {
+    if (!session?.user) return
+    try {
+      const { error: deleteError } = await supabase.from('community_group_messages').delete().eq('id', messageId).eq('sender_id', session.user.id)
+      if (deleteError) throw deleteError
+      setMessages((current) => current.filter((item) => item.id !== messageId))
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not delete this message.'))
+    }
+  }
+
+  if (isLoading) return <section className="chat-screen"><Loading label="Loading community" /></section>
+  if (error && !group) return <section className="page-stack"><ErrorState title="Could not load community" description={error} /></section>
+  if (!group) return <section className="page-stack"><EmptyState title="Community unavailable" description="This community could not be found." action={<Button to="/community" variant="outline">Back to community</Button>} /></section>
+
+  return <section className="chat-screen community-group-screen">
+    <header className="chat-screen__head">
+      <Button to="/community" variant="quiet" iconOnly aria-label="Back to community"><ArrowLeft size={18} /></Button>
+      <div className="chat-screen__profile">
+        <span className="community-group-card__icon"><Users size={20} /></span>
+        <span className="chat-screen__identity"><strong>{group.name}</strong><small>{group.description || 'Banjara Connect community'}</small></span>
+      </div>
+      <span />
+    </header>
+    <div className="chat-messages">
+      {messages.length ? messages.map((item) => {
+        const mine = item.sender_id === session?.user.id
+        const sender = profiles[item.sender_id]
+        const senderName = sender?.display_name || sender?.username || 'Community member'
+        return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}`} key={item.id}>
+          <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}`}>
+            {!mine && <strong className="community-group-message__sender">{senderName}</strong>}
+            <p className="chat-message-text">{item.content}</p>
+            <span>{new Date(item.created_at).toLocaleTimeString()}</span>
+            {mine && <button type="button" className="community-group-message__delete" onClick={() => void deleteGroupMessage(item.id)} aria-label="Delete message">Delete</button>}
+          </div>
+        </div>
+      }) : <p className="micro-note">No messages yet. Say hello to the group.</p>}
+      {realtimeError && <p className="field__error" role="status">{realtimeError}</p>}
+      {error && <p className="field__error" role="alert">{error}</p>}
+    </div>
+    <div className="chat-compose-area">
+      <form className="chat-disabled-compose" onSubmit={sendGroupMessage}>
+        <Input aria-label="Group message" placeholder="Message this community" value={message} onChange={(event) => setMessage(event.target.value)} />
+        <Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send group message">{isSending ? '…' : <Send size={17} />}</Button>
+      </form>
+    </div>
+  </section>
 }
 
 export function NotificationsPage() {
