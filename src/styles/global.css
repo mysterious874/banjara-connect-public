@@ -765,7 +765,7 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   .auth-card, .assistant-intro, .state-block--empty, .state-block--error,
   .community-preview-card, .event-preview { border-radius: 15px; }
   .community-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
+  .toast { bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 125001; }
 }
 @media (max-width: 370px) {
   .topbar__inner, .app-shell__body { width: calc(100% - 22px); }
