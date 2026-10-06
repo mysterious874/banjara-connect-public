@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Pencil, Plus, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
@@ -779,6 +779,8 @@ export function ChatConversationPage() {
   const [error, setError] = useState('')
   const [realtimeError, setRealtimeError] = useState('')
   const [pendingDeleteId, setPendingDeleteId] = useState('')
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([])
+  const longPressTimer = useRef<number | null>(null)
 
   useEffect(() => {
     let active = true
@@ -858,6 +860,77 @@ export function ChatConversationPage() {
     }
   }
 
+  function clearLongPressTimer() {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  function toggleMessageSelection(messageId: string) {
+    setSelectedMessageIds((current) => current.includes(messageId)
+      ? current.filter((id) => id !== messageId)
+      : [...current, messageId])
+  }
+
+  function startMessageLongPress(messageId: string) {
+    clearLongPressTimer()
+    longPressTimer.current = window.setTimeout(() => {
+      setSelectedMessageIds((current) => current.includes(messageId) ? current : [...current, messageId])
+      longPressTimer.current = null
+    }, 550)
+  }
+
+  function handleMessageContextMenu(event: React.MouseEvent, messageId: string) {
+    event.preventDefault()
+    clearLongPressTimer()
+    toggleMessageSelection(messageId)
+  }
+
+  function cancelMessageSelection() {
+    clearLongPressTimer()
+    setSelectedMessageIds([])
+  }
+
+  async function deleteSelectedMessages(mode: 'me' | 'everyone') {
+    if (!selectedMessageIds.length || pendingDeleteId) return
+    const selected = messages.filter((item) => selectedMessageIds.includes(item.id))
+    setPendingDeleteId('bulk')
+    setError('')
+    try {
+      if (mode === 'everyone') {
+        const ownSelected = selected.filter((item) => item.sender_id === session?.user.id && !item.is_deleted_for_everyone)
+        for (const item of ownSelected) await deleteMessageForEveryone(item.id)
+        setMessages((current) => current.map((item) => ownSelected.some((selectedItem) => selectedItem.id === item.id)
+          ? { ...item, content: '', media_url: null, media_type: null, is_deleted_for_everyone: true }
+          : item))
+      } else {
+        for (const item of selected) {
+          if (!item.is_deleted_for_everyone) await deleteMessageForMe(item.id)
+        }
+        setMessages((current) => current.filter((item) => !selectedMessageIds.includes(item.id)))
+      }
+      setSelectedMessageIds([])
+    } catch (caught) {
+      setError(userFacingError(caught, mode === 'everyone' ? 'Could not delete the selected messages for everyone.' : 'Could not delete the selected messages for you.'))
+    } finally {
+      setPendingDeleteId('')
+    }
+  }
+
+  async function copySelectedMessages() {
+    const selected = messages
+      .filter((item) => selectedMessageIds.includes(item.id) && !item.is_deleted_for_everyone && item.content)
+      .map((item) => item.content)
+    if (!selected.length) return
+    try {
+      await navigator.clipboard.writeText(selected.join('\n'))
+      setSelectedMessageIds([])
+    } catch {
+      setError('Could not copy the selected messages.')
+    }
+  }
+
   async function handleDeleteMessage(item: ChatMessage, mode: 'me' | 'everyone') {
     if (pendingDeleteId) return
     setPendingDeleteId(item.id)
@@ -897,7 +970,7 @@ export function ChatConversationPage() {
   if (error && !person) return <section className="page-stack"><ErrorState title="Could not load conversation" description={error} /></section>
   if (!person) return <section className="page-stack"><EmptyState title="Conversation unavailable" description="This conversation could not be found." action={<Button to="/chat" variant="outline">Back to chats</Button>} /></section>
   const personName = person.display_name || person.username
-  return <section className="chat-screen"><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>Conversation</small></span><span /></header><div className="chat-messages">{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}`}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : item.content}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div>{!item.is_deleted_for_everyone && <div className="chat-message-actions"><button type="button" disabled={pendingDeleteId === item.id} onClick={() => void handleDeleteMessage(item, 'me')}>Delete for me</button>{mine && <button type="button" disabled={pendingDeleteId === item.id} onClick={() => void handleDeleteMessage(item, 'everyone')}>Delete for everyone</button>}</div>}</div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area"><form className="chat-disabled-compose" onSubmit={sendMessage}><Input aria-label="Message" placeholder="Write a message" value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send message">{isSending ? '…' : <Send size={17} />}</Button></form></div></section>
+  return <section className="chat-screen"><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>Conversation</small></span><span /></header><div className="chat-messages">{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{selectedMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelMessageSelection} aria-label="Close message selection">×</button><strong>{selectedMessageIds.length} selected</strong><button type="button" onClick={() => void copySelectedMessages()}>Copy</button><button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('me')}>Delete for me</button>{messages.some((item) => selectedMessageIds.includes(item.id) && item.sender_id === session?.user.id && !item.is_deleted_for_everyone) && <button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('everyone')}>Delete for everyone</button>}</div>}{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; const selected = selectedMessageIds.includes(item.id); return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startMessageLongPress(item.id)} onPointerUp={clearLongPressTimer} onPointerCancel={clearLongPressTimer} onPointerLeave={clearLongPressTimer} onContextMenu={(event) => handleMessageContextMenu(event, item.id)} onClick={() => { if (selectedMessageIds.length > 0) toggleMessageSelection(item.id) }}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : item.content}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area"><form className="chat-disabled-compose" onSubmit={sendMessage}><Input aria-label="Message" placeholder="Write a message" value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send message">{isSending ? '…' : <Send size={17} />}</Button></form></div></section>
 }
 
 export function NotificationsPage() {
