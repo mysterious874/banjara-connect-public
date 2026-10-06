@@ -47,6 +47,13 @@ export async function loadNotifications(): Promise<NotificationRecord[]> {
   })) as NotificationRecord[]
 }
 
+export async function markAllNotificationsRead() {
+  const userId = await requireAuthenticatedUserId()
+  const { error } = await supabase.from('notifications').update({ is_read: true })
+    .eq('user_id', userId).eq('is_read', false)
+  if (error) throw error
+}
+
 export async function markNotificationRead(notificationId: string) {
   const userId = await requireAuthenticatedUserId()
   const { error } = await supabase.from('notifications').update({ is_read: true })
