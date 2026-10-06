@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/AuthProvider'
 import { useEffect, useState } from 'react'
 import { loadUnreadNotificationCount } from '../utils/notificationData'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
+import { loadUnreadChatCount } from '../utils/chatData'
 
 const desktopItems = [
   { to: '/home', label: 'Home', icon: House },
@@ -27,10 +28,53 @@ const mobileItems = [
   { to: '/settings', label: 'More', icon: Ellipsis },
 ]
 
+function useUnreadChatCount(sessionUserId: string | undefined) {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    if (!sessionUserId) {
+      setCount(0)
+      return () => { active = false }
+    }
+
+    const refresh = async () => {
+      try {
+        const next = await loadUnreadChatCount()
+        if (active) setCount(next)
+      } catch {
+        if (active) setCount(0)
+      }
+    }
+
+    void refresh()
+    const unsubscribeMessages = subscribeToPostgresChanges({
+      topic: `chat-badge-messages:${sessionUserId}`,
+      event: 'INSERT',
+      table: 'messages',
+    }, () => { void refresh() })
+    const unsubscribeReads = subscribeToPostgresChanges({
+      topic: `chat-badge-reads:${sessionUserId}`,
+      event: '*',
+      table: 'message_reads',
+      filter: `user_id=eq.${sessionUserId}`,
+    }, () => { void refresh() })
+
+    return () => {
+      active = false
+      unsubscribeMessages()
+      unsubscribeReads()
+    }
+  }, [sessionUserId])
+
+  return count
+}
+
 export function Header() {
   const { profile, session } = useAuth()
   const name = profile?.display_name || profile?.username || 'Your profile'
   const [unreadCount, setUnreadCount] = useState(0)
+  const unreadChatCount = useUnreadChatCount(session?.user.id)
 
   useEffect(() => {
     let active = true
@@ -75,7 +119,7 @@ export function DesktopNavigation() {
   const { pathname } = useLocation()
   return <nav className="desktop-nav" aria-label="Main navigation">{desktopItems.map(({ to, label, icon: Icon }) => {
     const active = isActiveRoute(pathname, to)
-    return <NavLink key={to} to={to} aria-current={active ? 'page' : undefined} className={`desktop-nav__item${active ? ' is-active' : ''}`}><Icon size={16} /><span>{label}</span></NavLink>
+    return <NavLink key={to} to={to} aria-current={active ? 'page' : undefined} className={`desktop-nav__item${active ? ' is-active' : ''}`}><span className="nav-icon-wrap"><Icon size={16} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
   })}</nav>
 }
 
@@ -83,6 +127,6 @@ export function BottomNavigation() {
   const location = useLocation()
   return <nav className="bottom-nav" aria-label="Main navigation">{mobileItems.map(({ to, label, icon: Icon, emphasized }) => {
     const active = isActiveRoute(location.pathname, to)
-    return <NavLink key={to} to={to} aria-label={label === 'AI' ? 'AI Assistant' : label === 'More' ? 'More settings' : label} aria-current={active ? 'page' : undefined} className={`bottom-nav__item${active ? ' is-active' : ''}${emphasized ? ' bottom-nav__item--create' : ''}`}><span className="bottom-nav__icon"><Icon size={emphasized ? 20 : 16} strokeWidth={active ? 2.4 : 1.8} /></span><span>{label}</span></NavLink>
+    return <NavLink key={to} to={to} aria-label={label === 'AI' ? 'AI Assistant' : label === 'More' ? 'More settings' : label} aria-current={active ? 'page' : undefined} className={`bottom-nav__item${active ? ' is-active' : ''}${emphasized ? ' bottom-nav__item--create' : ''}`}><span className="bottom-nav__icon nav-icon-wrap"><Icon size={emphasized ? 20 : 16} strokeWidth={active ? 2.4 : 1.8} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
   })}</nav>
 }
