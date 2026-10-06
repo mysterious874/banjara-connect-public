@@ -1617,42 +1617,7 @@ export function CommunityGroupPage() {
           unsubscribeMessages()
           unsubscribeMembers()
         }
-          topic: `community-group:${groupId}`,
-          event: '*',
-          table: 'community_group_messages',
-          filter: `group_id=eq.${groupId}`,
-        }, () => {
-          void (async () => {
-            const { data: latest, error: latestError } = await supabase
-              .from('community_group_messages')
-              .select('id,group_id,sender_id,content,media_url,media_type,created_at')
-              .eq('group_id', groupId)
-              .order('created_at', { ascending: true })
-              .limit(100)
-            if (latestError || !active) return
-            const incoming = (latest ?? []) as CommunityGroupMessage[]
-            const latestMap = new Map(incoming.map((item) => [item.id, item as CommunityGroupMessage]))
-            setMessages((current) => {
-              const merged = current.map((item) => latestMap.get(item.id) ?? item)
-              for (const item of incoming) if (!merged.some((existing) => existing.id === item.id)) merged.push(item as CommunityGroupMessage)
-              return merged.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-            })
-            const next = incoming as CommunityGroupMessage[]
-            for (const groupMessage of next) {
-              if (groupMessage.media_url) {
-                try { groupMessage.media_signed_url = await createGroupMediaUrl(groupMessage.media_url) } catch { groupMessage.media_signed_url = null }
-              }
-            }
-            const ids = [...new Set(next.map((row) => row.sender_id))]
-            if (ids.length) {
-              const { data: latestProfiles } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
-              if (active) setProfiles(Object.fromEntries((latestProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])))
-            }
-          })()
-        }, (status) => {
-          if (active) setRealtimeError(status === 'SUBSCRIBED' ? '' : `Live group updates are unavailable (${status.toLowerCase().replace('_', ' ')}).`)
-        })
-      } catch (caught) {
+
         if (active) setError(userFacingError(caught, 'Could not load this community.'))
       } finally {
         if (active) setIsLoading(false)
