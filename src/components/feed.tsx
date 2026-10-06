@@ -123,7 +123,7 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
       {isEditing ? <form className="post-edit-form" onSubmit={updatePost}><label className="visually-hidden" htmlFor={`post-edit-${post.id}`}>Edit your post</label><textarea id={`post-edit-${post.id}`} value={editContent} onChange={(event) => setEditContent(event.target.value)} maxLength={500} required /><div><Button type="button" variant="quiet" onClick={() => { setIsEditing(false); setEditContent(postContent) }} disabled={isSavingPost}><X size={15} />Cancel</Button><Button type="submit" disabled={isSavingPost || !editContent.trim()}><Check size={15} />{isSavingPost ? 'Saving…' : 'Save'}</Button></div></form> : <p className="post-card__text">{postContent}</p>}
       {((post as FeedPost & { media?: PostMediaData[] }).media ?? []).map((media) => media.signedUrl ? (
         media.type === 'video'
-          ? <video key={media.path} className="post-card__media" src={media.signedUrl} controls playsInline preload="metadata" />
+          ? <video key={media.path} className="post-card__media post-card__video" src={media.signedUrl} controls playsInline preload="metadata" />
           : <img key={media.path} className="post-card__media" src={media.signedUrl} alt="Post media" loading="lazy" />
       ) : null)}
       <div className="post-card__meta"><span>{post.visibility ?? 'Community post'} · {new Date(post.created_at).toLocaleString()}</span><span>{isLikeLoading ? 'Loading likes…' : `${likeCount} likes`}</span></div>
