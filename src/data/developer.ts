@@ -9,11 +9,11 @@ export const developerProfile = {
   why: 'I started building Banjara Connect to create a digital place for community connection, cultural knowledge and shared stories, and to make discovery and communication easier.',
   vision: 'A welcoming digital future where people can connect, learn from one another and help preserve community knowledge with care.',
   mission: 'Build practical, respectful tools for community discovery, communication and knowledge sharing without flattening regional differences.',
-  technology: 'Phase 1 is a frontend built with React, TypeScript, Vite and React Router. Authentication, databases, APIs and other backend services are not part of this phase.',
-  developmentJourney: 'The project is being delivered in phases. This phase focuses on the user interface, navigation and community information; later work can be planned separately.',
+  technology: 'Banjara Connect uses React, TypeScript, Vite and React Router, with Supabase authentication and database-backed features.',
+  developmentJourney: 'The project is being delivered in phases, with community features built alongside their supporting authentication and data services.',
   publicProjectInfo: [
     { label: 'Project', value: 'Banjara Connect' },
-    { label: 'Current phase', value: 'Phase 1 · frontend only' },
+    { label: 'Current phase', value: 'Community platform development' },
     { label: 'Purpose', value: 'Community connection and cultural knowledge sharing' },
   ],
   focusAreas: [

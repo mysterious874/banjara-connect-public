@@ -16,15 +16,34 @@ async function attachAuthors(posts: PostRecord[]): Promise<FeedPost[]> {
   return posts.map((post) => ({ ...post, author: authorsById.get(post.user_id) ?? null }))
 }
 
-export async function loadPosts(options: { userId?: string; postId?: string; excludeUserIds?: string[] } = {}): Promise<FeedPost[]> {
-  let query = supabase.from('posts').select(postColumns).order('created_at', { ascending: false })
+export async function loadPostsPage(
+  options: { userId?: string; excludeUserIds?: string[]; offset?: number; limit?: number } = {},
+): Promise<{ posts: FeedPost[]; hasMore: boolean; nextOffset: number }> {
+  const limit = options.limit ?? 50
+  const offset = options.offset ?? 0
+  let query = supabase.from('posts').select(postColumns)
+    .order('created_at', { ascending: false }).order('id', { ascending: true })
   if (options.userId) query = query.eq('user_id', options.userId)
-  if (options.postId) query = query.eq('id', options.postId).limit(1)
+  query = query.range(offset, offset + limit - 1)
   if (options.excludeUserIds?.length) query = query.not('user_id', 'in', `(${options.excludeUserIds.join(',')})`)
 
   const { data, error } = await query
   if (error) throw error
-  return attachAuthors((data ?? []) as PostRecord[])
+  const rows = (data ?? []) as PostRecord[]
+  return { posts: await attachAuthors(rows), hasMore: rows.length === limit, nextOffset: offset + rows.length }
+}
+
+export async function loadPosts(options: { userId?: string; postId?: string; excludeUserIds?: string[] } = {}): Promise<FeedPost[]> {
+  if (options.postId) {
+    let query = supabase.from('posts').select(postColumns).eq('id', options.postId).limit(1)
+    if (options.userId) query = query.eq('user_id', options.userId)
+    if (options.excludeUserIds?.length) query = query.not('user_id', 'in', `(${options.excludeUserIds.join(',')})`)
+    const { data, error } = await query
+    if (error) throw error
+    return attachAuthors((data ?? []) as PostRecord[])
+  }
+  const { posts } = await loadPostsPage(options)
+  return posts
 }
 
 export async function loadPost(postId: string): Promise<FeedPost | null> {

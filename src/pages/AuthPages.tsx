@@ -4,8 +4,9 @@ import { ArrowRight } from 'lucide-react'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { Button, Input } from '../components/ui'
 import { useAuth } from '../hooks/AuthProvider'
-import { hideSyntheticAuthEmail, mobileAuthEmail, normalizeMobileNumber } from '../utils/authIdentity'
+import { mobileAuthEmail, normalizeMobileNumber } from '../utils/authIdentity'
 import { supabase } from '../utils/supabase'
+import { userFacingError } from '../utils/userFacingError'
 
 export function SplashPage() {
   const navigate = useNavigate()
@@ -24,7 +25,10 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const destination = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/home'
+  const requestedDestination = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
+  const destination = requestedDestination?.startsWith('/') && !requestedDestination.startsWith('//') && !requestedDestination.includes('\\')
+    ? requestedDestination
+    : '/home'
 
   useEffect(() => {
     if (session) navigate(destination, { replace: true })
@@ -44,14 +48,12 @@ export function LoginPage() {
     try {
       const { error: authError } = await supabase.auth.signInWithPassword({ email: authEmail, password })
       if (authError) {
-        setError(authError.code === 'user_already_exists' || /already (registered|exists)/i.test(authError.message)
-          ? 'We could not complete signup. If you already have an account, sign in instead.'
-          : hideSyntheticAuthEmail(authError.message))
+        setError(userFacingError(authError, 'Unable to sign in with those details. Please try again.'))
         return
       }
       navigate(destination, { replace: true })
     } catch (authError) {
-      setError(authError instanceof Error ? hideSyntheticAuthEmail(authError.message) : 'Could not sign in. Please try again.')
+      setError(userFacingError(authError, 'Could not sign in. Please try again.'))
     } finally {
       setIsSubmitting(false)
     }

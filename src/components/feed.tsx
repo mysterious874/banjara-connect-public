@@ -5,6 +5,7 @@ import type { FeedPost } from '../types/app'
 import { useAuth } from '../hooks/AuthProvider'
 import { loadPostLikes, togglePostLike } from '../utils/socialData'
 import { supabase } from '../utils/supabase'
+import { userFacingError } from '../utils/userFacingError'
 import { Avatar, Button, ConfirmationDialog } from './ui'
 
 export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () => void }) {
@@ -28,9 +29,9 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
 
   useEffect(() => {
     let active = true
+    setLikeCount(0)
+    setLiked(false)
     if (!session?.user) {
-      setLikeCount(0)
-      setLiked(false)
       setIsLikeLoading(false)
       return () => { active = false }
     }
@@ -41,7 +42,7 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
       setLikeCount(state.count)
       setLiked(state.liked)
     }).catch((error: unknown) => {
-      if (active) setLikeError(error instanceof Error ? error.message : 'Could not load post likes.')
+      if (active) setLikeError(userFacingError(error, 'Could not load post likes.'))
     }).finally(() => {
       if (active) setIsLikeLoading(false)
     })
@@ -57,7 +58,7 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
       setLikeCount(state.count)
       setLiked(state.liked)
     } catch (error) {
-      setLikeError(error instanceof Error ? error.message : 'Could not update the post like.')
+      setLikeError(userFacingError(error, 'Could not update the post like.'))
     } finally {
       setIsLikePending(false)
     }
@@ -82,7 +83,7 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
       setIsEditing(false)
       setShowPostOptions(false)
     } catch (caught) {
-      setPostError(caught instanceof Error ? caught.message : 'Could not update this post.')
+      setPostError(userFacingError(caught, 'Could not update this post.'))
     } finally {
       setIsSavingPost(false)
     }
@@ -104,7 +105,7 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
       setShowDeleteConfirmation(false)
       onDeleted?.()
     } catch (caught) {
-      setPostError(caught instanceof Error ? caught.message : 'Could not delete this post.')
+      setPostError(userFacingError(caught, 'Could not delete this post.'))
     } finally {
       setIsDeletingPost(false)
     }

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { Download } from 'lucide-react'
 import { Button } from './ui'
+import { userFacingError } from '../utils/userFacingError'
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>
@@ -75,7 +76,7 @@ export function PwaInstallControl() {
     try {
       await promptInstall()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The browser could not open its install prompt.')
+      setError(userFacingError(caught, 'The browser could not open its install prompt.'))
     }
   }
 

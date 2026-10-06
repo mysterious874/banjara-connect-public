@@ -12,11 +12,11 @@ import { useAuth } from '../hooks/AuthProvider'
 import { usePreviewToast } from '../hooks/usePreviewToast'
 import { previewUsers } from '../utils/previewData'
 import { loadBlockState, loadBlockedUserIds, toggleBlock } from '../utils/blockData'
-import { loadPost, loadPosts } from '../utils/postData'
-import { filterProfiles, loadProfiles } from '../utils/profileData'
+import { loadPost, loadPostsPage } from '../utils/postData'
+import { filterProfiles, loadProfiles, loadProfilesPage } from '../utils/profileData'
 import { getOrCreateConversation } from '../utils/chatData'
 import { supabase } from '../utils/supabase'
-import { hideSyntheticAuthEmail } from '../utils/authIdentity'
+import { userFacingError } from '../utils/userFacingError'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
@@ -42,6 +42,9 @@ export function HomePage() {
   const { profile, isProfileLoading, profileError, session } = useAuth()
   const [posts, setPosts] = useState<FeedPost[]>([])
   const [isPostsLoading, setIsPostsLoading] = useState(true)
+  const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false)
+  const [postsHasMore, setPostsHasMore] = useState(false)
+  const [postsOffset, setPostsOffset] = useState(0)
   const [postsError, setPostsError] = useState('')
   const [people, setPeople] = useState<ProfileRecord[]>([])
   const [isPeopleLoading, setIsPeopleLoading] = useState(true)
@@ -51,14 +54,17 @@ export function HomePage() {
     let active = true
     if (!session?.user) {
       setPeople([])
+      setPeopleError('')
       setIsPeopleLoading(false)
       return () => { active = false }
     }
+    setPeople([])
+    setPeopleError('')
     setIsPeopleLoading(true)
     loadProfiles().then((nextPeople) => {
       if (active) setPeople(nextPeople)
     }).catch((error: unknown) => {
-      if (active) setPeopleError(error instanceof Error ? error.message : 'Could not load profiles.')
+      if (active) setPeopleError(userFacingError(error, 'Could not load profiles.'))
     }).finally(() => {
       if (active) setIsPeopleLoading(false)
     })
@@ -69,24 +75,52 @@ export function HomePage() {
     let active = true
     if (!session?.user) {
       setPosts([])
+      setPostsError('')
+      setPostsHasMore(false)
       setIsPostsLoading(false)
       return () => { active = false }
     }
+    setPosts([])
+    setPostsHasMore(false)
     setIsPostsLoading(true)
     setPostsError('')
     void (async () => {
       try {
         const blockedIds = await loadBlockedUserIds()
-        const nextPosts = await loadPosts({ excludeUserIds: blockedIds })
-        if (active) setPosts(nextPosts)
+        const page = await loadPostsPage({ excludeUserIds: blockedIds })
+        if (active) {
+          setPosts(page.posts)
+          setPostsHasMore(page.hasMore)
+          setPostsOffset(page.nextOffset)
+        }
       } catch (error) {
-        if (active) setPostsError(error instanceof Error ? error.message : 'Could not load posts.')
+        if (active) setPostsError(userFacingError(error, 'Could not load posts.'))
       } finally {
         if (active) setIsPostsLoading(false)
       }
     })()
     return () => { active = false }
   }, [session?.user.id])
+
+  async function loadMorePosts() {
+    if (isLoadingMorePosts || !postsHasMore) return
+    setIsLoadingMorePosts(true)
+    setPostsError('')
+    try {
+      const blockedIds = await loadBlockedUserIds()
+      const page = await loadPostsPage({ excludeUserIds: blockedIds, offset: postsOffset })
+      setPosts((current) => {
+        const seen = new Set(current.map((post) => post.id))
+        return [...current, ...page.posts.filter((post) => !seen.has(post.id))]
+      })
+      setPostsHasMore(page.hasMore)
+      setPostsOffset(page.nextOffset)
+    } catch (error) {
+      setPostsError(userFacingError(error, 'Could not load more posts.'))
+    } finally {
+      setIsLoadingMorePosts(false)
+    }
+  }
 
   return (
     <div className="home-grid">
@@ -103,7 +137,7 @@ export function HomePage() {
         <StoriesRail />
         <PostComposer name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url} />
         <div className="feed-heading"><div><span className="eyebrow">FROM YOUR COMMUNITY</span><h2>Your feed</h2></div></div>
-        {isPostsLoading ? <Loading label="Loading posts" /> : postsError ? <ErrorState title="Could not load posts" description={postsError} /> : posts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared with your community will appear here." action={<Button to="/create" variant="outline">Create a post</Button>} /> : <div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>}
+        {isPostsLoading ? <Loading label="Loading posts" /> : postsError && !posts.length ? <ErrorState title="Could not load posts" description={postsError} /> : posts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared with your community will appear here." action={<Button to="/create" variant="outline">Create a post</Button>} /> : <><div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>{postsError && <p className="field__error" role="alert">{postsError}</p>}{postsHasMore && <Button variant="outline" onClick={() => void loadMorePosts()} disabled={isLoadingMorePosts}>{isLoadingMorePosts ? 'Loading posts…' : 'Load more posts'}</Button>}</>}
       </div>
       <aside className="home-aside">
         <section className="aside-section"><div className="aside-section__heading"><h2>People to know</h2><Link className="text-link" to="/connect">More</Link></div>{isPeopleLoading ? <Loading label="Loading profiles" /> : peopleError ? <p className="field__error" role="alert">{peopleError}</p> : <div className="user-list">{people.slice(0, 2).map((user) => <UserCard key={user.id} user={user} compact />)}</div>}</section>
@@ -121,9 +155,16 @@ export function ConnectPage() {
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
-    if (!session?.user) return () => { active = false }
+    if (!session?.user) {
+      setPeople([])
+      setError('')
+      setIsLoading(false)
+      return () => { active = false }
+    }
+    setPeople([])
+    setError('')
     setIsLoading(true)
-    loadProfiles().then((nextPeople) => { if (active) setPeople(nextPeople) }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Could not load profiles.') }).finally(() => { if (active) setIsLoading(false) })
+    loadProfiles().then((nextPeople) => { if (active) setPeople(nextPeople) }).catch((caught: unknown) => { if (active) setError(userFacingError(caught, 'Could not load profiles.')) }).finally(() => { if (active) setIsLoading(false) })
     return () => { active = false }
   }, [session?.user.id])
   return <section className="page-stack"><PageHeading eyebrow="FIND YOUR CIRCLE" title="Connect" description="Meet community members and discover the places, traditions, and ideas they care about." /><div className="connect-feature"><div className="connect-feature__icon"><Users size={23} /></div><div><span className="eyebrow">YOUR COMMUNITY</span><h2>Good things grow together.</h2><p>Discover members and shared interests.</p></div><Compass className="connect-feature__watermark" size={74} /></div><div className="section-heading"><h2>People you may know</h2></div>{isLoading ? <Loading label="Loading profiles" /> : error ? <ErrorState title="Could not load profiles" description={error} /> : people.length ? <div className="connect-list">{people.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title="No profiles to show" description="Other community profiles will appear here when available." />}</section>
@@ -145,16 +186,58 @@ export function SearchPage() {
   const { session } = useAuth()
   const [profiles, setProfiles] = useState<ProfileRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [nextOffset, setNextOffset] = useState(0)
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
-    if (!session?.user) return () => { active = false }
+    if (!session?.user) {
+      setProfiles([])
+      setHasMore(false)
+      setError('')
+      setIsLoading(false)
+      return () => { active = false }
+    }
+    setProfiles([])
+    setHasMore(false)
     setIsLoading(true)
-    loadProfiles().then((nextProfiles) => { if (active) setProfiles(nextProfiles) }).catch((caught: unknown) => { if (active) setError(caught instanceof Error ? caught.message : 'Could not search profiles.') }).finally(() => { if (active) setIsLoading(false) })
+    setError('')
+    setNextOffset(0)
+    loadProfilesPage().then(({ profiles: nextProfiles, hasMore: more, nextOffset: offset }) => {
+      if (!active) return
+      setProfiles(nextProfiles)
+      setHasMore(more)
+      setNextOffset(offset)
+    }).catch((caught: unknown) => {
+      if (active) setError(userFacingError(caught, 'Could not search profiles.'))
+    }).finally(() => {
+      if (active) setIsLoading(false)
+    })
     return () => { active = false }
   }, [session?.user.id])
+
+  async function loadMoreProfiles() {
+    if (isLoadingMore || !hasMore) return
+    setIsLoadingMore(true)
+    setError('')
+    try {
+      const page = await loadProfilesPage(nextOffset)
+      setProfiles((current) => {
+        const seen = new Set(current.map((profile) => profile.id))
+        return [...current, ...page.profiles.filter((profile) => !seen.has(profile.id))]
+      })
+      setHasMore(page.hasMore)
+      setNextOffset(page.nextOffset)
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not load more profiles.'))
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }
+
   const matches = filterProfiles(profiles, query)
-  return <section className="page-stack"><PageHeading eyebrow="LOOK A LITTLE CLOSER" title="Search" description="Find community profiles." /><SearchBar placeholder="Try a name or place" /><div className="section-heading"><h2>{query ? `Results for “${query}”` : 'Suggested profiles'}</h2></div>{isLoading ? <Loading label="Searching profiles" /> : error ? <ErrorState title="Could not search profiles" description={error} /> : matches.length ? <div className="connect-list">{matches.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title="No profiles found" description="Try another name or place." />}</section>
+  return <section className="page-stack"><PageHeading eyebrow="LOOK A LITTLE CLOSER" title="Search" description="Find community profiles." /><SearchBar placeholder="Try a name or place" /><div className="section-heading"><h2>{query ? `Results for “${query}”` : 'Suggested profiles'}</h2></div>{isLoading ? <Loading label="Searching profiles" /> : error && !profiles.length ? <ErrorState title="Could not search profiles" description={error} /> : <>{error && <p className="field__error" role="alert">{error}</p>}{matches.length ? <div className="connect-list">{matches.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title="No profiles found" description={hasMore ? 'Load more profiles to continue searching.' : 'Try another name or place.'} />}{hasMore && <Button variant="outline" onClick={() => void loadMoreProfiles()} disabled={isLoadingMore}>{isLoadingMore ? 'Loading profiles…' : 'Load more profiles'}</Button>}</>}</section>
 }
 
 export function CreatePostPage() {
@@ -179,12 +262,12 @@ export function CreatePostPage() {
         content: text.trim(),
       }).select('id').single()
       if (insertError) {
-        setError(insertError.message)
+        setError(userFacingError(insertError, 'Could not create your post.'))
         return
       }
       navigate(`/posts/${data.id}`, { replace: true })
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not create your post.')
+      setError(userFacingError(caught, 'Could not create your post.'))
     } finally {
       setIsSaving(false)
     }
@@ -196,6 +279,7 @@ export function CreatePostPage() {
 export function PostDetailsPage() {
   const navigate = useNavigate()
   const { postId = '' } = useParams()
+  const { session } = useAuth()
   const [post, setPost] = useState<FeedPost | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -204,15 +288,16 @@ export function PostDetailsPage() {
     let active = true
     setIsLoading(true)
     setError('')
-    loadPost(postId).then((nextPost) => {
-      if (active) setPost(nextPost)
+    setPost(null)
+    Promise.all([loadPost(postId), loadBlockedUserIds()]).then(([nextPost, blockedIds]) => {
+      if (active) setPost(nextPost && !blockedIds.includes(nextPost.user_id) ? nextPost : null)
     }).catch((caught: unknown) => {
-      if (active) setError(caught instanceof Error ? caught.message : 'Could not load this post.')
+      if (active) setError(userFacingError(caught, 'Could not load this post.'))
     }).finally(() => {
       if (active) setIsLoading(false)
     })
     return () => { active = false }
-  }, [postId])
+  }, [postId, session?.user.id])
 
   if (isLoading) return <section className="page-stack"><Loading label="Loading post" /></section>
   if (error) return <section className="page-stack"><ErrorState title="Could not load post" description={error} /></section>
@@ -248,7 +333,7 @@ function CommentItemCard({ comment, like, isLikePending, onToggleLike, onUpdated
       onUpdated(comment.id, editContent.trim())
       setIsEditing(false)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not update this comment.')
+      setError(userFacingError(caught, 'Could not update this comment.'))
     } finally {
       setIsSaving(false)
     }
@@ -263,7 +348,7 @@ function CommentItemCard({ comment, like, isLikePending, onToggleLike, onUpdated
       onDeleted(comment.id)
       setConfirmDelete(false)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not delete this comment.')
+      setError(userFacingError(caught, 'Could not delete this comment.'))
     } finally {
       setIsDeleting(false)
     }
@@ -288,17 +373,24 @@ export function CommentsPage() {
     let active = true
     setIsLoading(true)
     setError('')
-    Promise.all([loadPost(postId), loadComments(postId)]).then(([nextPost, nextComments]) => {
+    setPost(null)
+    setComments([])
+    Promise.all([loadPost(postId), loadComments(postId), loadBlockedUserIds()]).then(([nextPost, nextComments, blockedIds]) => {
       if (!active) return
+      if (nextPost && blockedIds.includes(nextPost.user_id)) {
+        setPost(null)
+        setComments([])
+        return
+      }
       setPost(nextPost)
-      setComments(nextComments)
+      setComments(nextComments.filter((comment) => !blockedIds.includes(comment.user_id)))
     }).catch((caught: unknown) => {
-      if (active) setError(caught instanceof Error ? caught.message : 'Could not load this conversation.')
+      if (active) setError(userFacingError(caught, 'Could not load this conversation.'))
     }).finally(() => {
       if (active) setIsLoading(false)
     })
     return () => { active = false }
-  }, [postId])
+  }, [postId, session?.user.id])
 
   useEffect(() => {
     let active = true
@@ -310,7 +402,7 @@ export function CommentsPage() {
       if (!active) return
       setCommentLikes(Object.fromEntries(likes))
     }).catch((caught: unknown) => {
-      if (active) setError(caught instanceof Error ? caught.message : 'Could not load comment likes.')
+      if (active) setError(userFacingError(caught, 'Could not load comment likes.'))
     })
     return () => { active = false }
   }, [comments, session?.user.id])
@@ -322,10 +414,11 @@ export function CommentsPage() {
     setError('')
     try {
       const refreshedComments = await createComment(postId, content)
-      setComments(refreshedComments)
+      const blockedIds = await loadBlockedUserIds()
+      setComments(refreshedComments.filter((comment) => !blockedIds.includes(comment.user_id)))
       setContent('')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not send this comment.')
+      setError(userFacingError(caught, 'Could not send this comment.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -340,7 +433,7 @@ export function CommentsPage() {
       const next = await toggleCommentLike(comment.id, current.liked)
       setCommentLikes((currentLikes) => ({ ...currentLikes, [comment.id]: next }))
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not update this comment like.')
+      setError(userFacingError(caught, 'Could not update this comment like.'))
     } finally {
       setPendingLikeIds((currentIds) => currentIds.filter((id) => id !== comment.id))
     }
@@ -363,6 +456,9 @@ export function ProfilePage() {
   const [otherProfileError, setOtherProfileError] = useState('')
   const [profilePosts, setProfilePosts] = useState<FeedPost[]>([])
   const [isProfilePostsLoading, setIsProfilePostsLoading] = useState(false)
+  const [isLoadingMoreProfilePosts, setIsLoadingMoreProfilePosts] = useState(false)
+  const [profilePostsHasMore, setProfilePostsHasMore] = useState(false)
+  const [profilePostsOffset, setProfilePostsOffset] = useState(0)
   const [profilePostsError, setProfilePostsError] = useState('')
   const [isBlocked, setIsBlocked] = useState(false)
   const [isBlockLoading, setIsBlockLoading] = useState(true)
@@ -390,9 +486,9 @@ export function ProfilePage() {
         const { data, error } = await profileLookup.maybeSingle()
         if (!active) return
         setOtherProfile(data as ProfileRecord | null)
-        setOtherProfileError(error?.message ?? '')
+        setOtherProfileError(error ? userFacingError(error, 'Could not load this profile.') : '')
       } catch (error) {
-        if (active) setOtherProfileError(error instanceof Error ? error.message : 'Could not load this profile.')
+        if (active) setOtherProfileError(userFacingError(error, 'Could not load this profile.'))
       } finally {
         if (active) setIsOtherProfileLoading(false)
       }
@@ -414,7 +510,7 @@ export function ProfilePage() {
     loadBlockState(profile.id).then((state) => {
       if (active) setIsBlocked(state.blocked)
     }).catch((caught: unknown) => {
-      if (active) setBlockError(caught instanceof Error ? caught.message : 'Could not load block state.')
+      if (active) setBlockError(userFacingError(caught, 'Could not load block state.'))
     }).finally(() => {
       if (active) setIsBlockLoading(false)
     })
@@ -423,8 +519,10 @@ export function ProfilePage() {
 
   useEffect(() => {
     let active = true
+    setProfilePosts([])
+    setProfilePostsHasMore(false)
+    setProfilePostsError('')
     if (!profile) {
-      setProfilePosts([])
       setIsProfilePostsLoading(false)
       return () => { active = false }
     }
@@ -433,21 +531,42 @@ export function ProfilePage() {
       return () => { active = false }
     }
     if (!isOwn && isBlocked) {
-      setProfilePosts([])
       setIsProfilePostsLoading(false)
       return () => { active = false }
     }
     setIsProfilePostsLoading(true)
-    setProfilePostsError('')
-    loadPosts({ userId: profile.id }).then((nextPosts) => {
-      if (active) setProfilePosts(nextPosts)
+    loadPostsPage({ userId: profile.id }).then((page) => {
+      if (active) {
+        setProfilePosts(page.posts)
+        setProfilePostsHasMore(page.hasMore)
+        setProfilePostsOffset(page.nextOffset)
+      }
     }).catch((error: unknown) => {
-      if (active) setProfilePostsError(error instanceof Error ? error.message : 'Could not load profile posts.')
+      if (active) setProfilePostsError(userFacingError(error, 'Could not load profile posts.'))
     }).finally(() => {
       if (active) setIsProfilePostsLoading(false)
     })
     return () => { active = false }
   }, [isBlocked, isBlockLoading, isOwn, profile?.id])
+
+  async function loadMoreProfilePosts() {
+    if (!profile || isLoadingMoreProfilePosts || !profilePostsHasMore) return
+    setIsLoadingMoreProfilePosts(true)
+    setProfilePostsError('')
+    try {
+      const page = await loadPostsPage({ userId: profile.id, offset: profilePostsOffset })
+      setProfilePosts((current) => {
+        const seen = new Set(current.map((post) => post.id))
+        return [...current, ...page.posts.filter((post) => !seen.has(post.id))]
+      })
+      setProfilePostsHasMore(page.hasMore)
+      setProfilePostsOffset(page.nextOffset)
+    } catch (caught) {
+      setProfilePostsError(userFacingError(caught, 'Could not load more profile posts.'))
+    } finally {
+      setIsLoadingMoreProfilePosts(false)
+    }
+  }
 
   async function handleBlock() {
     if (!profile || isOwn || isBlockPending) return
@@ -457,7 +576,7 @@ export function ProfilePage() {
       setIsBlocked(await toggleBlock(profile.id, isBlocked))
       setProfilePosts([])
     } catch (caught) {
-      setBlockError(caught instanceof Error ? caught.message : 'Could not update block state.')
+      setBlockError(userFacingError(caught, 'Could not update block state.'))
     } finally {
       setIsBlockPending(false)
     }
@@ -471,7 +590,7 @@ export function ProfilePage() {
       const conversationId = await getOrCreateConversation(profile.id)
       navigate(`/chat/${conversationId}`)
     } catch (caught) {
-      setBlockError(caught instanceof Error ? caught.message : 'Could not start this conversation.')
+      setBlockError(userFacingError(caught, 'Could not start this conversation.'))
     } finally {
       setIsStartingConversation(false)
     }
@@ -488,7 +607,7 @@ export function ProfilePage() {
   const name = profile.display_name || profile.username || 'Your profile'
   const profileUsername = profile.username || `member-${profile.id.slice(0, 8)}`
   if (!isOwn && isBlocked) return <section className="page-stack"><PageHeading title="Profile blocked" /><Button variant="outline" onClick={handleBlock} disabled={isBlockPending}>{isBlockPending ? 'Updating…' : 'Unblock profile'}</Button>{blockError && <p className="field__error" role="alert">{blockError}</p>}<EmptyState title="Profile content hidden" description="Unblock this profile to view its posts and details." /></section>
-  return <section className="page-stack"><div className="profile-cover"><span className="profile-cover__stitch" /><span className="profile-cover__label">COMMUNITY PROFILE</span></div><div className="profile-summary"><Avatar name={name} image={profile.avatar_url ?? undefined} size="large" /><div className="profile-summary__actions">{isOwn ? <Button to="/edit-profile" variant="outline">Edit profile</Button> : <><Button variant="outline" onClick={startConversation} disabled={isStartingConversation || isBlockPending}>{isStartingConversation ? 'Opening…' : 'Message'}</Button><Button variant="quiet" onClick={handleBlock} disabled={isBlockPending}>{isBlockPending ? 'Updating…' : 'Block'}</Button></>}</div><h1>{name}</h1><span className="profile-handle">@{profileUsername}</span><span className="local-label">{profile.is_verified ? 'Verified' : 'Member'}</span>{profile.bio && <p>{profile.bio}</p>}{profile.location && <span className="profile-location"><MapPin size={14} />{profile.location}</span>}{blockError && <p className="field__error" role="alert">{blockError}</p>}</div><div className="section-heading"><h2>Posts</h2></div>{isProfilePostsLoading ? <Loading label="Loading profile posts" /> : profilePostsError ? <ErrorState title="Could not load profile posts" description={profilePostsError} /> : profilePosts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared by this profile will appear here." /> : <div className="feed-list">{profilePosts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setProfilePosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>}</section>
+  return <section className="page-stack"><div className="profile-cover"><span className="profile-cover__stitch" /><span className="profile-cover__label">COMMUNITY PROFILE</span></div><div className="profile-summary"><Avatar name={name} image={profile.avatar_url ?? undefined} size="large" /><div className="profile-summary__actions">{isOwn ? <Button to="/edit-profile" variant="outline">Edit profile</Button> : <><Button variant="outline" onClick={startConversation} disabled={isStartingConversation || isBlockPending}>{isStartingConversation ? 'Opening…' : 'Message'}</Button><Button variant="quiet" onClick={handleBlock} disabled={isBlockPending}>{isBlockPending ? 'Updating…' : 'Block'}</Button></>}</div><h1>{name}</h1><span className="profile-handle">@{profileUsername}</span><span className="local-label">{profile.is_verified ? 'Verified' : 'Member'}</span>{profile.bio && <p>{profile.bio}</p>}{profile.location && <span className="profile-location"><MapPin size={14} />{profile.location}</span>}{blockError && <p className="field__error" role="alert">{blockError}</p>}</div><div className="section-heading"><h2>Posts</h2></div>{isProfilePostsLoading ? <Loading label="Loading profile posts" /> : profilePostsError && !profilePosts.length ? <ErrorState title="Could not load profile posts" description={profilePostsError} /> : profilePosts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared by this profile will appear here." /> : <><div className="feed-list">{profilePosts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setProfilePosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>{profilePostsError && <p className="field__error" role="alert">{profilePostsError}</p>}{profilePostsHasMore && <Button variant="outline" onClick={() => void loadMoreProfilePosts()} disabled={isLoadingMoreProfilePosts}>{isLoadingMoreProfilePosts ? 'Loading posts…' : 'Load more posts'}</Button>}</>}</section>
 }
 
 export function EditProfilePage() {
@@ -547,20 +666,51 @@ export function ReelsPage() {
 }
 
 export function ChatListPage() {
+  const { session } = useAuth()
   const [conversations, setConversations] = useState<Awaited<ReturnType<typeof loadConversations>>>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
-    loadConversations().then((rows) => {
-      if (active) setConversations(rows)
-    }).catch((caught: unknown) => {
-      if (active) setError(caught instanceof Error ? caught.message : 'Could not load conversations.')
-    }).finally(() => {
-      if (active) setIsLoading(false)
-    })
-    return () => { active = false }
-  }, [])
+    let requestPending = false
+    let refreshQueued = false
+    setConversations([])
+    setError('')
+    setIsLoading(true)
+    const refresh = async () => {
+      if (requestPending) {
+        refreshQueued = true
+        return
+      }
+      requestPending = true
+      do {
+        refreshQueued = false
+        try {
+          const rows = await loadConversations()
+          if (active) {
+            setConversations(rows)
+            setError('')
+          }
+        } catch (caught) {
+          if (active) setError(userFacingError(caught, 'Could not load conversations.'))
+        } finally {
+          if (active) setIsLoading(false)
+        }
+      } while (active && refreshQueued)
+      requestPending = false
+    }
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    void refresh()
+    window.addEventListener('focus', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      active = false
+      window.removeEventListener('focus', refreshWhenVisible)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [session?.user.id])
   return <section className="page-stack"><PageHeading eyebrow="CONVERSATIONS" title="Chat" description="Your conversations." />{isLoading ? <Loading label="Loading conversations" /> : error ? <ErrorState title="Could not load conversations" description={error} /> : conversations.length ? <div className="chat-list">{conversations.map((conversation) => { const name = conversation.member.display_name || conversation.member.username; return <Link to={`/chat/${conversation.id}`} className="chat-row" key={conversation.id}><Avatar name={name} image={conversation.member.avatar_url ?? undefined} /><span className="chat-row__copy"><strong>{name}</strong><span>{conversation.lastMessage?.content ?? 'No messages yet'}</span></span><span className="chat-row__time">{conversation.unreadCount > 0 ? `${conversation.unreadCount} unread` : conversation.lastMessage ? new Date(conversation.lastMessage.created_at).toLocaleDateString() : ''}</span></Link>})}</div> : <EmptyState title="No conversations yet" description="Start a conversation from a community profile." />}</section>
 }
 
@@ -571,6 +721,8 @@ export function ChatConversationPage() {
   const [person, setPerson] = useState<ProfileRecord | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false)
+  const [hasOlderMessages, setHasOlderMessages] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
   const [realtimeError, setRealtimeError] = useState('')
@@ -578,27 +730,51 @@ export function ChatConversationPage() {
   useEffect(() => {
     let active = true
     let unsubscribe: (() => void) | null = null
+    let messageRefreshPending = false
+    let messageRefreshQueued = false
     setIsLoading(true)
     setError('')
     setRealtimeError('')
+    setPerson(null)
+    setMessages([])
+    setHasOlderMessages(false)
     void (async () => {
       try {
         const [peer, history] = await Promise.all([loadConversationPeer(conversationId), loadConversationMessages(conversationId)])
         if (!active) return
         setPerson(peer as ProfileRecord)
-        setMessages(history)
+        setMessages(history.messages)
+        setHasOlderMessages(history.hasMore)
+        const refreshLatestMessages = async () => {
+          if (messageRefreshPending) {
+            messageRefreshQueued = true
+            return
+          }
+          messageRefreshPending = true
+          do {
+            messageRefreshQueued = false
+            try {
+              const latest = await loadConversationMessages(conversationId)
+              if (!active) return
+              setMessages((current) => {
+                const byId = new Map(current.map((item) => [item.id, item]))
+                for (const item of latest.messages) byId.set(item.id, item)
+                return [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
+              })
+            } catch (caught) {
+              if (active) setError(userFacingError(caught, 'Could not refresh messages.'))
+            }
+          } while (active && messageRefreshQueued)
+          messageRefreshPending = false
+        }
         unsubscribe = subscribeToConversation(conversationId, () => {
-          void loadConversationMessages(conversationId).then((nextMessages) => {
-            if (active) setMessages(nextMessages)
-          }).catch((caught: unknown) => {
-            if (active) setError(caught instanceof Error ? caught.message : 'Could not refresh messages.')
-          })
+          void refreshLatestMessages()
         }, (status) => {
           if (!active) return
           setRealtimeError(status === 'SUBSCRIBED' ? '' : `Live message updates are unavailable (${status.toLowerCase().replace('_', ' ')}).`)
         })
       } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : 'Could not load this conversation.')
+        if (active) setError(userFacingError(caught, 'Could not load this conversation.'))
       } finally {
         if (active) setIsLoading(false)
       }
@@ -607,7 +783,27 @@ export function ChatConversationPage() {
       active = false
       unsubscribe?.()
     }
-  }, [conversationId])
+  }, [conversationId, session?.user.id])
+
+  async function loadOlderMessages() {
+    const oldest = messages[0]
+    if (!oldest || isLoadingOlder || !hasOlderMessages) return
+    setIsLoadingOlder(true)
+    setError('')
+    try {
+      const page = await loadConversationMessages(conversationId, { created_at: oldest.created_at, id: oldest.id })
+      setMessages((current) => {
+        const byId = new Map(page.messages.map((item) => [item.id, item]))
+        for (const item of current) byId.set(item.id, item)
+        return [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
+      })
+      setHasOlderMessages(page.hasMore)
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not load earlier messages.'))
+    } finally {
+      setIsLoadingOlder(false)
+    }
+  }
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -619,7 +815,7 @@ export function ChatConversationPage() {
       setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
       setMessage('')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not send this message.')
+      setError(userFacingError(caught, 'Could not send this message.'))
     } finally {
       setIsSending(false)
     }
@@ -629,7 +825,7 @@ export function ChatConversationPage() {
   if (error && !person) return <section className="page-stack"><ErrorState title="Could not load conversation" description={error} /></section>
   if (!person) return <section className="page-stack"><EmptyState title="Conversation unavailable" description="This conversation could not be found." action={<Button to="/chat" variant="outline">Back to chats</Button>} /></section>
   const personName = person.display_name || person.username
-  return <section className="chat-screen"><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>Conversation</small></span><span /></header><div className="chat-messages">{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; return <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}`} key={item.id}>{item.content}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area"><form className="chat-disabled-compose" onSubmit={sendMessage}><Input aria-label="Message" placeholder="Write a message" value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send message">{isSending ? '…' : <Send size={17} />}</Button></form></div></section>
+  return <section className="chat-screen"><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>Conversation</small></span><span /></header><div className="chat-messages">{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; return <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}`} key={item.id}>{item.content}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area"><form className="chat-disabled-compose" onSubmit={sendMessage}><Input aria-label="Message" placeholder="Write a message" value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() || isSending} iconOnly aria-label="Send message">{isSending ? '…' : <Send size={17} />}</Button></form></div></section>
 }
 
 export function NotificationsPage() {
@@ -641,24 +837,40 @@ export function NotificationsPage() {
   const [realtimeError, setRealtimeError] = useState('')
   useEffect(() => {
     let active = true
+    let refreshPending = false
+    let refreshQueued = false
     if (!session?.user) {
       setNotifications([])
+      setError('')
       setIsLoading(false)
       setRealtimeError('')
       return () => { active = false }
     }
+    setNotifications([])
+    setError('')
+    setIsLoading(true)
+    setRealtimeError('')
     const refresh = async () => {
-      try {
-        const rows = await loadNotifications()
-        if (active) {
-          setNotifications(rows)
-          setError('')
-        }
-      } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : 'Could not load notifications.')
-      } finally {
-        if (active) setIsLoading(false)
+      if (refreshPending) {
+        refreshQueued = true
+        return
       }
+      refreshPending = true
+      do {
+        refreshQueued = false
+        try {
+          const rows = await loadNotifications()
+          if (active) {
+            setNotifications(rows)
+            setError('')
+          }
+        } catch (caught) {
+          if (active) setError(userFacingError(caught, 'Could not load notifications.'))
+        } finally {
+          if (active) setIsLoading(false)
+        }
+      } while (active && refreshQueued)
+      refreshPending = false
     }
     void refresh()
     const unsubscribe = subscribeToPostgresChanges({
@@ -683,7 +895,7 @@ export function NotificationsPage() {
       await markNotificationRead(notification.id)
       setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true } : item))
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not mark notification read.')
+      setError(userFacingError(caught, 'Could not mark notification read.'))
     } finally {
       setPendingId('')
     }
@@ -697,7 +909,7 @@ export function NotificationsPage() {
     return 'sent you a notification'
   }
 
-  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => { const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'; const Icon = notification.type.includes('like') ? Heart : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles; return <article className="notification-row" key={notification.id}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__icon"><Icon size={15} /></span><p><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></p>{!notification.is_read && <button type="button" className="icon-button" aria-label="Mark notification read" disabled={pendingId === notification.id} onClick={() => markRead(notification)}><Check size={17} /></button>}</article>})}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}</section>
+  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => { const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'; const Icon = notification.type.includes('like') ? Heart : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles; return <article className="notification-row" key={notification.id}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__icon"><Icon size={15} /></span><p><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></p>{!notification.is_read && <button type="button" className="icon-button" aria-label={`Mark ${actorName}'s notification read`} disabled={pendingId === notification.id} onClick={() => markRead(notification)}><Check size={17} /></button>}</article>})}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}</section>
 }
 
 export function AssistantPage() {
@@ -719,13 +931,18 @@ export function SettingsPage() {
   async function handleSignOut() {
     setIsSigningOut(true)
     setError('')
-    const { error: signOutError } = await signOut()
-    setIsSigningOut(false)
-    if (signOutError) {
-      setError(signOutError.message)
-      return
+    try {
+      const { error: signOutError } = await signOut()
+      if (signOutError) {
+        setError(userFacingError(signOutError, 'Could not sign out. Please try again.'))
+        return
+      }
+      navigate('/login', { replace: true })
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not sign out. Please try again.'))
+    } finally {
+      setIsSigningOut(false)
     }
-    navigate('/login', { replace: true })
   }
 
   return <section className="page-stack"><PageHeading eyebrow="MAKE IT YOURS" title="Settings" description="Manage your account and preferences." />{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}<PwaInstallControl />{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
@@ -770,7 +987,7 @@ export function ChangePasswordPage() {
 
       const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
       if (updateError) {
-        setError(hideSyntheticAuthEmail(updateError.message))
+        setError(userFacingError(updateError, 'Could not update your password.'))
         return
       }
       setCurrentPassword('')
@@ -778,7 +995,7 @@ export function ChangePasswordPage() {
       setConfirmPassword('')
       setSuccess(true)
     } catch (caught) {
-      setError(caught instanceof Error ? hideSyntheticAuthEmail(caught.message) : 'Could not update your password.')
+      setError(userFacingError(caught, 'Could not update your password.'))
     } finally {
       setIsSaving(false)
     }
@@ -790,7 +1007,7 @@ export function ChangePasswordPage() {
 export function PrivacyPage() {
   const [privateProfile, setPrivateProfile] = useState(false)
   const [activityStatus, setActivityStatus] = useState(true)
-  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="YOUR SPACE, YOUR CHOICE" title="Privacy & security" description="Preference switches are stored only in this page preview." /><PreviewNotice>LOCAL UI STATE · NO ACCOUNT SETTINGS ARE SAVED</PreviewNotice><div className="settings-group"><h2>Profile visibility</h2><div className="preference-row"><span><strong>Private profile</strong><small>Only people you approve can see your posts.</small></span><button type="button" className={`toggle${privateProfile ? ' is-on' : ''}`} role="switch" aria-checked={privateProfile} aria-label="Private profile" onClick={() => setPrivateProfile(!privateProfile)}><span /></button></div><div className="preference-row"><span><strong>Show activity status</strong><small>Let connections know when you are around.</small></span><button type="button" className={`toggle${activityStatus ? ' is-on' : ''}`} role="switch" aria-checked={activityStatus} aria-label="Show activity status" onClick={() => setActivityStatus(!activityStatus)}><span /></button></div></div><div className="settings-group"><h2>Safety</h2><Link className="settings-row" to="/settings/blocked"><span className="settings-row__icon"><LockKeyhole size={18} /></span><span><strong>Blocked users</strong><small>Review profiles you have blocked</small></span><ChevronRight size={18} /></Link><Link className="settings-row" to="/report"><span className="settings-row__icon"><CircleHelp size={18} /></span><span><strong>Report a concern</strong><small>Let the team know what feels wrong</small></span><ChevronRight size={18} /></Link></div></section>
+  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="YOUR SPACE, YOUR CHOICE" title="Privacy & security" description="These preference switches are visual previews and do not change account privacy." /><PreviewNotice>LOCAL UI STATE · NO ACCOUNT SETTINGS ARE SAVED</PreviewNotice><div className="settings-group"><h2>Profile visibility</h2><div className="preference-row"><span><strong>Private profile</strong><small>Preview only; this does not limit who can see your profile or posts.</small></span><button type="button" className={`toggle${privateProfile ? ' is-on' : ''}`} role="switch" aria-checked={privateProfile} aria-label="Private profile preview" onClick={() => setPrivateProfile(!privateProfile)}><span /></button></div><div className="preference-row"><span><strong>Show activity status</strong><small>Preview only; activity status is not shared or saved.</small></span><button type="button" className={`toggle${activityStatus ? ' is-on' : ''}`} role="switch" aria-checked={activityStatus} aria-label="Show activity status preview" onClick={() => setActivityStatus(!activityStatus)}><span /></button></div></div><div className="settings-group"><h2>Safety</h2><Link className="settings-row" to="/settings/blocked"><span className="settings-row__icon"><LockKeyhole size={18} /></span><span><strong>Blocked users</strong><small>Review profiles you have blocked</small></span><ChevronRight size={18} /></Link><Link className="settings-row" to="/report"><span className="settings-row__icon"><CircleHelp size={18} /></span><span><strong>Report a concern</strong><small>Let the team know what feels wrong</small></span><ChevronRight size={18} /></Link></div></section>
 }
 
 export function BlockedUsersPage() {
@@ -801,7 +1018,14 @@ export function BlockedUsersPage() {
   const [error, setError] = useState('')
   useEffect(() => {
     let active = true
-    if (!session?.user) return () => { active = false }
+    if (!session?.user) {
+      setProfiles([])
+      setError('')
+      setIsLoading(false)
+      return () => { active = false }
+    }
+    setProfiles([])
+    setError('')
     setIsLoading(true)
     void (async () => {
       try {
@@ -816,7 +1040,7 @@ export function BlockedUsersPage() {
         if (profileError) throw profileError
         if (active) setProfiles((data ?? []) as ProfileRecord[])
       } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : 'Could not load blocked profiles.')
+        if (active) setError(userFacingError(caught, 'Could not load blocked profiles.'))
       } finally {
         if (active) setIsLoading(false)
       }
@@ -831,7 +1055,7 @@ export function BlockedUsersPage() {
       await toggleBlock(profileId, true)
       setProfiles((current) => current.filter((profile) => profile.id !== profileId))
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not unblock this profile.')
+      setError(userFacingError(caught, 'Could not unblock this profile.'))
     } finally {
       setPendingId('')
     }
@@ -860,7 +1084,7 @@ export function ReportPage() {
       setTargetId('')
       setDetails('')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not submit this report.')
+      setError(userFacingError(caught, 'Could not submit this report.'))
     } finally {
       setIsSubmitting(false)
     }

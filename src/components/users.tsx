@@ -6,6 +6,7 @@ import type { ProfileRecord } from '../types/app'
 import { useAuth } from '../hooks/AuthProvider'
 import { loadFollowState, toggleFollow } from '../utils/followData'
 import { Avatar, Button } from './ui'
+import { userFacingError } from '../utils/userFacingError'
 
 export function UserCard({ user, compact = false }: { user: ProfileRecord; compact?: boolean }) {
   const { session } = useAuth()
@@ -20,8 +21,9 @@ export function UserCard({ user, compact = false }: { user: ProfileRecord; compa
 
   useEffect(() => {
     let active = true
+    setFollowing(false)
+    setError('')
     if (!session?.user || isSelf) {
-      setFollowing(false)
       setIsLoading(false)
       return () => { active = false }
     }
@@ -29,7 +31,7 @@ export function UserCard({ user, compact = false }: { user: ProfileRecord; compa
     loadFollowState(user.id).then((state) => {
       if (active) setFollowing(state.following)
     }).catch((caught: unknown) => {
-      if (active) setError(caught instanceof Error ? caught.message : 'Could not load follow state.')
+      if (active) setError(userFacingError(caught, 'Could not load follow state.'))
     }).finally(() => {
       if (active) setIsLoading(false)
     })
@@ -43,7 +45,7 @@ export function UserCard({ user, compact = false }: { user: ProfileRecord; compa
     try {
       setFollowing(await toggleFollow(user.id, following))
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not update follow state.')
+      setError(userFacingError(caught, 'Could not update follow state.'))
     } finally {
       setIsPending(false)
     }

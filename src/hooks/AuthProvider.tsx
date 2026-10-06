@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { AuthError, Session, User } from '@supabase/supabase-js'
 import { supabase } from '../utils/supabase'
+import { userFacingError } from '../utils/userFacingError'
 import type { ProfileRecord, ProfileUpdate } from '../types/app'
 
 const profileColumns = 'id,username,display_name,avatar_url,bio,location,is_verified'
@@ -62,8 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true
+    let receivedAuthEvent = false
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (active) {
+        receivedAuthEvent = true
         setSession(nextSession)
         setIsLoading(false)
         setInitializationError(null)
@@ -72,12 +75,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return
-      setSession(data.session)
-      setInitializationError(error?.message ?? null)
+      if (!receivedAuthEvent) {
+        setSession(data.session)
+        setInitializationError(error ? userFacingError(error, 'Could not check your session. Please try again.') : null)
+      }
       setIsLoading(false)
     }).catch((error: unknown) => {
       if (!active) return
-      setInitializationError(error instanceof Error ? error.message : 'Could not initialize your session.')
+      setInitializationError(userFacingError(error, 'Could not initialize your session.'))
       setIsLoading(false)
     })
 
@@ -103,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadOrCreateProfile(user).then((nextProfile) => {
       if (active) setProfile(nextProfile)
     }).catch((error: unknown) => {
-      if (active) setProfileError(error instanceof Error ? error.message : 'Could not load your profile.')
+      if (active) setProfileError(userFacingError(error, 'Could not load your profile.'))
     }).finally(() => {
       if (active) setIsProfileLoading(false)
     })
@@ -120,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(nextProfile)
       return nextProfile
     } catch (error) {
-      setProfileError(error instanceof Error ? error.message : 'Could not load your profile.')
+      setProfileError(userFacingError(error, 'Could not load your profile.'))
       return null
     } finally {
       setIsProfileLoading(false)
@@ -134,14 +139,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase.from('profiles').update(updates).eq('id', user.id).select(profileColumns).single()
       if (error) {
-        setProfileError(error.message)
-        return { data: null, error: error.message }
+        const message = userFacingError(error, 'Could not update your profile.')
+        setProfileError(message)
+        return { data: null, error: message }
       }
       const nextProfile = data as ProfileRecord
       setProfile(nextProfile)
       return { data: nextProfile, error: null }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not update your profile.'
+      const message = userFacingError(error, 'Could not update your profile.')
       setProfileError(message)
       return { data: null, error: message }
     } finally {

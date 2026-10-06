@@ -1,4 +1,4 @@
-import { useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, Info, LoaderCircle, X } from 'lucide-react'
 
@@ -24,11 +24,14 @@ type InputProps = InputHTMLAttributes<HTMLInputElement> & {
 export function Input({ label, error, id, className = '', ...props }: InputProps) {
   const generatedId = useId()
   const inputId = id ?? generatedId
+  const errorId = `${inputId}-error`
+  const { ['aria-describedby']: existingDescribedBy, ...inputProps } = props
+  const describedBy = [existingDescribedBy, error ? errorId : undefined].filter(Boolean).join(' ') || undefined
   return (
     <label className="field" htmlFor={inputId}>
       {label && <span className="field__label">{label}</span>}
-      <input id={inputId} className={`field__control${error ? ' field__control--error' : ''}${className ? ` ${className}` : ''}`} aria-invalid={Boolean(error)} {...props} />
-      {error && <span className="field__error">{error}</span>}
+      <input {...inputProps} id={inputId} className={`field__control${error ? ' field__control--error' : ''}${className ? ` ${className}` : ''}`} aria-invalid={Boolean(error)} aria-describedby={describedBy} />
+      {error && <span id={errorId} className="field__error">{error}</span>}
     </label>
   )
 }
@@ -56,20 +59,72 @@ export function ErrorState({ title = 'This preview did not load', description = 
 
 export function Tabs({ items, value, onChange, label }: { items: string[]; value: string; onChange: (value: string) => void; label: string }) {
   return (
-    <div className="tabs" role="tablist" aria-label={label}>
-      {items.map((item) => <button key={item} type="button" className={`tabs__item${value === item ? ' is-active' : ''}`} role="tab" aria-selected={value === item} onClick={() => onChange(item)}>{item}</button>)}
+    <div className="tabs" role="group" aria-label={label}>
+      {items.map((item) => <button key={item} type="button" className={`tabs__item${value === item ? ' is-active' : ''}`} aria-pressed={value === item} onClick={() => onChange(item)}>{item}</button>)}
     </div>
   )
 }
 
+function useDialogAccessibility(open: boolean, onClose: () => void) {
+  const dialogRef = useRef<HTMLElement>(null)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+
+  useEffect(() => {
+    if (!open) return
+    const dialogElement = dialogRef.current
+    if (!dialogElement) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const focusableSelector = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+    const getFocusable = () => Array.from(dialogElement.querySelectorAll<HTMLElement>(focusableSelector))
+    ;(getFocusable()[0] ?? dialogElement).focus()
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = getFocusable()
+      if (!focusable.length) {
+        event.preventDefault()
+        dialogRef.current?.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    dialogElement.addEventListener('keydown', handleKeyDown)
+    return () => {
+      dialogElement.removeEventListener('keydown', handleKeyDown)
+      previousFocus?.focus()
+    }
+  }, [open])
+
+  return dialogRef
+}
+
 export function Modal({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
+  const dialogRef = useDialogAccessibility(open, onClose)
+  const titleId = useId()
   if (!open) return null
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal" role="dialog" aria-modal="true" aria-label={title}><div className="modal__head"><h2>{title}</h2><button className="icon-button" type="button" onClick={onClose} aria-label="Close dialog"><X size={18} /></button></div>{children}</section></div>
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section ref={dialogRef} className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><div className="modal__head"><h2 id={titleId}>{title}</h2><button className="icon-button" type="button" onClick={onClose} aria-label="Close dialog"><X size={18} /></button></div>{children}</section></div>
 }
 
 export function BottomSheet({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
+  const dialogRef = useDialogAccessibility(open, onClose)
+  const titleId = useId()
   if (!open) return null
-  return <div className="sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="bottom-sheet" role="dialog" aria-modal="true" aria-label={title}><div className="bottom-sheet__handle" /><div className="modal__head"><h2>{title}</h2><button className="icon-button" type="button" onClick={onClose} aria-label="Close sheet"><X size={18} /></button></div>{children}</section></div>
+  return <div className="sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section ref={dialogRef} className="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><div className="bottom-sheet__handle" /><div className="modal__head"><h2 id={titleId}>{title}</h2><button className="icon-button" type="button" onClick={onClose} aria-label="Close sheet"><X size={18} /></button></div>{children}</section></div>
 }
 
 export function ConfirmationDialog({ open, title, description, confirmLabel = 'Confirm', onConfirm, onClose }: { open: boolean; title: string; description: string; confirmLabel?: string; onConfirm: () => void; onClose: () => void }) {

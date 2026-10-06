@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './authenticatedUser'
+import { loadBlockedUserIds } from './blockData'
 import type { ProfileRecord } from '../types/app'
 import { subscribeToPostgresChanges, type RealtimeSubscriptionStatus } from './realtimeData'
 
@@ -24,6 +25,7 @@ export type ConversationSummary = {
 
 const messageColumns = 'id,conversation_id,sender_id,content,media_url,media_type,is_deleted_for_everyone,created_at,updated_at'
 const pendingConversationRequests = new Map<string, Promise<string>>()
+const conversationMessagePageSize = 50
 
 export async function getOrCreateConversation(targetUserId: string) {
   const userId = await requireAuthenticatedUserId()
@@ -81,7 +83,13 @@ async function createOrFindConversation(userId: string, targetUserId: string) {
     const { error: cleanupError } = await supabase.from('conversations').delete()
       .eq('id', conversation.id).eq('created_by', userId)
     if (cleanupError) {
-      throw new Error(`Could not add conversation members (${createMembersError.message}) or clean up the new conversation (${cleanupError.message}).`)
+      if (import.meta.env.DEV) {
+        console.error('Conversation setup and cleanup failed.', {
+          memberErrorCode: createMembersError.code,
+          cleanupErrorCode: cleanupError.code,
+        })
+      }
+      throw new Error('Could not finish creating the conversation. Please try again.')
     }
     throw createMembersError
   }
@@ -137,12 +145,18 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   for (const member of members ?? []) {
     if (member.user_id !== userId && conversationIds.includes(member.conversation_id)) otherUsers.set(member.conversation_id, member.user_id)
   }
+  const blockedIds = new Set(await loadBlockedUserIds())
+  for (const [conversationId, peerId] of otherUsers) {
+    if (blockedIds.has(peerId)) otherUsers.delete(conversationId)
+  }
+  const visibleConversationIds = conversationIds.filter((id) => otherUsers.has(id))
+  if (!visibleConversationIds.length) return []
   const otherUserIds = [...new Set(otherUsers.values())]
   if (!otherUserIds.length) return []
 
   const summaryMessages: Array<{ lastMessage: ChatMessage | null; unreadCount: number }> = []
-  for (let offset = 0; offset < conversationIds.length; offset += 5) {
-    const batch = await Promise.all(conversationIds.slice(offset, offset + 5)
+  for (let offset = 0; offset < visibleConversationIds.length; offset += 5) {
+    const batch = await Promise.all(visibleConversationIds.slice(offset, offset + 5)
       .map((id) => loadConversationSummaryMessages(id, userId)))
     summaryMessages.push(...batch)
   }
@@ -151,7 +165,7 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   if (profilesError) throw profilesError
 
   const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
-  return conversationIds.flatMap((id, index) => {
+  return visibleConversationIds.flatMap((id, index) => {
     const memberId = otherUsers.get(id)
     const member = memberId ? profileMap.get(memberId) : undefined
     if (!member) return []
@@ -159,17 +173,29 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   }).sort((left, right) => (right.lastMessage?.created_at ?? '').localeCompare(left.lastMessage?.created_at ?? ''))
 }
 
-export async function loadConversationMessages(conversationId: string) {
+export async function loadConversationMessages(
+  conversationId: string,
+  before?: Pick<ChatMessage, 'created_at' | 'id'>,
+): Promise<{ messages: ChatMessage[]; hasMore: boolean }> {
   const userId = await requireAuthenticatedUserId()
   const { data: membership, error: membershipError } = await supabase.from('conversation_members')
     .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', userId).maybeSingle()
   if (membershipError) throw membershipError
   if (!membership) throw new Error('You are not a member of this conversation.')
 
-  const { data, error } = await supabase.from('messages').select(messageColumns)
-    .eq('conversation_id', conversationId).order('created_at', { ascending: true })
+  let query = supabase.from('messages').select(messageColumns)
+    .eq('conversation_id', conversationId)
+    .eq('is_deleted_for_everyone', false)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(conversationMessagePageSize)
+  if (before) {
+    query = query.or(`created_at.lt.${before.created_at},and(created_at.eq.${before.created_at},id.lt.${before.id})`)
+  }
+  const { data, error } = await query
   if (error) throw error
-  const messages = ((data ?? []) as ChatMessage[]).filter((message) => !message.is_deleted_for_everyone)
+  const page = (data ?? []) as ChatMessage[]
+  const messages = page.reverse()
   const unreadIds = messages.filter((message) => message.sender_id !== userId).map((message) => message.id)
   if (unreadIds.length) {
     const { data: existingReads, error: readError } = await supabase.from('message_reads').select('message_id')
@@ -182,7 +208,7 @@ export async function loadConversationMessages(conversationId: string) {
       if (insertError && insertError.code !== '23505') throw insertError
     }
   }
-  return messages
+  return { messages, hasMore: page.length === conversationMessagePageSize }
 }
 
 export async function loadConversationPeer(conversationId: string) {
@@ -196,6 +222,13 @@ export async function loadConversationPeer(conversationId: string) {
   if (membersError) throw membersError
   const peerId = members?.[0]?.user_id
   if (!peerId) throw new Error('Conversation member could not be found.')
+  const [{ data: outgoingBlock, error: outgoingBlockError }, { data: incomingBlock, error: incomingBlockError }] = await Promise.all([
+    supabase.from('blocks').select('blocker_id').eq('blocker_id', userId).eq('blocked_id', peerId).maybeSingle(),
+    supabase.from('blocks').select('blocker_id').eq('blocker_id', peerId).eq('blocked_id', userId).maybeSingle(),
+  ])
+  if (outgoingBlockError) throw outgoingBlockError
+  if (incomingBlockError) throw incomingBlockError
+  if (outgoingBlock || incomingBlock) throw new Error('Messaging is unavailable for this profile.')
   const { data: profile, error: profileError } = await supabase.from('profiles')
     .select('id,username,display_name,avatar_url').eq('id', peerId).maybeSingle()
   if (profileError) throw profileError
