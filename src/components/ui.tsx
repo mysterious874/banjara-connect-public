@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Info, LoaderCircle, X } from 'lucide-react'
+import { Check, Eye, EyeOff, Info, LoaderCircle, X } from 'lucide-react'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   to?: string
@@ -19,18 +19,21 @@ export function Button({ to, variant = 'primary', iconOnly = false, className = 
 type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   label?: string
   error?: string
+  showPasswordToggle?: boolean
 }
 
-export function Input({ label, error, id, className = '', ...props }: InputProps) {
+export function Input({ label, error, id, className = '', showPasswordToggle = false, ...props }: InputProps) {
   const generatedId = useId()
   const inputId = id ?? generatedId
   const errorId = `${inputId}-error`
-  const { ['aria-describedby']: existingDescribedBy, ...inputProps } = props
+  const { ['aria-describedby']: existingDescribedBy, type, ...inputProps } = props
+  const [showPassword, setShowPassword] = useState(false)
+  const inputType = showPasswordToggle && type === 'password' ? (showPassword ? 'text' : 'password') : type
   const describedBy = [existingDescribedBy, error ? errorId : undefined].filter(Boolean).join(' ') || undefined
   return (
     <label className="field" htmlFor={inputId}>
       {label && <span className="field__label">{label}</span>}
-      <input {...inputProps} id={inputId} className={`field__control${error ? ' field__control--error' : ''}${className ? ` ${className}` : ''}`} aria-invalid={Boolean(error)} aria-describedby={describedBy} />
+      <span className={`field__control-wrap${showPasswordToggle && type === 'password' ? ' field__control-wrap--password' : ''}`}><input {...inputProps} type={inputType} id={inputId} className={`field__control${error ? ' field__control--error' : ''}${className ? ` ${className}` : ''}`} aria-invalid={Boolean(error)} aria-describedby={describedBy} />{showPasswordToggle && type === 'password' && <button type="button" className="field__password-toggle" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'} title={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>}</span>
       {error && <span id={errorId} className="field__error">{error}</span>}
     </label>
   )
