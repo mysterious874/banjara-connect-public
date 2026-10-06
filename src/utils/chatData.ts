@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './authenticatedUser'
 import { loadBlockedUserIds } from './blockData'
-import { createChatMediaUrl, deleteChatMedia, type ChatMediaData } from './chatMediaData'
+import { createChatMediaUrl, deleteChatMedia, uploadChatMedia } from './chatMediaData'
 import type { ProfileRecord } from '../types/app'
 import { subscribeToPostgresChanges, type RealtimeSubscriptionStatus } from './realtimeData'
 
@@ -261,9 +261,9 @@ export async function loadConversationPeer(conversationId: string) {
   return profile
 }
 
-export async function sendConversationMessage(conversationId: string, content: string, media?: ChatMediaData) {
+export async function sendConversationMessage(conversationId: string, content: string, mediaFile?: File) {
   const normalized = content.trim()
-  if (!normalized && !media) throw new Error('Message cannot be empty.')
+  if (!normalized && !mediaFile) throw new Error('Message cannot be empty.')
   const senderId = await requireAuthenticatedUserId()
   const { data: membership, error: membershipError } = await supabase.from('conversation_members')
     .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', senderId).maybeSingle()
@@ -277,9 +277,12 @@ export async function sendConversationMessage(conversationId: string, content: s
   }).select(messageColumns).single()
   if (error) throw error
   const created = data as ChatMessage
-  if (!media) return created
+  if (!mediaFile) return created
 
+  let uploadedPath = ''
   try {
+    const media = await uploadChatMedia(mediaFile, senderId, conversationId, created.id)
+    uploadedPath = media.path
     const { error: updateError, data: updated } = await supabase.from('messages').update({
       media_url: media.path,
       media_type: media.type,
@@ -288,6 +291,13 @@ export async function sendConversationMessage(conversationId: string, content: s
     if (updateError) throw updateError
     return updated as ChatMessage
   } catch (caught) {
+    if (uploadedPath) {
+      try {
+        await deleteChatMedia([uploadedPath])
+      } catch (cleanupError) {
+        if (import.meta.env.DEV) console.error('Could not clean up failed chat media upload.', cleanupError)
+      }
+    }
     try {
       await supabase.from('messages').delete().eq('id', created.id).eq('sender_id', senderId)
     } catch (cleanupError) {
