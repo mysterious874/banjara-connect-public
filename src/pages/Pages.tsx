@@ -742,13 +742,12 @@ export function EditProfilePage() {
       setLocation(current.displayName)
       setLocationSuggestions([])
     } catch (caught) {
-      const message = caught instanceof GeolocationPositionError
-        ? caught.code === 1
-          ? 'Location permission was denied. Allow location access in your browser and try again.'
-          : caught.code === 3
-            ? 'Location took too long to fetch. Try again.'
-            : 'Could not fetch your current location.'
-        : userFacingError(caught, 'Could not fetch your current location.')
+      const locationCode = caught && typeof caught === 'object' && 'code' in caught && typeof caught.code === 'number' ? caught.code : null
+      const message = locationCode === 1
+        ? 'Location permission was denied. Allow location access in your browser and try again.'
+        : locationCode === 3
+          ? 'Location took too long to fetch. Try again.'
+          : userFacingError(caught, 'Could not fetch your current location.')
       setError(message)
     } finally {
       setIsFetchingLocation(false)
