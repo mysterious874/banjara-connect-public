@@ -20,8 +20,8 @@ export default defineConfig({
         theme_color: '#7b1e2b',
         background_color: '#fbf4e8',
         icons: [
-          { src: '/banjara-mark.svg', sizes: '64x64', type: 'image/svg+xml', purpose: 'any' },
-          { src: '/banjara-mark-maskable.svg', sizes: '64x64', type: 'image/svg+xml', purpose: 'maskable' },
+          { src: '/banjara-mark.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: '/banjara-mark-maskable.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
         ],
       },
       workbox: {
