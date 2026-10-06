@@ -201,6 +201,58 @@ img { max-width: 100%; }
 .post-edit-form > div, .comment-edit-form > div { display: flex; justify-content: flex-end; gap: 7px; }
 .post-edit-form .button, .comment-edit-form .button { min-height: 36px; padding: 0 10px; font-size: 11px; }
 .post-card__text { margin: 14px 0; color: #3e4940; font-size: 12px; line-height: 1.8; }
+.post-card__media-hold { position: relative; touch-action: manipulation; }
+.media-preview-backdrop {
+  position: fixed;
+  z-index: 130000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgb(10 14 12 / 62%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: mediaPreviewIn 160ms ease-out;
+}
+.media-preview-dialog {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(94vw, 1000px);
+  height: min(88vh, 900px);
+}
+.media-preview-content {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 18px 60px rgb(0 0 0 / 38%);
+}
+.media-preview-close {
+  position: absolute;
+  z-index: 2;
+  top: -8px;
+  right: -8px;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: #fff;
+  background: rgb(0 0 0 / 55%);
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 50%;
+  cursor: pointer;
+}
+@keyframes mediaPreviewIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .post-card__media { display: block; width: 100%; max-width: 100%; max-height: min(70vh, 720px); object-fit: contain; background: #111; border-radius: 6px; }
 .post-card__video { height: auto; }
 .post-card__image-wrap { position: relative; overflow: hidden; background: #edf0e8; border-radius: 6px; }
