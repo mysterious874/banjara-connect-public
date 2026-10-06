@@ -28,6 +28,19 @@ import type { FeedPost, ProfileRecord } from '../types/app'
 import { deleteMessageForEveryone, deleteMessageForMe, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
 import { createComment, deleteComment, loadCommentLikes, loadComments, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 
+function renderChatMessageContent(content: string) {
+  return content.split('\n').map((line, index, lines) => {
+    const postMatch = line.trim().match(/^\\/posts\\/([0-9a-f-]+)$/i)
+    const storyMatch = line.trim().match(/^\\/stories(?:\\?story=([0-9a-f-]+))?$/i)
+    const contentNode = postMatch
+      ? <Link className="chat-shared-link" to={`/posts/${postMatch[1]}`}>Open shared post</Link>
+      : storyMatch
+        ? <Link className="chat-shared-link" to={storyMatch[1] ? `/stories?story=${storyMatch[1]}` : '/stories'}>Open shared story</Link>
+        : line
+    return <span key={`chat-line-${index}`}>{contentNode}{index < lines.length - 1 && <br />}</span>
+  })
+}
+
 function PageHeading({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
   return <div className="page-heading"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h1>{title}</h1>{description && <p>{description}</p>}</div>{action}</div>
 }
@@ -829,6 +842,7 @@ export function EditProfilePage() {
 }
 export function StoriesPage() {
   const navigate = useNavigate()
+  const [storyParams] = useSearchParams()
   const { session, profile } = useAuth()
   const [stories, setStories] = useState<StoryRecord[]>([])
   const [selectedStory, setSelectedStory] = useState<StoryRecord | null>(null)
@@ -851,7 +865,9 @@ export function StoriesPage() {
     try {
       const next = await loadActiveStories()
       setStories(next)
+      const requestedStoryId = storyParams.get('story')
       setSelectedStory((current) => {
+        if (requestedStoryId) return next.find((item) => item.id === requestedStoryId) ?? current ?? next[0] ?? null
         if (current) return next.find((item) => item.user_id === current.user_id) ?? next[0] ?? null
         return next[0] ?? null
       })
@@ -950,7 +966,7 @@ export function StoriesPage() {
     setError('')
     try {
       const conversation = await getOrCreateConversation(selectedStory.user_id)
-      await sendConversationMessage(conversation, `↩️ Replied to ${selectedStory.author?.display_name || selectedStory.author?.username || 'your'} story:\n\n${replyMessage.trim()}\n\nStory: /stories`)
+      await sendConversationMessage(conversation, `↩️ Replied to ${selectedStory.author?.display_name || selectedStory.author?.username || 'your'} story:\n\n${replyMessage.trim()}\n\nStory: /stories?story=${selectedStory.id}`)
       setReplyMessage('')
       setSuccess('Message sent')
     } catch (caught) {
@@ -1290,7 +1306,7 @@ export function ChatConversationPage() {
     return
   }
   if (selectedMessageIds.length > 0) toggleMessageSelection(item.id)
-}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" />}{item.content && <p className="chat-message-text">{item.content}</p>}</>}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{isSendingMedia && <div className="chat-media-sending" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending photo/video…</strong><small>You can continue chatting while it sends</small><span className="chat-media-sending__track"><span /></span></span></div>}{selectedMedia && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" onClick={() => mediaInputRef.current?.click()} disabled={isSendingMedia}><Paperclip size={18} /></Button><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form><p className="micro-note">Photos and videos up to 50 MB</p></div></section>
+}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" />}{item.content && <p className="chat-message-text">{renderChatMessageContent(item.content)}</p>}</>}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{isSendingMedia && <div className="chat-media-sending" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending photo/video…</strong><small>You can continue chatting while it sends</small><span className="chat-media-sending__track"><span /></span></span></div>}{selectedMedia && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" onClick={() => mediaInputRef.current?.click()} disabled={isSendingMedia}><Paperclip size={18} /></Button><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form><p className="micro-note">Photos and videos up to 50 MB</p></div></section>
 }
 
 export function NotificationsPage() {
