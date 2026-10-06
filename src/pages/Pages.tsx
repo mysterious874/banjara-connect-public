@@ -1492,7 +1492,6 @@ export function CommunityGroupPage() {
   const [selectedGroupMedia, setSelectedGroupMedia] = useState<File | null>(null)
   const [isSendingGroupMedia, setIsSendingGroupMedia] = useState(false)
   const groupMediaInputRef = useRef<HTMLInputElement | null>(null)
-  const [groupUnreadCount, setGroupUnreadCount] = useState(0)
   const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(false)
   const [isLoadingOlderGroupMessages, setIsLoadingOlderGroupMessages] = useState(false)
   const isGroupAdmin = Boolean(session?.user && group && (group.created_by === session.user.id || members.some((member) => member.user_id === session.user.id && member.role === 'admin')))
@@ -1552,7 +1551,6 @@ export function CommunityGroupPage() {
         }
         setGroup(groupRow)
         setMessages(nextMessages)
-        setGroupUnreadCount(0)
         setProfiles(Object.fromEntries((senderProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])))
         setMembers(((memberRows ?? []) as Array<{ user_id: string; role: string }>).map((member) => {
           const profile = (senderProfiles ?? []).find((item) => item.id === member.user_id) as ProfileRecord | undefined
