@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
+import { BrandMark } from './components/brand'
 
 const SplashPage = lazy(() => import('./pages/AuthPages').then(({ SplashPage }) => ({ default: SplashPage })))
 const LoginPage = lazy(() => import('./pages/AuthPages').then(({ LoginPage }) => ({ default: LoginPage })))
@@ -33,8 +34,19 @@ const DeveloperPage = lazy(() => import('./pages/DeveloperPage').then(({ Develop
 const NotFoundPage = lazy(() => import('./pages/Pages').then(({ NotFoundPage }) => ({ default: NotFoundPage })))
 
 export default function App() {
+  const [showLaunchIntro, setShowLaunchIntro] = useState(false)
+
+  useEffect(() => {
+    const isSplashRoute = window.location.pathname === '/' || window.location.pathname === '/splash'
+    if (isSplashRoute) return
+    setShowLaunchIntro(true)
+    const timer = window.setTimeout(() => setShowLaunchIntro(false), 4000)
+    return () => window.clearTimeout(timer)
+  }, [])
+
   return (
-    <Suspense fallback={<div className="state-block" role="status">Loading page…</div>}>
+    <>
+      <Suspense fallback={<div className="state-block" role="status">Loading page…</div>}>
       <Routes>
         <Route path="/" element={<SplashPage />} />
         <Route path="/splash" element={<SplashPage />} />
@@ -70,6 +82,19 @@ export default function App() {
         <Route path="/404" element={<NotFoundPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-    </Suspense>
+      </Suspense>
+      {showLaunchIntro && (
+        <main className="splash" aria-label="Banjara Connect intro">
+          <div className="splash__pattern" aria-hidden="true" />
+          <div className="splash__content">
+            <span className="splash__logo-wrap"><span className="splash__logo-ring" /><BrandMark size="large" /></span>
+            <h1>Banjara Connect</h1>
+            <span className="splash__line" />
+            <p>Apni community. Apni pehchaan. Apna connection.</p>
+            <span className="splash__loader" aria-hidden="true"><span /></span>
+          </div>
+        </main>
+      )}
+    </>
   )
 }
