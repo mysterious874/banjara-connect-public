@@ -9,6 +9,7 @@ const HomePage = lazy(() => import('./pages/Pages').then(({ HomePage }) => ({ de
 const ConnectPage = lazy(() => import('./pages/Pages').then(({ ConnectPage }) => ({ default: ConnectPage })))
 const CommunityPage = lazy(() => import('./pages/Pages').then(({ CommunityPage }) => ({ default: CommunityPage })))
 const BanjaraHistoryPage = lazy(() => import('./pages/BanjaraHistoryPage').then(({ BanjaraHistoryPage }) => ({ default: BanjaraHistoryPage })))
+const CommunityGroupPage = lazy(() => import('./pages/Pages').then(({ CommunityGroupPage }) => ({ default: CommunityGroupPage })))
 const SearchPage = lazy(() => import('./pages/Pages').then(({ SearchPage }) => ({ default: SearchPage })))
 const CreatePostPage = lazy(() => import('./pages/Pages').then(({ CreatePostPage }) => ({ default: CreatePostPage })))
 const PostDetailsPage = lazy(() => import('./pages/Pages').then(({ PostDetailsPage }) => ({ default: PostDetailsPage })))
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="connect" element={<ConnectPage />} />
           <Route path="community" element={<CommunityPage />} />
           <Route path="community/history" element={<BanjaraHistoryPage />} />
+          <Route path="community/groups/:groupId" element={<CommunityGroupPage />} />
           <Route path="search" element={<SearchPage />} />
           <Route path="create" element={<CreatePostPage />} />
           <Route path="posts/:postId" element={<PostDetailsPage />} />
