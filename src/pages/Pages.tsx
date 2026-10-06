@@ -231,6 +231,8 @@ export function CommunityPage() {
   const [groupDescription, setGroupDescription] = useState('')
   const [groupSaving, setGroupSaving] = useState(false)
   const [groupUnreadCount, setGroupUnreadCount] = useState(0)
+  const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(false)
+  const [isLoadingOlderGroupMessages, setIsLoadingOlderGroupMessages] = useState(false)
   const [selectedGroupMedia, setSelectedGroupMedia] = useState<File | null>(null)
   const [isSendingGroupMedia, setIsSendingGroupMedia] = useState(false)
   const groupMediaInputRef = useRef<HTMLInputElement | null>(null)
@@ -1513,14 +1515,16 @@ export function CommunityGroupPage() {
         if (!membership) throw new Error('You are not a member of this community.')
         const [{ data: groupRow, error: groupError }, { data: rows, error: messagesError }, { data: memberRows, error: membersError }] = await Promise.all([
           supabase.from('community_groups').select('id,name,description,created_by').eq('id', groupId).maybeSingle(),
-          supabase.from('community_group_messages').select('id,group_id,sender_id,content,media_url,media_type,created_at').eq('group_id', groupId).order('created_at', { ascending: true }).limit(100),
+          supabase.from('community_group_messages').select('id,group_id,sender_id,content,media_url,media_type,created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(101),
           supabase.from('community_group_members').select('user_id,role').eq('group_id', groupId).order('joined_at', { ascending: true }),
         ])
         if (groupError) throw groupError
         if (messagesError) throw messagesError
         if (membersError) throw membersError
         if (!groupRow) throw new Error('This community no longer exists.')
-        const nextMessages = (rows ?? []) as CommunityGroupMessage[]
+        const fetchedRows = (rows ?? []) as CommunityGroupMessage[]
+        setHasOlderGroupMessages(fetchedRows.length > 100)
+        const nextMessages = fetchedRows.slice(0, 100).reverse()
         for (const groupMessage of nextMessages) {
           if (groupMessage.media_url) {
             try { groupMessage.media_signed_url = await createGroupMediaUrl(groupMessage.media_url) } catch { groupMessage.media_signed_url = null }
@@ -1558,13 +1562,19 @@ export function CommunityGroupPage() {
               .order('created_at', { ascending: true })
               .limit(100)
             if (latestError || !active) return
-            const next = (latest ?? []) as CommunityGroupMessage[]
+            const incoming = (latest ?? []) as CommunityGroupMessage[]
+            const latestMap = new Map(incoming.map((item) => [item.id, item as CommunityGroupMessage]))
+            setMessages((current) => {
+              const merged = current.map((item) => latestMap.get(item.id) ?? item)
+              for (const item of incoming) if (!merged.some((existing) => existing.id === item.id)) merged.push(item as CommunityGroupMessage)
+              return merged.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            })
+            const next = incoming as CommunityGroupMessage[]
             for (const groupMessage of next) {
               if (groupMessage.media_url) {
                 try { groupMessage.media_signed_url = await createGroupMediaUrl(groupMessage.media_url) } catch { groupMessage.media_signed_url = null }
               }
             }
-            setMessages(next)
             const ids = [...new Set(next.map((row) => row.sender_id))]
             if (ids.length) {
               const { data: latestProfiles } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
@@ -1585,6 +1595,43 @@ export function CommunityGroupPage() {
       unsubscribe?.()
     }
   }, [groupId, session?.user.id])
+
+  async function loadOlderGroupMessages() {
+    if (!groupId || !messages.length || isLoadingOlderGroupMessages || !hasOlderGroupMessages) return
+    setIsLoadingOlderGroupMessages(true)
+    try {
+      const oldest = messages[0]
+      const { data: rows, error: olderError } = await supabase
+        .from('community_group_messages')
+        .select('id,group_id,sender_id,content,media_url,media_type,created_at')
+        .eq('group_id', groupId)
+        .lt('created_at', oldest.created_at)
+        .order('created_at', { ascending: false })
+        .limit(51)
+      if (olderError) throw olderError
+      const fetched = (rows ?? []) as CommunityGroupMessage[]
+      setHasOlderGroupMessages(fetched.length > 50)
+      const older = fetched.slice(0, 50).reverse()
+      for (const item of older) {
+        if (item.media_url) {
+          try { item.media_signed_url = await createGroupMediaUrl(item.media_url) } catch { item.media_signed_url = null }
+        }
+      }
+      const ids = [...new Set(older.map((row) => row.sender_id))]
+      if (ids.length) {
+        const { data: olderProfiles } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
+        setProfiles((current) => ({ ...current, ...Object.fromEntries((olderProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])) }))
+      }
+      setMessages((current) => {
+        const merged = [...older, ...current]
+        return merged.filter((item,index,array) => array.findIndex((candidate) => candidate.id === item.id) === index)
+      })
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not load older messages.'))
+    } finally {
+      setIsLoadingOlderGroupMessages(false)
+    }
+  }
 
   async function loadGroupMembers() {
     if (!groupId) return
@@ -1807,6 +1854,7 @@ export function CommunityGroupPage() {
     <ConfirmationDialog open={groupDeleteOpen} title="Delete this community?" description="This permanently deletes the group, its members and its messages. This action cannot be undone." confirmLabel={groupSaving ? 'Deleting…' : 'Delete community'} onClose={() => { if (!groupSaving) setGroupDeleteOpen(false) }} onConfirm={() => void deleteGroup()} />
 
     <div className="chat-messages">
+      {hasOlderGroupMessages && <div className="chat-history-loader"><Button variant="outline" onClick={() => void loadOlderGroupMessages()} disabled={isLoadingOlderGroupMessages}>{isLoadingOlderGroupMessages ? 'Loading older messages…' : 'Load older messages'}</Button></div>}
       {messages.length ? messages.map((item) => {
         const mine = item.sender_id === session?.user.id
         const sender = profiles[item.sender_id]
