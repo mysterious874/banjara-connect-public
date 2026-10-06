@@ -32,6 +32,24 @@ export async function loadProfiles(): Promise<ProfileRecord[]> {
   return profiles
 }
 
+export async function searchProfilesByUsername(query: string): Promise<ProfileRecord[]> {
+  const currentUserId = await requireAuthenticatedUserId()
+  const normalized = query.trim().replace(/[%_]/g, (character) => `\\${character}`)
+  if (!normalized) return []
+
+  const [{ data, error }, blockedIds] = await Promise.all([
+    supabase.from('profiles')
+      .select(profileColumns)
+      .ilike('username', `${normalized}%`)
+      .neq('id', currentUserId)
+      .order('username', { ascending: true })
+      .limit(20),
+    loadBlockedUserIds(),
+  ])
+  if (error) throw error
+  return ((data ?? []) as ProfileRecord[]).filter((profile) => !blockedIds.includes(profile.id))
+}
+
 export function filterProfiles(profiles: ProfileRecord[], query: string) {
   const normalized = query.trim().toLocaleLowerCase()
   if (!normalized) return profiles
