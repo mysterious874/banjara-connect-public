@@ -28,7 +28,7 @@ const mobileItems = [
   { to: '/settings', label: 'More', icon: Ellipsis },
 ]
 
-export function useUnreadChatCount(sessionUserId: string | undefined) {
+function useUnreadChatCount(sessionUserId: string | undefined) {
   const [count, setCount] = useState(0)
 
   useEffect(() => {
@@ -113,16 +113,20 @@ function isActiveRoute(pathname: string, to: string) {
   return pathname === to || (to === '/chat' && pathname.startsWith('/chat/')) || (to === '/profile' && pathname.startsWith('/profile')) || (to === '/settings' && pathname.startsWith('/settings'))
 }
 
-export function DesktopNavigation({ unreadChatCount = 0 }: { unreadChatCount?: number }) {
+export function DesktopNavigation() {
   const { pathname } = useLocation()
+  const { session } = useAuth()
+  const unreadChatCount = useUnreadChatCount(session?.user.id)
   return <nav className="desktop-nav" aria-label="Main navigation">{desktopItems.map(({ to, label, icon: Icon }) => {
     const active = isActiveRoute(pathname, to)
     return <NavLink key={to} to={to} aria-current={active ? 'page' : undefined} className={`desktop-nav__item${active ? ' is-active' : ''}`}><span className="nav-icon-wrap"><Icon size={16} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
   })}</nav>
 }
 
-export function BottomNavigation({ unreadChatCount = 0 }: { unreadChatCount?: number }) {
+export function BottomNavigation() {
   const location = useLocation()
+  const { session } = useAuth()
+  const unreadChatCount = useUnreadChatCount(session?.user.id)
   return <nav className="bottom-nav" aria-label="Main navigation">{mobileItems.map(({ to, label, icon: Icon, emphasized }) => {
     const active = isActiveRoute(location.pathname, to)
     return <NavLink key={to} to={to} aria-label={label === 'AI' ? 'AI Assistant' : label === 'More' ? 'More settings' : label} aria-current={active ? 'page' : undefined} className={`bottom-nav__item${active ? ' is-active' : ''}${emphasized ? ' bottom-nav__item--create' : ''}`}><span className="bottom-nav__icon nav-icon-wrap"><Icon size={emphasized ? 20 : 16} strokeWidth={active ? 2.4 : 1.8} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
