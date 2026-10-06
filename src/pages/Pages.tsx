@@ -1261,7 +1261,7 @@ export function ChatConversationPage() {
   const suppressNextMessageClick = useRef(false)
   const [chatMenuOpen, setChatMenuOpen] = useState(false)
   const [chatThemeOpen, setChatThemeOpen] = useState(false)
-  const [chatTheme, setChatTheme] = useState('classic')
+  const [chatTheme, setChatTheme] = useState('midnight')
 
   const chatThemes = [
     { id: 'classic', label: 'Classic', preview: '#7A263A' },
@@ -1286,7 +1286,7 @@ export function ChatConversationPage() {
     setChatMenuOpen(false)
     setChatThemeOpen(false)
     try {
-      setChatTheme(window.localStorage.getItem(`banjara-chat-theme-${conversationId}`) || 'classic')
+      setChatTheme(window.localStorage.getItem(`banjara-chat-theme-${conversationId}`) || 'midnight')
     } catch {
       setChatTheme('classic')
     }
