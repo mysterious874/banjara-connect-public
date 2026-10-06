@@ -74,8 +74,6 @@ export function Header() {
   const { profile, session } = useAuth()
   const name = profile?.display_name || profile?.username || 'Your profile'
   const [unreadCount, setUnreadCount] = useState(0)
-  const unreadChatCount = useUnreadChatCount(session?.user.id)
-
   useEffect(() => {
     let active = true
     if (!session?.user.id) {
@@ -117,6 +115,8 @@ function isActiveRoute(pathname: string, to: string) {
 
 export function DesktopNavigation() {
   const { pathname } = useLocation()
+  const { session } = useAuth()
+  const unreadChatCount = useUnreadChatCount(session?.user.id)
   return <nav className="desktop-nav" aria-label="Main navigation">{desktopItems.map(({ to, label, icon: Icon }) => {
     const active = isActiveRoute(pathname, to)
     return <NavLink key={to} to={to} aria-current={active ? 'page' : undefined} className={`desktop-nav__item${active ? ' is-active' : ''}`}><span className="nav-icon-wrap"><Icon size={16} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
@@ -125,6 +125,8 @@ export function DesktopNavigation() {
 
 export function BottomNavigation() {
   const location = useLocation()
+  const { session } = useAuth()
+  const unreadChatCount = useUnreadChatCount(session?.user.id)
   return <nav className="bottom-nav" aria-label="Main navigation">{mobileItems.map(({ to, label, icon: Icon, emphasized }) => {
     const active = isActiveRoute(location.pathname, to)
     return <NavLink key={to} to={to} aria-label={label === 'AI' ? 'AI Assistant' : label === 'More' ? 'More settings' : label} aria-current={active ? 'page' : undefined} className={`bottom-nav__item${active ? ' is-active' : ''}${emphasized ? ' bottom-nav__item--create' : ''}`}><span className="bottom-nav__icon nav-icon-wrap"><Icon size={emphasized ? 20 : 16} strokeWidth={active ? 2.4 : 1.8} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
