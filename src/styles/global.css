@@ -2018,5 +2018,5 @@ button, input, textarea, select { font-size: 16px; }
 
 /* Fine header alignment: keep header position unchanged, move only its contents down 1px. */
 .topbar__inner > * {
-  transform: translateY(1px);
+  transform: translateY(3px);
 }
