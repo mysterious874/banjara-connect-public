@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Pencil, Plus, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
@@ -881,7 +881,7 @@ export function ChatConversationPage() {
     }, 550)
   }
 
-  function handleMessageContextMenu(event: React.MouseEvent, messageId: string) {
+  function handleMessageContextMenu(event: MouseEvent, messageId: string) {
     event.preventDefault()
     clearLongPressTimer()
     toggleMessageSelection(messageId)
@@ -928,25 +928,6 @@ export function ChatConversationPage() {
       setSelectedMessageIds([])
     } catch {
       setError('Could not copy the selected messages.')
-    }
-  }
-
-  async function handleDeleteMessage(item: ChatMessage, mode: 'me' | 'everyone') {
-    if (pendingDeleteId) return
-    setPendingDeleteId(item.id)
-    setError('')
-    try {
-      if (mode === 'everyone') {
-        await deleteMessageForEveryone(item.id)
-        setMessages((current) => current.map((message) => message.id === item.id ? { ...message, content: '', media_url: null, media_type: null, is_deleted_for_everyone: true } : message))
-      } else {
-        await deleteMessageForMe(item.id)
-        setMessages((current) => current.filter((message) => message.id !== item.id))
-      }
-    } catch (caught) {
-      setError(userFacingError(caught, mode === 'everyone' ? 'Could not delete this message for everyone.' : 'Could not delete this message for you.'))
-    } finally {
-      setPendingDeleteId('')
     }
   }
 
