@@ -882,3 +882,13 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   .heritage-section { grid-template-columns: 28px minmax(0, 1fr); gap: 7px; padding: 10px; }
   .heritage-section__number { width: 27px; height: 27px; }
 }
+
+
+.chat-message-row { display: flex; flex-direction: column; gap: 4px; max-width: 82%; }
+.chat-message-row--you { margin-left: auto; align-items: flex-end; }
+.chat-message-row--them { margin-right: auto; align-items: flex-start; }
+.chat-message-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.chat-message-actions button { border: 0; background: transparent; padding: 2px 4px; font: inherit; font-size: 11px; cursor: pointer; opacity: .72; }
+.chat-message-actions button:hover { opacity: 1; text-decoration: underline; }
+.chat-message-actions button:disabled { cursor: wait; opacity: .45; }
+.chat-bubble em { opacity: .7; }
