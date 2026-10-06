@@ -230,6 +230,7 @@ export function CommunityPage() {
   const [groupName, setGroupName] = useState('')
   const [groupDescription, setGroupDescription] = useState('')
   const [groupSaving, setGroupSaving] = useState(false)
+  const isGroupAdmin = Boolean(session?.user && group && (group.created_by === session.user.id || members.some((member) => member.user_id === session.user.id && member.role === 'admin')))
   const [groupUnreadCount, setGroupUnreadCount] = useState(0)
   const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(false)
   const [isLoadingOlderGroupMessages, setIsLoadingOlderGroupMessages] = useState(false)
@@ -1816,10 +1817,17 @@ export function CommunityGroupPage() {
   }
 
   async function deleteGroupMessage(messageId: string) {
-    if (!session?.user) return
+    if (!session?.user || !groupId) return
+    const target = messages.find((item) => item.id === messageId)
+    const canDelete = target?.sender_id === session.user.id || isGroupAdmin
+    if (!canDelete) return
     try {
-      const { error: deleteError } = await supabase.from('community_group_messages').delete().eq('id', messageId).eq('sender_id', session.user.id)
+      const { error: deleteError } = await supabase
+        .from('community_group_messages')
+        .delete()
+        .eq('id', messageId)
       if (deleteError) throw deleteError
+      if (target?.media_url) await deleteGroupMedia([target.media_url]).catch(() => undefined)
       setMessages((current) => current.filter((item) => item.id !== messageId))
     } catch (caught) {
       setError(userFacingError(caught, 'Could not delete this message.'))
@@ -1866,7 +1874,7 @@ export function CommunityGroupPage() {
             {item.media_signed_url && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={item.media_signed_url} controls playsInline preload="metadata" />}
             {item.content && <p className="chat-message-text">{item.content}</p>
             <span>{new Date(item.created_at).toLocaleTimeString()}</span>
-            {mine && <button type="button" className="community-group-message__delete" onClick={() => void deleteGroupMessage(item.id)} aria-label="Delete message">Delete</button>}
+            {(mine || isGroupAdmin) && <button type="button" className="community-group-message__delete" onClick={() => void deleteGroupMessage(item.id)} aria-label={mine ? 'Delete message' : 'Delete message as admin'}>{mine ? 'Delete' : 'Delete · Admin'}</button>}
           </div>
         </div>
       }) : <p className="micro-note">No messages yet. Say hello to the group.</p>}
