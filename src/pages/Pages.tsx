@@ -574,6 +574,8 @@ export function CommentsPage() {
   const { session } = useAuth()
   const [post, setPost] = useState<FeedPost | null>(null)
   const [comments, setComments] = useState<CommentRecord[]>([])
+  const [commentsHasMore, setCommentsHasMore] = useState(false)
+  const [isLoadingMoreComments, setIsLoadingMoreComments] = useState(false)
   const [commentLikes, setCommentLikes] = useState<Record<string, { count: number; liked: boolean }>>({})
   const [content, setContent] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -587,7 +589,8 @@ export function CommentsPage() {
     setError('')
     setPost(null)
     setComments([])
-    Promise.all([loadPost(postId), loadComments(postId), loadBlockedUserIds()]).then(([nextPost, nextComments, blockedIds]) => {
+    setCommentsHasMore(false)
+    Promise.all([loadPost(postId), loadComments(postId), loadBlockedUserIds()]).then(([nextPost, commentPage, blockedIds]) => {
       if (!active) return
       if (nextPost && blockedIds.includes(nextPost.user_id)) {
         setPost(null)
@@ -595,7 +598,8 @@ export function CommentsPage() {
         return
       }
       setPost(nextPost)
-      setComments(nextComments.filter((comment) => !blockedIds.includes(comment.user_id)))
+      setComments(commentPage.comments.filter((comment) => !blockedIds.includes(comment.user_id)))
+      setCommentsHasMore(commentPage.hasMore)
     }).catch((caught: unknown) => {
       if (active) setError(userFacingError(caught, 'Could not load this conversation.'))
     }).finally(() => {
@@ -619,6 +623,22 @@ export function CommentsPage() {
     return () => { active = false }
   }, [comments, session?.user.id])
 
+  async function loadMoreComments() {
+    if (isLoadingMoreComments || !commentsHasMore) return
+    setIsLoadingMoreComments(true)
+    try {
+      const blockedIds = await loadBlockedUserIds()
+      const page = await loadComments(postId, comments.length)
+      const visible = page.comments.filter((comment) => !blockedIds.includes(comment.user_id))
+      setComments((current) => [...current, ...visible.filter((item) => !current.some((existing) => existing.id === item.id))])
+      setCommentsHasMore(page.hasMore)
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not load more comments.'))
+    } finally {
+      setIsLoadingMoreComments(false)
+    }
+  }
+
   async function submitComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!content.trim() || isSubmitting) return
@@ -627,7 +647,9 @@ export function CommentsPage() {
     try {
       const refreshedComments = await createComment(postId, content)
       const blockedIds = await loadBlockedUserIds()
-      setComments(refreshedComments.filter((comment) => !blockedIds.includes(comment.user_id)))
+      const visible = refreshedComments.comments.filter((comment) => !blockedIds.includes(comment.user_id))
+      setComments(visible)
+      setCommentsHasMore(refreshedComments.hasMore)
       setContent('')
     } catch (caught) {
       setError(userFacingError(caught, 'Could not send this comment.'))
@@ -656,7 +678,7 @@ export function CommentsPage() {
   if (!post) return <section className="page-stack"><EmptyState title="Post not found" description="This post is not available." /></section>
   const postAuthor = post.author?.display_name || post.author?.username || 'community post'
 
-  return <section className="page-stack page-stack--narrow"><Button to={`/posts/${post.id}`} variant="quiet"><ArrowLeft size={16} />Back to post</Button><PageHeading eyebrow="COMMUNITY COMMENTS" title="The conversation" description={`On ${postAuthor}'s post`} />{error && <p className="field__error" role="alert">{error}</p>}<div className="comment-list">{comments.length ? comments.map((comment) => <CommentItemCard key={comment.id} comment={comment} like={commentLikes[comment.id] ?? { count: 0, liked: false }} isLikePending={pendingLikeIds.includes(comment.id)} onToggleLike={toggleLike} onUpdated={(commentId, updatedContent) => setComments((current) => current.map((item) => item.id === commentId ? { ...item, content: updatedContent } : item))} onDeleted={(commentId) => { setComments((current) => current.filter((item) => item.id !== commentId)); setCommentLikes((current) => { const next = { ...current }; delete next[commentId]; return next }) }} />) : <EmptyState title="No comments yet" description="Start the conversation." />}</div><form className="comment-compose" onSubmit={submitComment}><Input aria-label="Write a comment" placeholder="Add to the conversation..." value={content} onChange={(event) => setContent(event.target.value)} /><Button type="submit" iconOnly aria-label="Send comment" disabled={!content.trim() || isSubmitting}>{isSubmitting ? '…' : <Send size={17} />}</Button></form></section>
+  return <section className="page-stack page-stack--narrow"><Button to={`/posts/${post.id}`} variant="quiet"><ArrowLeft size={16} />Back to post</Button><PageHeading eyebrow="COMMUNITY COMMENTS" title="The conversation" description={`On ${postAuthor}'s post`} />{error && <p className="field__error" role="alert">{error}</p>}<div className="comment-list">{comments.length ? comments.map((comment) => <CommentItemCard key={comment.id} comment={comment} like={commentLikes[comment.id] ?? { count: 0, liked: false }} isLikePending={pendingLikeIds.includes(comment.id)} onToggleLike={toggleLike} onUpdated={(commentId, updatedContent) => setComments((current) => current.map((item) => item.id === commentId ? { ...item, content: updatedContent } : item))} onDeleted={(commentId) => { setComments((current) => current.filter((item) => item.id !== commentId)); setCommentLikes((current) => { const next = { ...current }; delete next[commentId]; return next }) }} />) : <EmptyState title="No comments yet" description="Start the conversation." />}</div>{commentsHasMore && <Button variant="outline" onClick={() => void loadMoreComments()} disabled={isLoadingMoreComments}>{isLoadingMoreComments ? 'Loading more comments…' : 'Load more comments'}</Button>}<form className="comment-compose" onSubmit={submitComment}><Input aria-label="Write a comment" placeholder="Add to the conversation..." value={content} onChange={(event) => setContent(event.target.value)} /><Button type="submit" iconOnly aria-label="Send comment" disabled={!content.trim() || isSubmitting}>{isSubmitting ? '…' : <Send size={17} />}</Button></form></section>
 }
 
 export function ProfilePage() {
