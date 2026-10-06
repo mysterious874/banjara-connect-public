@@ -1911,9 +1911,14 @@ export function CommunityGroupPage() {
             <Avatar name={member.display_name || member.username} image={member.avatar_url ?? undefined} />
             <span><strong>{member.display_name || member.username || 'Community member'}</strong><small>@{member.username || 'member'} · {member.role === 'admin' ? 'Admin' : 'Member'}</small></span>
             {member.role === 'admin' && <ShieldCheck size={16} aria-label="Admin" />}
-            {isCurrentAdmin && !isSelf && <Button type="button" variant="quiet" onClick={() => void setMemberRole(member.user_id, member.role === 'admin' ? 'member' : 'admin')} disabled={!!memberAction}>
-              {rolePending ? '…' : member.role === 'admin' ? 'Remove admin' : 'Make admin'}
-            </Button>}
+            {isCurrentAdmin && !isSelf && <span className="community-group-member-actions">
+              <Button type="button" variant="quiet" onClick={() => void setMemberRole(member.user_id, member.role === 'admin' ? 'member' : 'admin')} disabled={!!memberAction}>
+                {rolePending ? '…' : member.role === 'admin' ? 'Remove admin' : 'Make admin'}
+              </Button>
+              <Button type="button" variant="quiet" onClick={() => void removeGroupMember(member.user_id)} disabled={!!memberAction}>
+                {memberAction === member.user_id ? '…' : 'Remove'}
+              </Button>
+            </span>}
           </div>
         })}</div>
         <Button type="button" variant="outline" onClick={() => void leaveGroup()} disabled={memberAction === 'leave'}>{memberAction === 'leave' ? 'Leaving…' : 'Leave community'}</Button>
