@@ -20,6 +20,7 @@ import { deletePostMedia, uploadPostMedia, validatePostMedia } from '../utils/me
 import { deleteProfileAvatar, profileAvatarPathFromUrl, uploadProfileAvatar, validateProfileAvatar } from '../utils/profileMediaData'
 import { fetchCurrentLocation, searchLocationSuggestions, type LocationSuggestion } from '../utils/locationData'
 import { validateChatMedia } from '../utils/chatMediaData'
+import { createStory, deleteStory, loadActiveStories, validateStoryMedia, type StoryRecord } from '../utils/storyData'
 import { userFacingError } from '../utils/userFacingError'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, type NotificationRecord } from '../utils/notificationData'
@@ -828,7 +829,128 @@ export function EditProfilePage() {
   </form></section>
 }
 export function StoriesPage() {
-  return <section className="page-stack"><PageHeading eyebrow="LITTLE WINDOWS INTO TODAY" title="Stories" description="Short community moments, curated for this frontend preview." /><PreviewNotice /><div className="story-preview-grid">{previewUsers.map((user, index) => <Link to="/home" className={`story-preview story-preview--${user.tone}`} key={user.handle}><div className="story-preview__top"><Avatar name={user.name} initials={user.initials} tone={user.tone} /><span>{user.name}<small>{index + 1}h · sample story</small></span></div><div className="story-preview__center"><span>✳</span><p>{['A stitch, a story, and a slow morning.', 'There is always room for one more at the table.', 'A little color from the weekend gathering.'][index]}</p></div><span className="story-preview__bottom">VIEW SAMPLE STORY <ArrowRight size={14} /></span></Link>)}</div></section>
+  const { session, profile } = useAuth()
+  const [stories, setStories] = useState<StoryRecord[]>([])
+  const [selectedStory, setSelectedStory] = useState<StoryRecord | null>(null)
+  const [storyText, setStoryText] = useState('')
+  const [storyFile, setStoryFile] = useState<File | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isPublishing, setIsPublishing] = useState(false)
+  const [isReplying, setIsReplying] = useState(false)
+  const [error, setError] = useState('')
+  const [replyMessage, setReplyMessage] = useState('')
+  const [success, setSuccess] = useState('')
+
+  async function refreshStories() {
+    setIsLoading(true)
+    setError('')
+    try {
+      const next = await loadActiveStories()
+      setStories(next)
+      setSelectedStory((current) => current && next.some((item) => item.id === current.id) ? next.find((item) => item.id === current.id) ?? null : next[0] ?? null)
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not load stories.'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void refreshStories()
+  }, [session?.user.id])
+
+  function handleStoryFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      validateStoryMedia(file)
+      setStoryFile(file)
+      setError('')
+    } catch (caught) {
+      setStoryFile(null)
+      setError(userFacingError(caught, 'Could not select this story media.'))
+      event.target.value = ''
+    }
+  }
+
+  async function publishStory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!session?.user.id || (!storyText.trim() && !storyFile) || isPublishing) return
+    setIsPublishing(true)
+    setError('')
+    try {
+      await createStory(session.user.id, storyText, storyFile)
+      setStoryText('')
+      setStoryFile(null)
+      const input = document.getElementById('story-media') as HTMLInputElement | null
+      if (input) input.value = ''
+      await refreshStories()
+      setSuccess('Your story is live for 24 hours.')
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not publish your story.'))
+    } finally {
+      setIsPublishing(false)
+    }
+  }
+
+  async function removeStory(story: StoryRecord) {
+    if (!session?.user.id || story.user_id !== session.user.id) return
+    try {
+      await deleteStory(story)
+      setStories((current) => current.filter((item) => item.id !== story.id))
+      setSelectedStory((current) => current?.id === story.id ? null : current)
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not delete this story.'))
+    }
+  }
+
+  async function replyToStory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedStory || !replyMessage.trim() || !session?.user.id || selectedStory.user_id === session.user.id || isReplying) return
+    setIsReplying(true)
+    setError('')
+    try {
+      const conversation = await getOrCreateConversation(selectedStory.user_id)
+      await sendConversationMessage(conversation.id, `↩️ Replied to ${selectedStory.author?.display_name || selectedStory.author?.username || 'your'} story:\n\n${replyMessage.trim()}\n\nStory: /stories`)
+      setReplyMessage('')
+      setSuccess('Message sent to the story owner.')
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not send your story reply.'))
+    } finally {
+      setIsReplying(false)
+    }
+  }
+
+  const grouped = Array.from(new Map(stories.map((story) => [story.user_id, story])).values())
+  const ownStory = stories.find((story) => story.user_id === session?.user.id)
+  const activeStory = selectedStory
+  return <section className="page-stack">
+    <PageHeading eyebrow="LITTLE WINDOWS INTO TODAY" title="Stories" description="Share a photo, video, or message. Stories disappear after 24 hours." />
+    <form className="story-create-box" onSubmit={publishStory}>
+      <div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>Your story</strong><span>Visible for 24 hours</span></span></div>
+      <textarea aria-label="Story message" value={storyText} onChange={(event) => setStoryText(event.target.value)} placeholder="Add a message to your story (optional)" maxLength={500} />
+      <div className="story-create-box__media"><label className="button button--outline" htmlFor="story-media">Add photo or video</label><input id="story-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleStoryFile} />{storyFile && <span className="micro-note">{storyFile.name} · {(storyFile.size / (1024 * 1024)).toFixed(1)} MB</span>}<span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span></div>
+      <Button type="submit" disabled={isPublishing || (!storyText.trim() && !storyFile)}>{isPublishing ? 'Publishing…' : 'Post story'} <Send size={15} /></Button>
+    </form>
+    {error && <p className="field__error" role="alert">{error}</p>}
+    {success && <p className="micro-note" role="status">{success}</p>}
+    {isLoading ? <Loading label="Loading stories" /> : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="stories-page-layout">
+      <div className="story-list-panel"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div>{grouped.map((story) => {
+        const name = story.author?.display_name || story.author?.username || 'Community member'
+        const selected = activeStory?.user_id === story.user_id
+        return <button type="button" key={story.user_id} className={`story-user-row${selected ? ' is-selected' : ''}`} onClick={() => { setSelectedStory(story); setReplyMessage(''); setSuccess('') }}>
+          <span className="story-user-row__ring"><Avatar name={name} image={story.author?.avatar_url ?? undefined} size="large" /></span>
+          <span><strong>{name}</strong><small>{new Date(story.created_at).toLocaleTimeString()}</small></span>
+          {story.user_id === session?.user.id && <span className="local-label">You</span>}
+        </button>
+      })}</div>
+      {activeStory && <article className="story-viewer">
+        <div className="story-viewer__head"><div className="post-card__author"><Avatar name={activeStory.author?.display_name || activeStory.author?.username || 'Community member'} image={activeStory.author?.avatar_url ?? undefined} /><span><strong>{activeStory.author?.display_name || activeStory.author?.username || 'Community member'}</strong><span>{new Date(activeStory.created_at).toLocaleString()}</span></span></div>{activeStory.user_id === session?.user.id && <Button variant="quiet" onClick={() => void removeStory(activeStory)}><Trash2 size={15} />Delete</Button>}</div>
+        <div className="story-viewer__media">{activeStory.media_url && activeStory.media_type === 'video' && <video src={activeStory.media_url} controls autoPlay playsInline className="story-viewer__asset" />}{activeStory.media_url && activeStory.media_type === 'image' && <img src={activeStory.media_url} alt="Story" className="story-viewer__asset" />}{activeStory.content && <p className="story-viewer__caption">{activeStory.content}</p>}</div>
+        {activeStory.user_id !== session?.user.id && <form className="story-reply" onSubmit={replyToStory}><Input aria-label="Send message" placeholder="Send message…" value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /><Button type="submit" iconOnly aria-label="Send message" disabled={!replyMessage.trim() || isReplying}>{isReplying ? '…' : <Send size={17} />}</Button></form>}
+      </article>}
+    </div>}
+  </section>
 }
 
 export function ReelsPage() {
