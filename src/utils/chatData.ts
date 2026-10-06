@@ -44,60 +44,13 @@ export async function getOrCreateConversation(targetUserId: string) {
 }
 
 async function createOrFindConversation(userId: string, targetUserId: string) {
-  const [{ data: outgoingBlock, error: outgoingBlockError }, { data: incomingBlock, error: incomingBlockError }] = await Promise.all([
-    supabase.from('blocks').select('blocker_id').eq('blocker_id', userId).eq('blocked_id', targetUserId).maybeSingle(),
-    supabase.from('blocks').select('blocker_id').eq('blocker_id', targetUserId).eq('blocked_id', userId).maybeSingle(),
-  ])
-  if (outgoingBlockError) throw outgoingBlockError
-  if (incomingBlockError) throw incomingBlockError
-  if (outgoingBlock || incomingBlock) throw new Error('Messaging is unavailable for this profile.')
-
-  const { data: ownMemberships, error: membershipError } = await supabase.from('conversation_members')
-    .select('conversation_id').eq('user_id', userId)
-  if (membershipError) throw membershipError
-  const conversationIds = [...new Set((ownMemberships ?? []).map((row) => row.conversation_id as string))]
-  if (conversationIds.length) {
-    const { data: members, error } = await supabase.from('conversation_members')
-      .select('conversation_id,user_id').in('conversation_id', conversationIds)
-    if (error) throw error
-    const memberMap = new Map<string, string[]>()
-    for (const member of members ?? []) {
-      const current = memberMap.get(member.conversation_id) ?? []
-      current.push(member.user_id)
-      memberMap.set(member.conversation_id, current)
-    }
-    const existing = conversationIds.find((id) => {
-      const ids = memberMap.get(id) ?? []
-      return ids.length === 2 && ids.includes(userId) && ids.includes(targetUserId)
-    })
-    if (existing) return existing
-  }
-
-  const { data: conversation, error: conversationError } = await supabase.from('conversations')
-    .insert({ created_by: userId }).select('id').single()
-  if (conversationError) throw conversationError
-
-  const { error: createMembersError } = await supabase.from('conversation_members').insert([
-    { conversation_id: conversation.id, user_id: userId },
-    { conversation_id: conversation.id, user_id: targetUserId },
-  ])
-  if (createMembersError) {
-    const { error: cleanupError } = await supabase.from('conversations').delete()
-      .eq('id', conversation.id).eq('created_by', userId)
-    if (cleanupError) {
-      if (import.meta.env.DEV) {
-        console.error('Conversation setup and cleanup failed.', {
-          memberErrorCode: createMembersError.code,
-          cleanupErrorCode: cleanupError.code,
-        })
-      }
-      throw new Error('Could not finish creating the conversation. Please try again.')
-    }
-    throw createMembersError
-  }
-  return conversation.id as string
+  const { data, error } = await supabase.rpc('get_or_create_direct_conversation', {
+    p_target_user_id: targetUserId,
+  })
+  if (error) throw error
+  if (!data) throw new Error('Could not create the conversation.')
+  return data as string
 }
-
 async function loadConversationSummaryMessages(conversationId: string, userId: string) {
   const pageSize = 500
   let offset = 0
