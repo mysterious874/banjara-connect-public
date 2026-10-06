@@ -1,6 +1,5 @@
 import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './authenticatedUser'
-import { loadBlockedUserIds } from './blockData'
 import { createChatMediaUrl, deleteChatMedia, uploadChatMedia } from './chatMediaData'
 import type { ProfileRecord } from '../types/app'
 import { subscribeToPostgresChanges, type RealtimeSubscriptionStatus } from './realtimeData'
