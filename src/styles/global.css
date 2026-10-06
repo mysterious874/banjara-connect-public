@@ -672,6 +672,31 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
 @keyframes splash-load { to { width: 100%; } }
 
 .desktop-nav { position: sticky; z-index: 65; top: 62px; display: none; gap: 5px; width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 7px 0; background: rgb(251 244 232 / 94%); border-bottom: 1px solid var(--bc-line); backdrop-filter: blur(16px); }
+.nav-icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.nav-badge {
+  position: absolute;
+  top: -9px;
+  right: -12px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  border: 2px solid var(--bc-paper, #fff);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
 .desktop-nav__item { display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px; color: var(--bc-muted); border-radius: 11px; font-size: 11px; font-weight: 800; }
 .desktop-nav__item:hover, .desktop-nav__item.is-active { color: var(--bc-maroon); background: #f0dfd2; }
 .bottom-nav { position: fixed; z-index: 125000; right: auto; bottom: max(8px, env(safe-area-inset-bottom)); left: 50%; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; width: min(calc(100vw - 14px), 680px); height: 68px; min-height: 0; padding: 6px; transform: translateX(-50%); background: rgb(255 250 242 / 96%); border: 1px solid var(--bc-line); border-radius: 23px; box-shadow: 0 16px 42px rgb(84 18 28 / 18%); backdrop-filter: blur(18px); }
