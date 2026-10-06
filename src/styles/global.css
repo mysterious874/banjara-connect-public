@@ -233,6 +233,15 @@ img { max-width: 100%; }
 .page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
 .page-heading h1 { font-size: 34px; }
 .page-heading p { max-width: 520px; margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.connect-search { display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 13px; color: var(--bc-muted); background: #fff; border: 1px solid var(--bc-line); border-radius: 10px; box-shadow: 0 5px 18px rgb(84 18 28 / 5%); }
+.connect-search:focus-within { border-color: #b99aa0; box-shadow: 0 0 0 3px rgb(123 30 43 / 8%); }
+.connect-search input { flex: 1; min-width: 0; color: var(--bc-text); background: transparent; border: 0; outline: 0; font-size: 13px; }
+.connect-search input::placeholder { color: #96908b; }
+.connect-search button { display: grid; width: 30px; height: 30px; padding: 0; place-items: center; color: var(--bc-muted); background: transparent; border: 0; border-radius: 50%; cursor: pointer; }
+.connect-search button:hover { background: var(--bc-soft); color: var(--bc-maroon); }
+.connect-search-results { display: grid; gap: 11px; padding: 15px; background: #fffaf6; border: 1px solid var(--bc-line); border-radius: 10px; }
+.connect-search-results .section-heading { margin: 0; }
+.connect-search-results .section-heading h2 { font-size: 16px; }
 .connect-feature { position: relative; display: flex; align-items: center; gap: 16px; min-height: 155px; overflow: hidden; padding: 22px; background: #eaf1ea; border: 1px solid #dce8dc; border-radius: 8px; }
 .connect-feature__icon { z-index: 1; display: grid; flex: none; width: 48px; height: 48px; place-items: center; color: var(--green); background: white; border-radius: 8px; }
 .connect-feature > div:nth-child(2) { z-index: 1; max-width: 420px; }
