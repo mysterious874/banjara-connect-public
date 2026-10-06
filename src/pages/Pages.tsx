@@ -224,12 +224,13 @@ export function CommunityPage() {
   const [hasMore, setHasMore] = useState(false)
   const [offset, setOffset] = useState(0)
   const [error, setError] = useState('')
-  const [groups, setGroups] = useState<Array<{ id: string; name: string; description: string; member_count: number }>>([])
+  const [groups, setGroups] = useState<Array<{ id: string; name: string; description: string; member_count: number; unread_count: number }>>([])
   const [groupsLoading, setGroupsLoading] = useState(true)
   const [groupModalOpen, setGroupModalOpen] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [groupDescription, setGroupDescription] = useState('')
   const [groupSaving, setGroupSaving] = useState(false)
+  const [groupUnreadCount, setGroupUnreadCount] = useState(0)
   const [selectedGroupMedia, setSelectedGroupMedia] = useState<File | null>(null)
   const [isSendingGroupMedia, setIsSendingGroupMedia] = useState(false)
   const groupMediaInputRef = useRef<HTMLInputElement | null>(null)
@@ -249,7 +250,21 @@ export function CommunityPage() {
       if (membersError) throw membersError
       const counts = new Map<string, number>()
       for (const member of members ?? []) counts.set(member.group_id, (counts.get(member.group_id) ?? 0) + 1)
-      setGroups((data ?? []).map((group) => ({ ...group, member_count: counts.get(group.id) ?? 0 })))
+      const { data: reads, error: readsError } = await supabase.from('community_group_message_reads').select('group_id,last_read_message_id').eq('user_id', session.user.id).in('group_id', ids)
+      if (readsError) throw readsError
+      const readMap = new Map((reads ?? []).map((row) => [row.group_id, row.last_read_message_id]))
+      const unreadCounts = new Map<string, number>()
+      for (const id of ids) {
+        const lastReadId = readMap.get(id)
+        let query = supabase.from('community_group_messages').select('id', { count: 'exact', head: true }).eq('group_id', id)
+        if (lastReadId) {
+          const { data: readMessage } = await supabase.from('community_group_messages').select('created_at').eq('id', lastReadId).maybeSingle()
+          if (readMessage?.created_at) query = query.gt('created_at', readMessage.created_at)
+        }
+        const { count } = await query
+        unreadCounts.set(id, count ?? 0)
+      }
+      setGroups((data ?? []).map((group) => ({ ...group, member_count: counts.get(group.id) ?? 0, unread_count: unreadCounts.get(group.id) ?? 0 })))
     } catch (caught) {
       setGroupError(userFacingError(caught, 'Could not load your communities.'))
     } finally {
@@ -309,7 +324,7 @@ export function CommunityPage() {
       <Button onClick={() => { setGroupError(''); setGroupModalOpen(true) }}><Plus size={16} />Create community</Button>
     </div>
 
-    {groupsLoading ? <Loading label="Loading your groups" /> : groups.length ? <div className="community-groups-list">{groups.map((group) => <Link to={`/community/groups/${group.id}`} className="community-group-card" key={group.id}><span className="community-group-card__icon"><Users size={20} /></span><div><strong>{group.name}</strong><p>{group.description || 'A Banjara Connect community group.'}</p><small>{group.member_count} {group.member_count === 1 ? 'member' : 'members'}</small></div><ChevronRight size={18} /></Link>)}</div> : <div className="community-groups-empty"><Users size={22} /><div><strong>No communities yet</strong><p>Create a group for your friends, family, region, interests or local circle.</p></div></div>}
+    {groupsLoading ? <Loading label="Loading your groups" /> : groups.length ? <div className="community-groups-list">{groups.map((group) => <Link to={`/community/groups/${group.id}`} className="community-group-card" key={group.id}><span className="community-group-card__icon"><Users size={20} /></span><div><strong>{group.name}</strong><p>{group.description || 'A Banjara Connect community group.'}</p><small>{group.member_count} {group.member_count === 1 ? 'member' : 'members'}{group.unread_count > 0 ? ` • ${group.unread_count} new` : ''}</small></div><ChevronRight size={18} /></Link>)}</div> : <div className="community-groups-empty"><Users size={22} /><div><strong>No communities yet</strong><p>Create a group for your friends, family, region, interests or local circle.</p></div></div>}
 
     <div className="community-action-card"><div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><small>Share something with the community</small></span></div><Button to="/create">Create a post <Send size={15} /></Button></div>
 
@@ -1449,6 +1464,9 @@ type CommunityGroupMessage = {
   group_id: string
   sender_id: string
   content: string
+  media_url: string | null
+  media_type: 'image' | 'video' | null
+  media_signed_url?: string | null
   created_at: string
 }
 
@@ -1514,8 +1532,13 @@ export function CommunityGroupPage() {
           : { data: [], error: null }
         if (profilesError) throw profilesError
         if (!active) return
+        const latestMessage = nextMessages[nextMessages.length - 1]
+        if (latestMessage) {
+          await supabase.rpc('mark_community_group_read', { p_group_id: groupId, p_message_id: latestMessage.id })
+        }
         setGroup(groupRow)
         setMessages(nextMessages)
+        setGroupUnreadCount(0)
         setProfiles(Object.fromEntries((senderProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])))
         setMembers(((memberRows ?? []) as Array<{ user_id: string; role: string }>).map((member) => {
           const profile = (senderProfiles ?? []).find((item) => item.id === member.user_id) as ProfileRecord | undefined
