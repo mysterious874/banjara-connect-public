@@ -782,6 +782,7 @@ export function ChatConversationPage() {
   const [pendingDeleteId, setPendingDeleteId] = useState('')
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([])
   const [selectedMedia, setSelectedMedia] = useState<File | null>(null)
+  const [isSendingMedia, setIsSendingMedia] = useState(false)
   const mediaInputRef = useRef<HTMLInputElement | null>(null)
   const longPressTimer = useRef<number | null>(null)
   const suppressNextMessageClick = useRef(false)
@@ -959,18 +960,32 @@ export function ChatConversationPage() {
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if ((!message.trim() && !selectedMedia) || isSending) return
-    setIsSending(true)
+    const textToSend = message.trim()
+    const mediaToSend = selectedMedia
+    if ((!textToSend && !mediaToSend) || isSendingMedia) return
     setError('')
+
+    if (mediaToSend) {
+      setIsSendingMedia(true)
+      clearSelectedMedia()
+      try {
+        const created = await sendConversationMessage(conversationId, textToSend, mediaToSend)
+        setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
+        if (textToSend === message.trim()) setMessage('')
+      } catch (caught) {
+        setError(userFacingError(caught, 'Could not send the photo or video.'))
+      } finally {
+        setIsSendingMedia(false)
+      }
+      return
+    }
+
     try {
-      const created = await sendConversationMessage(conversationId, message, selectedMedia ?? undefined)
+      const created = await sendConversationMessage(conversationId, textToSend)
       setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
       setMessage('')
-      clearSelectedMedia()
     } catch (caught) {
       setError(userFacingError(caught, 'Could not send this message.'))
-    } finally {
-      setIsSending(false)
     }
   }
 
@@ -984,7 +999,7 @@ export function ChatConversationPage() {
     return
   }
   if (selectedMessageIds.length > 0) toggleMessageSelection(item.id)
-}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" />}{item.content && <p className="chat-message-text">{item.content}</p>}</>}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{selectedMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" onClick={() => mediaInputRef.current?.click()} disabled={isSending}><Paperclip size={18} /></Button><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={(!message.trim() && !selectedMedia) || isSending} iconOnly aria-label="Send message">{isSending ? '…' : <Send size={17} />}</Button></form><p className="micro-note">Photos and videos up to 50 MB</p></div></section>
+}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" />}{item.content && <p className="chat-message-text">{item.content}</p>}</>}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{isSendingMedia && <div className="chat-media-sending" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending photo/video…</strong><small>You can continue chatting while it sends</small><span className="chat-media-sending__track"><span /></span></span></div>}{selectedMedia && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" onClick={() => mediaInputRef.current?.click()}><Paperclip size={18} /></Button><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="submit" disabled={(!message.trim() && !selectedMedia) || isSendingMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form><p className="micro-note">Photos and videos up to 50 MB</p></div></section>
 }
 
 export function NotificationsPage() {
