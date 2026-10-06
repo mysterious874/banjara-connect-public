@@ -4,7 +4,7 @@ import { loadBlockedUserIds } from './blockData'
 import { requireAuthenticatedUserId } from './authenticatedUser'
 
 const profileColumns = 'id,username,display_name,avatar_url,bio,location,is_verified,created_at'
-const profilePageSize = 50
+const profilePageSize = 20
 
 export async function loadProfilesPage(offset = 0): Promise<{ profiles: ProfileRecord[]; hasMore: boolean; nextOffset: number }> {
   const currentUserId = await requireAuthenticatedUserId()
