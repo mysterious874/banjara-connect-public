@@ -11,7 +11,7 @@ import { userFacingError } from '../utils/userFacingError'
 export function SplashPage() {
   const navigate = useNavigate()
   useEffect(() => {
-    const timer = window.setTimeout(() => navigate('/home', { replace: true }), 3200)
+    const timer = window.setTimeout(() => navigate('/home', { replace: true }), 4000)
     return () => window.clearTimeout(timer)
   }, [navigate])
   return <main className="splash"><div className="splash__pattern" aria-hidden="true" /><div className="splash__content"><span className="splash__logo-wrap"><span className="splash__logo-ring" /><BrandMark size="large" /></span><h1>Banjara Connect</h1><span className="splash__line" /><p>Apni community. Apni pehchaan. Apna connection.</p><span className="splash__loader" aria-hidden="true"><span /></span></div></main>
