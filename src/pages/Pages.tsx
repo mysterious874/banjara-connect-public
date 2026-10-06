@@ -123,7 +123,7 @@ export function HomePage() {
     setPostsError('')
     try {
       const blockedIds = await loadBlockedUserIds()
-      const page = await loadPostsPage({ excludeUserIds: blockedIds, offset: postsOffset })
+      const page = await loadPostsPage({ excludeUserIds: blockedIds, offset: postsOffset, limit: 20 })
       setPosts((current) => {
         const seen = new Set(current.map((post) => post.id))
         return [...current, ...page.posts.filter((post) => !seen.has(post.id))]
