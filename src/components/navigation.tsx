@@ -51,7 +51,7 @@ export function Header() {
     void refresh()
     const unsubscribe = subscribeToPostgresChanges({
       topic: `notifications-badge:${session.user.id}`,
-      event: 'INSERT',
+      event: '*',
       table: 'notifications',
       filter: `user_id=eq.${session.user.id}`,
     }, () => { void refresh() })
