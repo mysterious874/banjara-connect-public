@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Plus, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Plus, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, X, Flag } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
@@ -230,6 +230,11 @@ export function CommunityPage() {
   const [groupName, setGroupName] = useState('')
   const [groupDescription, setGroupDescription] = useState('')
   const [groupSaving, setGroupSaving] = useState(false)
+  const [reportTarget, setReportTarget] = useState<{ messageId?: string; userId: string; label: string } | null>(null)
+  const [reportReason, setReportReason] = useState('Spam or unwanted content')
+  const [reportDetails, setReportDetails] = useState('')
+  const [reportSaving, setReportSaving] = useState(false)
+  const [reportError, setReportError] = useState('')
   const isGroupAdmin = Boolean(session?.user && group && (group.created_by === session.user.id || members.some((member) => member.user_id === session.user.id && member.role === 'admin')))
   const [groupUnreadCount, setGroupUnreadCount] = useState(0)
   const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(false)
@@ -1859,6 +1864,16 @@ export function CommunityGroupPage() {
         <Button type="submit" disabled={groupSaving}>{groupSaving ? 'Saving…' : 'Save changes'}</Button>
       </form>
     </Modal>
+    <Modal open={!!reportTarget} title={reportTarget ? 'Report ' + reportTarget.label : 'Report'} onClose={() => { if (!reportSaving) { setReportTarget(null); setReportError('') } }}>
+      <form className="form-stack" onSubmit={submitGroupReport}>
+        <label className="field"><span className="field__label">Reason</span><select className="field__control" value={reportReason} onChange={(event) => setReportReason(event.target.value)} disabled={reportSaving}>
+          <option>Spam or unwanted content</option><option>Harassment or bullying</option><option>Hate or abusive content</option><option>Threats or dangerous content</option><option>Sexual or inappropriate content</option><option>Other</option>
+        </select></label>
+        <label className="field"><span className="field__label">Details (optional)</span><textarea className="field__control field__textarea" value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={1000} placeholder="Tell admins what happened" disabled={reportSaving} /></label>
+        {reportError && <p className="field__error" role="alert">{reportError}</p>}
+        <Button type="submit" disabled={reportSaving}>{reportSaving ? 'Submitting…' : 'Submit report'}</Button>
+      </form>
+    </Modal>
     <ConfirmationDialog open={groupDeleteOpen} title="Delete this community?" description="This permanently deletes the group, its members and its messages. This action cannot be undone." confirmLabel={groupSaving ? 'Deleting…' : 'Delete community'} onClose={() => { if (!groupSaving) setGroupDeleteOpen(false) }} onConfirm={() => void deleteGroup()} />
 
     <div className="chat-messages">
@@ -1875,6 +1890,7 @@ export function CommunityGroupPage() {
             {item.content && <p className="chat-message-text">{item.content}</p>
             <span>{new Date(item.created_at).toLocaleTimeString()}</span>
             {(mine || isGroupAdmin) && <button type="button" className="community-group-message__delete" onClick={() => void deleteGroupMessage(item.id)} aria-label={mine ? 'Delete message' : 'Delete message as admin'}>{mine ? 'Delete' : 'Delete · Admin'}</button>}
+            {!mine && <button type="button" className="community-group-message__delete" onClick={() => { setReportTarget({ messageId: item.id, userId: item.sender_id, label: senderName }); setReportError('') }} aria-label="Report message"><Flag size={13} /> Report</button>}
           </div>
         </div>
       }) : <p className="micro-note">No messages yet. Say hello to the group.</p>}
@@ -1911,6 +1927,7 @@ export function CommunityGroupPage() {
             <Avatar name={member.display_name || member.username} image={member.avatar_url ?? undefined} />
             <span><strong>{member.display_name || member.username || 'Community member'}</strong><small>@{member.username || 'member'} · {member.role === 'admin' ? 'Admin' : 'Member'}</small></span>
             {member.role === 'admin' && <ShieldCheck size={16} aria-label="Admin" />}
+            {!isSelf && <Button type="button" variant="quiet" onClick={() => { setReportTarget({ userId: member.user_id, label: member.display_name || member.username || 'Community member' }); setReportError('') }}><Flag size={13} /> Report</Button>}
             {isCurrentAdmin && !isSelf && <span className="community-group-member-actions">
               <Button type="button" variant="quiet" onClick={() => void setMemberRole(member.user_id, member.role === 'admin' ? 'member' : 'admin')} disabled={!!memberAction}>
                 {rolePending ? '…' : member.role === 'admin' ? 'Remove admin' : 'Make admin'}
