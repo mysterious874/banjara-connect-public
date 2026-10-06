@@ -10,6 +10,8 @@ export type NotificationRecord = {
   post_id: string | null
   comment_id: string | null
   message_id: string | null
+  group_id: string | null
+  group_message_id: string | null
   is_read: boolean
   created_at: string
   actor: Pick<ProfileRecord, 'username' | 'display_name' | 'avatar_url'> | null
@@ -29,7 +31,7 @@ export async function loadUnreadNotificationCount(): Promise<number> {
 export async function loadNotifications(): Promise<NotificationRecord[]> {
   const userId = await requireAuthenticatedUserId()
   const { data, error } = await supabase.from('notifications')
-    .select('id,user_id,actor_id,type,post_id,comment_id,message_id,is_read,created_at')
+    .select('id,user_id,actor_id,type,post_id,comment_id,message_id,group_id,group_message_id,is_read,created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(100)
