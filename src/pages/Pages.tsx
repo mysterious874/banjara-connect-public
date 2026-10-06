@@ -10,7 +10,6 @@ import { Avatar, Button, ConfirmationDialog, EmptyState, ErrorState, Input, Load
 import { UserCard } from '../components/users'
 import { useAuth } from '../hooks/AuthProvider'
 import { usePreviewToast } from '../hooks/usePreviewToast'
-import { previewUsers } from '../utils/previewData'
 import { loadBlockState, loadBlockedUserIds, toggleBlock } from '../utils/blockData'
 import { loadPost, loadPostsPage } from '../utils/postData'
 import { filterProfiles, loadProfiles, loadProfilesPage } from '../utils/profileData'
@@ -951,7 +950,7 @@ export function StoriesPage() {
     setError('')
     try {
       const conversation = await getOrCreateConversation(selectedStory.user_id)
-      await sendConversationMessage(conversation.id, `↩️ Replied to ${selectedStory.author?.display_name || selectedStory.author?.username || 'your'} story:\n\n${replyMessage.trim()}\n\nStory: /stories`)
+      await sendConversationMessage(conversation, `↩️ Replied to ${selectedStory.author?.display_name || selectedStory.author?.username || 'your'} story:\n\n${replyMessage.trim()}\n\nStory: /stories`)
       setReplyMessage('')
       setSuccess('Message sent')
     } catch (caught) {
@@ -1066,7 +1065,6 @@ export function ChatConversationPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
   const [hasOlderMessages, setHasOlderMessages] = useState(false)
-  const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
   const [realtimeError, setRealtimeError] = useState('')
   const [pendingDeleteId, setPendingDeleteId] = useState('')
