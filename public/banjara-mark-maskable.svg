@@ -1,18 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <rect width="64" height="64" fill="#5E1B2C"/>
-  <g transform="translate(8 8) scale(.75)">
-    <defs>
-      <linearGradient id="brand" x1="8" y1="6" x2="58" y2="60" gradientUnits="userSpaceOnUse">
-        <stop stop-color="#5E1B2C"/>
-        <stop offset="1" stop-color="#C65A32"/>
-      </linearGradient>
-    </defs>
-    <rect width="64" height="64" rx="18" fill="url(#brand)"/>
-    <path d="M32 7 38 17 32 25 26 17 32 7Z" fill="#FFF2CD"/>
-    <path d="M57 32 47 38 39 32 47 26 57 32Z" fill="#FFF2CD"/>
-    <path d="M32 57 26 47 32 39 38 47 32 57Z" fill="#FFF2CD"/>
-    <path d="M7 32 17 26 25 32 17 38 7 32Z" fill="#FFF2CD"/>
-    <circle cx="32" cy="32" r="7" fill="#C99A32"/>
-    <path d="M32 28.5v7M28.5 32h7" stroke="#7A263A" stroke-width="2.2" stroke-linecap="round"/>
+  <g transform="translate(5 5) scale(.84375)">
+    <rect width="64" height="64" rx="18" fill="#7A263A"/>
+    <path d="M32 9 54 32 32 55 10 32 32 9Z" stroke="#C99A32" stroke-width="2.2"/>
+    <path d="M21 20v24M21 21h11.5c5.2 0 8.5 2.7 8.5 6.5 0 3.1-2 5.4-5.4 6.1 4 .6 6.4 3.1 6.4 6.4 0 4.3-3.6 7-9.3 7H21" stroke="#FFF9EF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M29 26h3.3c2.2 0 3.5.9 3.5 2.5s-1.3 2.5-3.5 2.5H29M29 37h4.2c2.5 0 4 1 4 2.8 0 1.8-1.5 2.8-4 2.8H29" stroke="#C99A32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="32" cy="32" r="2.2" fill="#C99A32"/>
   </g>
 </svg>
