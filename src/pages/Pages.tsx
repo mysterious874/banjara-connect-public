@@ -1503,6 +1503,11 @@ export function CommunityGroupPage() {
         if (membersError) throw membersError
         if (!groupRow) throw new Error('This community no longer exists.')
         const nextMessages = (rows ?? []) as CommunityGroupMessage[]
+        for (const groupMessage of nextMessages) {
+          if (groupMessage.media_url) {
+            try { groupMessage.media_signed_url = await createGroupMediaUrl(groupMessage.media_url) } catch { groupMessage.media_signed_url = null }
+          }
+        }
         const senderIds = [...new Set([...nextMessages.map((row) => row.sender_id), ...((memberRows ?? []) as Array<{ user_id: string }>).map((row) => row.user_id)])]
         const { data: senderProfiles, error: profilesError } = senderIds.length
           ? await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', senderIds)
@@ -1531,6 +1536,11 @@ export function CommunityGroupPage() {
               .limit(100)
             if (latestError || !active) return
             const next = (latest ?? []) as CommunityGroupMessage[]
+            for (const groupMessage of next) {
+              if (groupMessage.media_url) {
+                try { groupMessage.media_signed_url = await createGroupMediaUrl(groupMessage.media_url) } catch { groupMessage.media_signed_url = null }
+              }
+            }
             setMessages(next)
             const ids = [...new Set(next.map((row) => row.sender_id))]
             if (ids.length) {
