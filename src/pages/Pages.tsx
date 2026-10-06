@@ -2249,8 +2249,63 @@ export function NotificationsPage() {
 }
 
 export function AssistantPage() {
-  const { notify } = usePreviewToast()
-  return <section className="assistant-screen" aria-label="Banjara Connect AI preview"><header className="assistant-navbar"><div className="assistant-navbar__inner"><Button to="/home" variant="quiet" iconOnly aria-label="Back to community"><ArrowLeft size={18} /></Button><div className="assistant-brand"><BrandMark size="small" /><span><strong>Ask with AI</strong><small>Banjara Connect AI · preview</small></span></div><Button variant="quiet" iconOnly aria-label="New preview conversation" onClick={() => notify('AI is not connected. No conversation was started.')}><Plus size={17} /></Button></div></header><div className="assistant-shell"><PreviewNotice>AI IS NOT CONNECTED IN THIS PHASE</PreviewNotice><div className="assistant-messages"><div className="assistant-welcome"><BrandMark size="large" /><h1>What can I help you with?</h1><p>This visual preview does not generate answers or send messages to an AI service.</p></div></div><div className="assistant-prompts"><button type="button" onClick={() => notify('Assistant suggestions are placeholders in this preview.')}>Community resources <ArrowRight size={15} /></button><button type="button" onClick={() => notify('Assistant suggestions are placeholders in this preview.')}>Banjara history & culture <ArrowRight size={15} /></button><button type="button" onClick={() => notify('Assistant suggestions are placeholders in this preview.')}>Find a local gathering <ArrowRight size={15} /></button></div><form className="assistant-compose" onSubmit={(event) => { event.preventDefault(); notify('The assistant is not connected. Your message was not sent.') }}><Input aria-label="Ask the assistant" placeholder="Assistant is unavailable in this preview" disabled /><Button type="submit" disabled iconOnly aria-label="Send question"><Send size={18} /></Button></form></div></section>
+  const { session } = useAuth()
+  const [searchParams] = useSearchParams()
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
+  const [input, setInput] = useState(searchParams.get('q') ?? '')
+  const [isSending, setIsSending] = useState(false)
+  const [error, setError] = useState('')
+
+  async function ask(question: string) {
+    const value = question.trim()
+    if (!value || isSending || !session?.access_token) return
+    const nextMessages = [...messages, { role: 'user' as const, content: value }]
+    setMessages(nextMessages)
+    setInput('')
+    setError('')
+    setIsSending(true)
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke('banjara-ai', {
+        body: { messages: nextMessages },
+      })
+      if (functionError) throw functionError
+      if (!data?.answer) throw new Error('AI returned no answer.')
+      setMessages((current) => [...current, { role: 'assistant', content: data.answer }])
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not connect to AI.'))
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  useEffect(() => {
+    const initial = searchParams.get('q')?.trim()
+    if (initial) void ask(initial)
+  }, [])
+
+  return <section className="assistant-screen" aria-label="Banjara Connect AI">
+    <header className="assistant-navbar"><div className="assistant-navbar__inner">
+      <Button to="/home" variant="quiet" iconOnly aria-label="Back to community"><ArrowLeft size={18} /></Button>
+      <div className="assistant-brand"><BrandMark size="small" /><span><strong>Ask with AI</strong><small>Banjara Connect AI</small></span></div>
+      <Button variant="quiet" iconOnly aria-label="New AI conversation" onClick={() => { setMessages([]); setError(''); setInput('') }}><Plus size={17} /></Button>
+    </div></header>
+    <div className="assistant-shell">
+      <div className="assistant-messages">
+        {!messages.length && !isSending ? <div className="assistant-welcome"><BrandMark size="large" /><h1>What can I help you with?</h1><p>Ask anything. Banjara Connect AI will help you find an answer.</p></div> : messages.map((message, index) => <article className={`assistant-message assistant-message--${message.role}`} key={`${message.role}-${index}`}><strong>{message.role === 'user' ? 'You' : 'AI'}</strong><p>{message.content}</p></article>)}
+        {isSending && <div className="assistant-message assistant-message--assistant"><strong>AI</strong><p>Thinking…</p></div>}
+        {error && <p className="field__error" role="alert">{error}</p>}
+      </div>
+      {!messages.length && <div className="assistant-prompts">
+        <button type="button" onClick={() => void ask('Tell me about Banjara history and culture.')}>Banjara history & culture <ArrowRight size={15} /></button>
+        <button type="button" onClick={() => void ask('What are some useful community resources?')}>Community resources <ArrowRight size={15} /></button>
+        <button type="button" onClick={() => void ask('Help me find useful information about my community.')}>Community discovery <ArrowRight size={15} /></button>
+      </div>}
+      <form className="assistant-compose" onSubmit={(event) => { event.preventDefault(); void ask(input) }}>
+        <Input aria-label="Ask the assistant" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask anything…" disabled={isSending} autoComplete="off" />
+        <Button type="submit" disabled={isSending || !input.trim()} iconOnly aria-label="Send question"><Send size={18} /></Button>
+      </form>
+    </div>
+  </section>
 }
 
 const settingsGroups = [
