@@ -138,7 +138,7 @@ export function PostCard({ post, onDeleted }: { post: FeedPost; onDeleted?: () =
         postContent.trim() || 'Photo/video post',
         '',
         `/posts/${post.id}`,
-      ].join('\\n')
+      ].join('\n')
       let sent = 0
       for (const conversationId of selectedConversationIds) {
         await sendConversationMessage(conversationId, message)
