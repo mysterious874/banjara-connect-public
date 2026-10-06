@@ -58,6 +58,7 @@ export function HomePage() {
   const [postsHasMore, setPostsHasMore] = useState(false)
   const [postsOffset, setPostsOffset] = useState(0)
   const [postsError, setPostsError] = useState('')
+  const [postLikeStates, setPostLikeStates] = useState<Map<string, { count: number; liked: boolean }>>(new Map())
   const [people, setPeople] = useState<ProfileRecord[]>([])
   const [isPeopleLoading, setIsPeopleLoading] = useState(true)
   const [peopleError, setPeopleError] = useState('')
@@ -103,6 +104,8 @@ export function HomePage() {
         if (active) {
           setPosts(page.posts)
           setPostsHasMore(page.hasMore)
+          const likeStates = await loadPostLikesBatch(page.posts.map((post) => post.id))
+          if (active) setPostLikeStates(likeStates)
           setPostsOffset(page.nextOffset)
         }
       } catch (error) {
@@ -149,7 +152,7 @@ export function HomePage() {
         <StoriesRail />
         <PostComposer name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url} />
         <div className="feed-heading"><div><span className="eyebrow">FROM YOUR COMMUNITY</span><h2>Your feed</h2></div></div>
-        {isPostsLoading ? <Loading label="Loading posts" /> : postsError && !posts.length ? <ErrorState title="Could not load posts" description={postsError} /> : posts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared with your community will appear here." action={<Button to="/create" variant="outline">Create a post</Button>} /> : <><div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>{postsError && <p className="field__error" role="alert">{postsError}</p>}{postsHasMore && <Button variant="outline" onClick={() => void loadMorePosts()} disabled={isLoadingMorePosts}>{isLoadingMorePosts ? 'Loading posts…' : 'Load more posts'}</Button>}</>}
+        {isPostsLoading ? <Loading label="Loading posts" /> : postsError && !posts.length ? <ErrorState title="Could not load posts" description={postsError} /> : posts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared with your community will appear here." action={<Button to="/create" variant="outline">Create a post</Button>} /> : <><div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} initialLikeState={postLikeStates.get(post.id)} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>{postsError && <p className="field__error" role="alert">{postsError}</p>}{postsHasMore && <Button variant="outline" onClick={() => void loadMorePosts()} disabled={isLoadingMorePosts}>{isLoadingMorePosts ? 'Loading posts…' : 'Load more posts'}</Button>}</>}
       </div>
       <aside className="home-aside">
         <section className="aside-section"><div className="aside-section__heading"><h2>People to know</h2><Link className="text-link" to="/connect">More</Link></div>{isPeopleLoading ? <Loading label="Loading profiles" /> : peopleError ? <p className="field__error" role="alert">{peopleError}</p> : <div className="user-list">{people.slice(0, 2).map((user) => <UserCard key={user.id} user={user} compact />)}</div>}</section>
