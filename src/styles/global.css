@@ -2509,3 +2509,20 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
     font-weight: 650;
   }
 }
+
+
+/* WhatsApp-style chat polish */
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble { max-width: min(78%, 360px); border-radius: 14px; padding: 8px 10px 5px; font-size: 13px; font-weight: 600; line-height: 1.42; }
+.chat-screen[class*="chat-screen--theme-"] .chat-message-row--them .chat-bubble { border-bottom-left-radius: 5px; }
+.chat-screen[class*="chat-screen--theme-"] .chat-message-row--you .chat-bubble { border-bottom-right-radius: 5px; }
+.chat-bubble__meta { display:inline-flex; align-items:center; gap:4px; float:right; margin:5px 0 0 9px; font-size:9px; line-height:1; opacity:.72; white-space:nowrap; }
+.chat-read-ticks { letter-spacing:-2px; font-size:11px; font-weight:800; }
+.chat-read-ticks--read { color:#43a5ff; opacity:1; }
+.chat-list-selection { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:8px; padding:8px; margin-bottom:8px; background:var(--bc-paper); border:1px solid var(--bc-line); border-radius:12px; box-shadow:var(--bc-shadow); }
+.chat-list-selection button { min-height:32px; padding:0 9px; border:1px solid var(--bc-line); border-radius:8px; background:var(--bc-paper); color:var(--bc-text); font:inherit; font-size:11px; font-weight:700; cursor:pointer; }
+.chat-list-selection button:first-child { padding:0 9px; }
+.chat-row--selected { background:var(--bc-soft) !important; border-color:var(--bc-maroon) !important; }
+.chat-row__time { display:flex; align-items:center; justify-content:flex-end; gap:5px; }
+.chat-screen__identity small { display:block; margin-top:2px; }
+.chat-screen__identity small::first-letter { color:inherit; }
+@media (max-width:560px) { .chat-screen[class*="chat-screen--theme-"] .chat-bubble { max-width:82%; font-size:13px; } .chat-list-selection { overflow-x:auto; } }
