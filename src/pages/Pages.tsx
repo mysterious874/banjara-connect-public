@@ -1267,20 +1267,10 @@ export function ChatListPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [hiddenIds, setHiddenIds] = useState<string[]>([])
   const [mutedIds, setMutedIds] = useState<string[]>([])
   const holdTimer = useRef<number | null>(null)
   const suppressNextChatClick = useRef(false)
 
-  useEffect(() => {
-    try {
-      setHiddenIds(JSON.parse(window.localStorage.getItem('banjara-chat-hidden') || '[]'))
-      setMutedIds(JSON.parse(window.localStorage.getItem('banjara-chat-muted') || '[]'))
-    } catch {
-      setHiddenIds([])
-      setMutedIds([])
-    }
-  }, [])
 
   useEffect(() => {
     let active = true
@@ -1335,13 +1325,9 @@ export function ChatListPage() {
   function persistList(key: string, ids: string[]) {
     try { window.localStorage.setItem(key, JSON.stringify(ids)) } catch { /* ignore */ }
   }
-  function hideSelected() {
-    const next = [...new Set([...hiddenIds, ...selectedIds])]
-    setHiddenIds(next); persistList('banjara-chat-hidden', next); setSelectedIds([])
-  }
   function deleteSelected() {
-    const next = [...new Set([...hiddenIds, ...selectedIds])]
-    setHiddenIds(next); persistList('banjara-chat-hidden', next); setSelectedIds([])
+    setConversations((current) => current.filter((conversation) => !selectedIds.includes(conversation.id)))
+    setSelectedIds([])
   }
   function toggleMuteSelected() {
     const allMuted = selectedIds.every((id) => mutedIds.includes(id))
@@ -1357,14 +1343,13 @@ export function ChatListPage() {
       setError(userFacingError(caught, 'Could not block the selected users.'))
     }
   }
-  const visibleConversations = conversations.filter((conversation) => !hiddenIds.includes(conversation.id))
+  const visibleConversations = conversations
 
   return <section className="page-stack">
     <PageHeading eyebrow="CONVERSATIONS" title="Chat" description="Your conversations." />
     {selectedIds.length > 0 && <div className="chat-list-selection" role="toolbar" aria-label="Selected chats">
       <button type="button" onClick={() => setSelectedIds([])} aria-label="Close selection">×</button>
       <strong>{selectedIds.length} selected</strong>
-      <button type="button" onClick={hideSelected}>Hide</button>
       <button type="button" onClick={deleteSelected}>Delete</button>
       <button type="button" onClick={toggleMuteSelected}>{selectedIds.every((id) => mutedIds.includes(id)) ? 'Unmute' : 'Mute'}</button>
       <button type="button" onClick={() => void blockSelected()}><Ban size={14} /> Block</button>
