@@ -60,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<ProfileRecord | null>(null)
   const [isProfileLoading, setIsProfileLoading] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     let active = true
@@ -93,6 +94,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const user = session?.user
+
+  // App-level presence: online as soon as the authenticated app is open,
+  // offline when the app/tab is backgrounded. This is intentionally global,
+  // not tied to the chat route.
+  useEffect(() => {
+    if (!user?.id) {
+      setOnlineUserIds(new Set())
+      return
+    }
+    const channel = supabase.channel('banjara-app-presence', {
+      config: { presence: { key: user.id } },
+    })
+    let active = true
+    const sync = () => {
+      if (!active) return
+      const state = channel.presenceState() as Record<string, Array<{ userId?: string }>>
+      const ids = new Set<string>()
+      Object.entries(state).forEach(([key, entries]) => {
+        const id = entries?.[0]?.userId ?? key
+        if (id) ids.add(id)
+      })
+      setOnlineUserIds(ids)
+    }
+    channel.on('presence', { event: 'sync' }, sync)
+    channel.on('presence', { event: 'join' }, sync)
+    channel.on('presence', { event: 'leave' }, sync)
+    const track = async () => {
+      try { await channel.track({ userId: user.id, online_at: new Date().toISOString() }) } catch { /* reconnect handles this */ }
+    }
+    const untrack = async () => {
+      try { await channel.untrack() } catch { /* channel may already be closed */ }
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void track()
+      else void untrack()
+    }
+    const handleBeforeUnload = () => { void untrack() }
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED' && document.visibilityState === 'visible') await track()
+    })
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      active = false
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      void untrack()
+      void supabase.removeChannel(channel)
+      setOnlineUserIds(new Set())
+    }
+  }, [user?.id])
+
   useEffect(() => {
     let active = true
     if (!user) {
@@ -155,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <AuthContext.Provider value={{ session, isLoading, initializationError, profile, isProfileLoading, profileError, refreshProfile, updateProfile, signOut: () => supabase.auth.signOut() }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ session, isLoading, initializationError, profile, isProfileLoading, profileError, onlineUserIds, refreshProfile, updateProfile, signOut: () => supabase.auth.signOut() }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
