@@ -2550,8 +2550,9 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
   box-sizing: border-box;
 }
 .chat-read-ticks { letter-spacing: -2px; font-size: 10px; font-weight: 800; }
-.chat-read-ticks--delivered { color: inherit; }
-.chat-read-ticks--read { color: #43a5ff; opacity: 1; }
+.chat-read-ticks--delivered { color: inherit; opacity: .9; }
+.chat-read-ticks--glow { color: var(--chat-head, var(--bc-maroon)); opacity: 1; text-shadow: 0 0 4px color-mix(in srgb, var(--chat-head, var(--bc-maroon)) 75%, transparent), 0 0 9px color-mix(in srgb, var(--chat-head, var(--bc-maroon)) 45%, transparent); filter: drop-shadow(0 0 2px color-mix(in srgb, var(--chat-head, var(--bc-maroon)) 60%, transparent)); }
+.chat-read-ticks--read { color: var(--chat-head, var(--bc-maroon)); opacity: 1; }
 .chat-online-dot { color: #238a55; font-size: 9px; font-weight: 800; }
 .chat-offline-dot { color: var(--bc-muted); font-size: 9px; font-weight: 700; }
 .chat-list .chat-row { touch-action: pan-y; user-select: none; -webkit-user-select: none; }
