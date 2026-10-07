@@ -2445,3 +2445,20 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 .connect-people-carousel .user-card--suggestion .user-card__copy strong { display: block; width: 100%; font-size: 11px; }
 .connect-people-carousel .user-card--suggestion .user-card__follow { width: 100%; min-width: 0; min-height: 31px; margin-top: auto; border-radius: 8px; font-size: 10px; }
 @media (max-width: 560px) { .connect-people-carousel { gap: 8px; } .connect-people-carousel .user-card--suggestion { flex-basis: 132px; min-width: 132px; min-height: 166px; } }
+
+/* Larger profile photos on Connect suggestion cards */
+.connect-people-carousel .user-card--suggestion .user-card__identity > .avatar {
+  width: 64px;
+  height: 64px;
+  font-size: 16px;
+}
+.connect-people-carousel .user-card--suggestion .user-card__follow {
+  text-decoration: none;
+}
+@media (max-width: 560px) {
+  .connect-people-carousel .user-card--suggestion .user-card__identity > .avatar {
+    width: 60px;
+    height: 60px;
+    font-size: 15px;
+  }
+}
