@@ -45,6 +45,8 @@ export function subscribeToPostgresChanges(
         const currentEntry = subscriptions.get(key)
         if (!currentEntry || currentEntry.channel !== channel) return
         currentEntry.status = status
+        // CLOSED is normally emitted during cleanup; do not surface it as a live outage.
+        if (status === 'CLOSED') return
         for (const current of currentEntry.subscribers) current.onStatus?.(status)
       })
     entry = { channel, subscribers }
