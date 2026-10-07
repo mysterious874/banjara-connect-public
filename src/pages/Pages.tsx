@@ -1746,13 +1746,17 @@ export function CommunityGroupPage() {
       const oldest = messages[0]
       const { data: rows, error: olderError } = await supabase
         .from('community_group_messages')
-        .select('id,group_id,sender_id,content,media_url,media_type,created_at')
+        .select('id,group_id,sender_id,content,media_url,media_type,is_deleted_for_everyone,created_at')
         .eq('group_id', groupId)
         .lt('created_at', oldest.created_at)
         .order('created_at', { ascending: false })
         .limit(51)
       if (olderError) throw olderError
-      const fetched = (rows ?? []) as CommunityGroupMessage[]
+      const olderIds = (rows ?? []).map((row) => row.id)
+      const { data: hiddenOlder, error: hiddenOlderError } = olderIds.length ? await supabase.from('community_group_message_deletions').select('message_id').eq('user_id', session?.user.id ?? '').in('message_id', olderIds) : { data: [], error: null }
+      if (hiddenOlderError) throw hiddenOlderError
+      const hiddenOlderIds = new Set((hiddenOlder ?? []).map((row) => row.message_id as string))
+      const fetched = ((rows ?? []) as CommunityGroupMessage[]).filter((row) => !hiddenOlderIds.has(row.id))
       setHasOlderGroupMessages(fetched.length > 50)
       const older = fetched.slice(0, 50).reverse()
       for (const item of older) {
