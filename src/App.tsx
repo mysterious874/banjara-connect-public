@@ -54,7 +54,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
     return (
       <main className="state-block state-block--error" role="alert" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: '24px' }}>
         <div style={{ maxWidth: '420px', textAlign: 'center' }}>
-          <h2>Banjara Connect could not load</h2>
+          <h2>Connect could not load</h2>
           <p>Please reload the app. Your account and data are safe.</p>
           <button className="button button--primary" type="button" onClick={this.handleRetry}>Reload app</button>
         </div>
@@ -138,13 +138,13 @@ export default function App() {
         </Routes>
       </Suspense>
       {showLaunchIntro && (
-        <main className="splash" aria-label="Banjara Connect intro">
+        <main className="splash" aria-label="Connect intro">
           <div className="splash__pattern" aria-hidden="true" />
           <div className="splash__content">
             <span className="splash__logo-wrap"><span className="splash__logo-ring" /><BrandMark size="large" /></span>
-            <h1>Banjara Connect</h1>
+            <h1>Connect</h1>
             <span className="splash__line" />
-            <p>Apni community. Apni pehchaan. Apna connection.</p>
+            <p>The communication platform for our people.</p>
             <span className="splash__loader" aria-hidden="true"><span /></span>
           </div>
         </main>
