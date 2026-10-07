@@ -1,0 +1,25 @@
+/* Mobile chat viewport fix: prevent the global mobile nav spacer from creating a white strip. */
+body:has(.app-shell--chat) {
+  padding-bottom: 0 !important;
+  overflow: hidden;
+}
+
+.app-shell--chat,
+.app-shell--chat .app-shell__body,
+.app-shell--chat .route-content,
+.app-shell--chat .chat-screen {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+}
+
+@media (max-width: 759px) {
+  body:has(.app-shell--chat) {
+    padding-bottom: 0 !important;
+  }
+
+  .app-shell--chat .chat-compose-area {
+    bottom: 0;
+    padding-bottom: max(7px, env(safe-area-inset-bottom));
+  }
+}
