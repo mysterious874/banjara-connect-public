@@ -77,3 +77,74 @@ body:has(.app-shell--chat) {
 
 /* Community group options menu: close cleanly on outside taps. */
 .community-group-screen .chat-screen__actions { position: relative; }
+
+
+/* Mobile keyboard hard-lock: keep the entire chat viewport anchored to the visual viewport.
+   The document itself must not scroll when an input receives focus. */
+@media (max-width: 799px) {
+  html:has(.app-shell--chat),
+  body:has(.app-shell--chat) {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+  }
+
+  body:has(.app-shell--chat) .app-shell--chat {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+
+  body:has(.app-shell--chat) .app-shell--chat .app-shell__body,
+  body:has(.app-shell--chat) .app-shell--chat .route-content {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  body:has(.app-shell--chat) .app-shell--chat .chat-screen {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    transform: none !important;
+  }
+
+  body:has(.app-shell--chat) .app-shell--chat .chat-screen__head {
+    position: relative !important;
+    top: auto !important;
+    flex: 0 0 auto !important;
+    z-index: 100 !important;
+    transform: none !important;
+  }
+
+  body:has(.app-shell--chat) .app-shell--chat .chat-messages {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  body:has(.app-shell--chat) .app-shell--chat .chat-compose-area {
+    flex: 0 0 auto !important;
+    transform: none !important;
+  }
+}
