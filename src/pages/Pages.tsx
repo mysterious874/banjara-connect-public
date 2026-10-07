@@ -43,6 +43,56 @@ function renderChatMessageContent(content: string) {
   })
 }
 
+function useChatKeyboardViewportLock() {
+  useEffect(() => {
+    if (window.innerWidth > 799) return
+    const root = document.documentElement
+    const body = document.body
+    const viewport = window.visualViewport
+    const apply = () => {
+      const active = document.activeElement
+      const keyboardOpen = Boolean(active && (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) && viewport && viewport.height < window.innerHeight - 80)
+      const chat = document.querySelector('.chat-screen') as HTMLElement | null
+      if (!chat) return
+      if (keyboardOpen && viewport) {
+        const top = Math.max(0, viewport.offsetTop)
+        chat.style.setProperty('top', `${top}px`)
+        chat.style.setProperty('height', `${viewport.height}px`)
+        chat.style.setProperty('max-height', `${viewport.height}px`)
+        root.style.setProperty('overflow', 'hidden')
+        body.style.setProperty('overflow', 'hidden')
+        window.requestAnimationFrame(() => window.scrollTo(0, 0))
+      } else {
+        chat.style.removeProperty('top')
+        chat.style.removeProperty('height')
+        chat.style.removeProperty('max-height')
+      }
+    }
+    const resetScroll = () => window.requestAnimationFrame(() => window.scrollTo(0, 0))
+    const onFocus = () => { window.setTimeout(apply, 50); window.setTimeout(apply, 250) }
+    const onBlur = () => window.setTimeout(apply, 50)
+    viewport?.addEventListener('resize', apply)
+    viewport?.addEventListener('scroll', apply)
+    document.addEventListener('focusin', onFocus)
+    document.addEventListener('focusout', onBlur)
+    window.addEventListener('scroll', resetScroll, { passive: true })
+    apply()
+    return () => {
+      viewport?.removeEventListener('resize', apply)
+      viewport?.removeEventListener('scroll', apply)
+      document.removeEventListener('focusin', onFocus)
+      document.removeEventListener('focusout', onBlur)
+      window.removeEventListener('scroll', resetScroll)
+      root.style.removeProperty('overflow')
+      body.style.removeProperty('overflow')
+      const chat = document.querySelector('.chat-screen') as HTMLElement | null
+      chat?.style.removeProperty('top')
+      chat?.style.removeProperty('height')
+      chat?.style.removeProperty('max-height')
+    }
+  }, [])
+}
+
 function PageHeading({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
   return <div className="page-heading"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h1>{title}</h1>{description && <p>{description}</p>}</div>{action}</div>
 }
@@ -1598,6 +1648,7 @@ export function ChatListPage() {
 
 // Chat conversation state declarations verified for Vercel build
 export function ChatConversationPage() {
+  useChatKeyboardViewportLock()
   const { conversationId = '' } = useParams()
   const { session, onlineUserIds, activeUserIds } = useAuth()
   const [message, setMessage] = useState('')
@@ -1882,6 +1933,7 @@ type CommunityGroupMessage = {
 }
 
 export function CommunityGroupPage() {
+  useChatKeyboardViewportLock()
   const { groupId = '' } = useParams()
   const { session } = useAuth()
   const [group, setGroup] = useState<{ id: string; name: string; description: string; created_by: string } | null>(null)
