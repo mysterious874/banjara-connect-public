@@ -36,6 +36,7 @@ export type ProfileUpdate = Partial<Pick<ProfileRecord, 'username' | 'display_na
 export type PostRecord = {
   id: string
   user_id: string
+  group_id: string | null
   content: string
   created_at: string
   visibility: string | null
