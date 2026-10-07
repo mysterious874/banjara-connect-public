@@ -148,7 +148,6 @@ export function HomePage() {
             {profileError && <p className="field__error" role="alert">{profileError}</p>}
           </div>
         </div>
-        <SearchBar showAssistant usernameOnly />
         <StoriesRail />
         <PostComposer name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url} />
         <div className="feed-heading"><div><span className="eyebrow">FROM YOUR COMMUNITY</span><h2>Your feed</h2></div></div>
