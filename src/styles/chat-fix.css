@@ -23,3 +23,20 @@ body:has(.app-shell--chat) {
     padding-bottom: max(7px, env(safe-area-inset-bottom));
   }
 }
+/* Community group chat: keep the composer inside the visual viewport when the mobile keyboard opens. */
+@media (max-width: 799px) {
+  .community-group-screen .chat-compose-area {
+    bottom: 0 !important;
+    padding-bottom: max(7px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .community-group-screen .chat-messages {
+    padding-bottom: 74px;
+    overscroll-behavior: contain;
+  }
+
+  body:has(.community-group-screen) {
+    padding-bottom: 0 !important;
+    overflow: hidden;
+  }
+}
