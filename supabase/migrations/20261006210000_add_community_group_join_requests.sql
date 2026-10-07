@@ -16,6 +16,7 @@ alter table public.community_group_join_requests enable row level security;
 alter table public.notifications add column if not exists group_join_request_id uuid references public.community_group_join_requests(id) on delete cascade;
 create index if not exists notifications_group_join_request_idx on public.notifications(group_join_request_id);
 grant select on public.community_group_join_requests to authenticated;
+drop policy if exists "join requests visible to participants" on public.community_group_join_requests;
 create policy "join requests visible to participants" on public.community_group_join_requests for select to authenticated using ((select auth.uid())=requester_id or (select auth.uid())=recipient_id);
 
 create or replace function public.request_community_group_join(p_group_id uuid,p_recipient_id uuid)
