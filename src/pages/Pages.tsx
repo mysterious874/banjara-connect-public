@@ -1253,7 +1253,7 @@ export function StoriesPage() {
           })}</div></div>}
       
     </>}
-    {selectedStory && grouped.length > 0 && <div className="story-fullscreen" role="dialog" aria-modal="true" aria-label="Story viewer">
+    {selectedStory && (grouped.length > 0 || Boolean(initialStory)) && <div className="story-fullscreen" role="dialog" aria-modal="true" aria-label="Story viewer">
       <div className="story-fullscreen__backdrop" onClick={() => navigate('/home')} />
       <div className="story-fullscreen__card">
         <div className="story-fullscreen__progress">{grouped.map((story, index) => <span key={story.user_id} className={`story-fullscreen__progress-segment${index < activeIndex ? ' is-complete' : index === activeIndex ? ' is-active' : ''}`} />)}</div>
