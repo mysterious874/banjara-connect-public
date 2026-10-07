@@ -2335,7 +2335,7 @@ export function CommunityGroupPage() {
   if (error && !group) return <section className="page-stack"><ErrorState title="Could not load community" description={error} /></section>
   if (!group) return <section className="page-stack"><EmptyState title="Community unavailable" description="This community could not be found." action={<Button to="/community" variant="outline">Back to community</Button>} /></section>
 
-  return <section className="chat-screen community-group-screen">
+  return <section className="chat-screen chat-screen--theme-classic community-group-screen">
     <header className="chat-screen__head"><Button to="/community" variant="quiet" iconOnly aria-label="Back to community"><ArrowLeft size={18} /></Button>
       <button type="button" className="chat-screen__profile community-group-header-button" onClick={() => { setMembersOpen(true); void loadGroupMembers() }}>
         <span className="community-group-card__icon"><Users size={20} /></span>
