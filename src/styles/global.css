@@ -2742,3 +2742,141 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
   }
   .splash__loader > span { width: 100%; }
 }
+
+
+/* Banjara Connect — soft Instagram-style luminous finish.
+   Keeps the original maroon / saffron / cream palette; adds depth, highlights and restrained glow. */
+:root {
+  --bc-glow-maroon: rgb(122 38 58 / 18%);
+  --bc-glow-orange: rgb(230 120 48 / 20%);
+  --bc-glow-gold: rgb(201 154 50 / 16%);
+}
+
+.topbar {
+  background: linear-gradient(180deg, rgb(251 244 232 / 96%), rgb(251 244 232 / 90%));
+  box-shadow: 0 8px 28px rgb(84 18 28 / 8%), 0 1px 0 rgb(255 255 255 / 70%) inset;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.app-shell__body {
+  position: relative;
+}
+
+.icon-button,
+.button--icon {
+  box-shadow: 0 5px 16px rgb(84 18 28 / 7%), 0 1px 0 rgb(255 255 255 / 75%) inset;
+  transition: box-shadow .2s ease, transform .2s ease, background .2s ease;
+}
+.icon-button:hover:not(:disabled),
+.button--icon:hover:not(:disabled) {
+  box-shadow: 0 7px 20px var(--bc-glow-maroon), 0 1px 0 rgb(255 255 255 / 80%) inset;
+  transform: translateY(-1px);
+}
+
+.button {
+  box-shadow: 0 7px 18px rgb(122 38 58 / 18%), 0 1px 0 rgb(255 255 255 / 18%) inset;
+  transition: box-shadow .2s ease, transform .2s ease, filter .2s ease;
+}
+.button:hover:not(:disabled) {
+  box-shadow: 0 9px 23px rgb(122 38 58 / 26%), 0 1px 0 rgb(255 255 255 / 20%) inset;
+  filter: saturate(1.05);
+  transform: translateY(-1px);
+}
+.button--outline {
+  box-shadow: 0 5px 16px rgb(122 38 58 / 8%), 0 1px 0 rgb(255 255 255 / 80%) inset;
+}
+.button--quiet:hover:not(:disabled) {
+  box-shadow: 0 5px 18px var(--bc-glow-maroon);
+}
+
+.search-bar {
+  box-shadow: 0 9px 26px rgb(84 18 28 / 9%), 0 1px 0 rgb(255 255 255 / 90%) inset;
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+.search-bar:focus-within {
+  border-color: rgb(122 38 58 / 42%);
+  box-shadow: 0 10px 30px rgb(122 38 58 / 12%), 0 0 0 3px rgb(230 120 48 / 8%), 0 1px 0 rgb(255 255 255 / 90%) inset;
+}
+.search-bar button {
+  box-shadow: 0 4px 12px rgb(122 38 58 / 22%), 0 1px 0 rgb(255 255 255 / 18%) inset;
+}
+
+.field__control {
+  box-shadow: 0 4px 14px rgb(84 18 28 / 5%), 0 1px 0 rgb(255 255 255 / 80%) inset;
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+.field__control:focus {
+  box-shadow: 0 7px 20px rgb(122 38 58 / 10%), 0 0 0 3px rgb(230 120 48 / 7%);
+}
+
+.stories-rail,
+.post-card,
+.composer,
+.user-card,
+.connect-feature,
+.create-post-box,
+.auth-card,
+.assistant-intro,
+.state-block--empty,
+.state-block--error,
+.community-preview-card,
+.event-preview,
+.warning-panel,
+.about-brand {
+  box-shadow: 0 8px 24px rgb(84 18 28 / 7%), 0 1px 0 rgb(255 255 255 / 82%) inset;
+  transition: box-shadow .22s ease, transform .22s ease, border-color .22s ease;
+}
+.post-card:hover,
+.user-card:hover,
+.community-preview-card:hover,
+.event-preview:hover {
+  box-shadow: 0 11px 30px rgb(122 38 58 / 11%), 0 1px 0 rgb(255 255 255 / 88%) inset;
+}
+
+.avatar {
+  box-shadow: 0 5px 15px rgb(122 38 58 / 16%), 0 0 0 1px rgb(255 240 200 / 48%);
+}
+
+.story-card--unread .story-card__ring {
+  box-shadow: 0 0 0 2px rgb(230 120 48 / 8%), 0 0 18px rgb(230 120 48 / 32%);
+}
+
+.bottom-nav {
+  background: rgb(251 244 232 / 94%);
+  box-shadow: 0 -8px 28px rgb(84 18 28 / 9%), 0 -1px 0 rgb(255 255 255 / 75%) inset;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.bottom-nav a,
+.bottom-nav button {
+  transition: color .2s ease, transform .2s ease, filter .2s ease;
+}
+.bottom-nav a:hover,
+.bottom-nav button:hover {
+  filter: drop-shadow(0 3px 8px rgb(230 120 48 / 22%));
+}
+
+.brand-mark img {
+  filter: drop-shadow(0 5px 12px rgb(122 38 58 / 17%));
+}
+
+.modal__panel,
+.sheet__panel,
+.chat-options-menu {
+  box-shadow: 0 18px 50px rgb(84 18 28 / 17%), 0 1px 0 rgb(255 255 255 / 85%) inset;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .icon-button,
+  .button--icon,
+  .stories-rail,
+  .post-card,
+  .user-card,
+  .community-preview-card,
+  .event-preview {
+    transition: none;
+  }
+}
+
