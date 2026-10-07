@@ -1,5 +1,7 @@
 -- WhatsApp-style per-user hiding and sender/admin delete-for-everyone for community messages.
 alter table public.community_group_messages add column if not exists is_deleted_for_everyone boolean not null default false;
+alter table public.community_group_messages drop constraint if exists community_group_messages_content_check;
+alter table public.community_group_messages add constraint community_group_messages_content_check check ((char_length(trim(content)) between 1 and 4000) or (media_url is not null);
 create table if not exists public.community_group_message_deletions (
   message_id uuid not null references public.community_group_messages(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
