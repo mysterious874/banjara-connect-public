@@ -14,8 +14,7 @@ export async function loadProfilesPage(offset = 0): Promise<{ profiles: ProfileR
     .order('id', { ascending: true })
     .neq('id', currentUserId)
     .range(offset, offset + profilePageSize - 1)
-  const { data, error } = await query
-  const blockedIds = await loadBlockedUserIds()
+  const [{ data, error }, blockedIds] = await Promise.all([query, loadBlockedUserIds()])
   if (error) throw error
   const rows = (data ?? []) as ProfileRecord[]
   return {
