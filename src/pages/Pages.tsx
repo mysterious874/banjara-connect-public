@@ -352,7 +352,7 @@ export function ConnectPage() {
       {query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')}><X size={17} /></button>}
     </label>
     {error && <p className="field__error" role="alert">{error}</p>}
-    {isLoading || isSearching ? <Loading label={isSearching ? 'Searching people' : 'Loading people'} /> : profiles.length ? <div className="connect-list">{profiles.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title={query ? 'No people found' : 'No people to show'} description={query ? 'Try another username.' : 'New community members will appear here.'} />}
+    {isLoading || isSearching ? <Loading label={isSearching ? 'Searching people' : 'Loading people'} /> : profiles.length ? <div className="connect-people-carousel" aria-label="People to connect">{profiles.map((user) => <UserCard key={user.id} user={user} suggestion />)}</div> : <EmptyState title={query ? 'No people found' : 'No people to show'} description={query ? 'Try another username.' : 'New community members will appear here.'} />}
   </section>
 }
 
@@ -413,7 +413,7 @@ export function SearchPage() {
   }
 
   const matches = filterProfiles(profiles, query)
-  return <section className="page-stack"><PageHeading eyebrow="LOOK A LITTLE CLOSER" title="Search" description="Find community profiles." /><SearchBar placeholder="Try a name or place" /><div className="section-heading"><h2>{query ? `Results for “${query}”` : 'Suggested profiles'}</h2></div>{isLoading ? <Loading label="Searching profiles" /> : error && !profiles.length ? <ErrorState title="Could not search profiles" description={error} /> : <>{error && <p className="field__error" role="alert">{error}</p>}{matches.length ? <div className="connect-list">{matches.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title="No profiles found" description={hasMore ? 'Load more profiles to continue searching.' : 'Try another name or place.'} />}{hasMore && <Button variant="outline" onClick={() => void loadMoreProfiles()} disabled={isLoadingMore}>{isLoadingMore ? 'Loading profiles…' : 'Load more profiles'}</Button>}</>}</section>
+  return <section className="page-stack"><PageHeading eyebrow="LOOK A LITTLE CLOSER" title="Search" description="Find community profiles." /><SearchBar placeholder="Try a name or place" /><div className="section-heading"><h2>{query ? `Results for “${query}”` : 'Suggested profiles'}</h2></div>{isLoading ? <Loading label="Searching profiles" /> : error && !profiles.length ? <ErrorState title="Could not search profiles" description={error} /> : <>{error && <p className="field__error" role="alert">{error}</p>}{matches.length ? <div className="connect-people-carousel" aria-label="People to connect">{matches.map((user) => <UserCard key={user.id} user={user} suggestion />)}</div> : <EmptyState title="No profiles found" description={hasMore ? 'Load more profiles to continue searching.' : 'Try another name or place.'} />}{hasMore && <Button variant="outline" onClick={() => void loadMoreProfiles()} disabled={isLoadingMore}>{isLoadingMore ? 'Loading profiles…' : 'Load more profiles'}</Button>}</>}</section>
 }
 
 export function CreatePostPage() {
