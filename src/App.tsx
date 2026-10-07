@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
+import { BrandMark } from './components/brand'
 
 const SplashPage = lazy(() => import('./pages/AuthPages').then(({ SplashPage }) => ({ default: SplashPage })))
 const LoginPage = lazy(() => import('./pages/AuthPages').then(({ LoginPage }) => ({ default: LoginPage })))
@@ -140,7 +141,7 @@ export default function App() {
         <main className="splash" aria-label="Connect intro">
           <div className="splash__pattern" aria-hidden="true" />
           <div className="splash__content">
-            <span className="splash__logo-wrap" aria-hidden="true"><span className="splash__logo-ring" /><span className="splash__connect-mark">C</span></span>
+            <span className="splash__logo-wrap" aria-hidden="true"><span className="splash__logo-ring" /><BrandMark size="large" /></span>
             <h1>Connect</h1>
             <span className="splash__line" />
             <p>Where our people connect, share and grow together.</p>
