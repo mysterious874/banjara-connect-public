@@ -1454,6 +1454,7 @@ export function ChatListPage() {
   </section>
 }
 
+// Chat conversation state declarations verified for Vercel build
 export function ChatConversationPage() {
   const { conversationId = '' } = useParams()
   const { session, onlineUserIds, activeUserIds } = useAuth()
