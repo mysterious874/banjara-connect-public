@@ -13,6 +13,8 @@ create unique index if not exists community_group_join_requests_pending_key on p
 create index if not exists community_group_join_requests_recipient_idx on public.community_group_join_requests(recipient_id,status,created_at desc);
 create index if not exists community_group_join_requests_requester_idx on public.community_group_join_requests(requester_id,created_at desc);
 alter table public.community_group_join_requests enable row level security;
+alter table public.notifications add column if not exists group_join_request_id uuid references public.community_group_join_requests(id) on delete cascade;
+create index if not exists notifications_group_join_request_idx on public.notifications(group_join_request_id);
 grant select on public.community_group_join_requests to authenticated;
 create policy "join requests visible to participants" on public.community_group_join_requests for select to authenticated using ((select auth.uid())=requester_id or (select auth.uid())=recipient_id);
 
