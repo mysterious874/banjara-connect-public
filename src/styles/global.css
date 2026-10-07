@@ -478,6 +478,10 @@ img { max-width: 100%; }
 .splash::before { position: absolute; top: 50%; left: 50%; width: min(78vw, 730px); aspect-ratio: 1; content: ''; border: 1px solid rgb(25 113 88 / 9%); border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 40px rgb(213 83 69 / 3%), 0 0 0 85px rgb(229 162 58 / 3%), 0 0 0 135px rgb(64 95 165 / 2%); }
 .splash__content { position: relative; display: flex; align-items: center; flex-direction: column; text-align: center; animation: logo-rise .8s .1s ease both; }
 .splash__content .brand-mark { margin-bottom: 23px; }
+.splash__logo-wrap { position: relative; display: grid; width: 86px; height: 86px; margin-bottom: 23px; place-items: center; }
+.splash__connect-mark { position: relative; z-index: 2; display: grid; width: 64px; height: 64px; place-items: center; color: #fff; background: var(--bc-maroon); border: 4px solid #fff; border-radius: 50%; box-shadow: 0 10px 28px rgb(123 30 43 / 22%); font-family: 'DM Sans', system-ui, sans-serif; font-size: 34px; font-weight: 800; }
+.splash__logo-ring { position: absolute; inset: 0; border: 2px solid rgb(123 30 43 / 22%); border-radius: 50%; animation: splash-ring 2s ease-out infinite; }
+@keyframes splash-ring { 0% { transform: scale(.82); opacity: .8; } 70%, 100% { transform: scale(1.12); opacity: 0; } }
 .splash__overline { color: var(--green); font-size: 9px; font-weight: 800; }
 .splash__content h1 { margin: 8px 0; color: var(--bc-maroon); font-family: 'DM Sans', system-ui, sans-serif; font-size: clamp(37px, 7vw, 58px); font-weight: 400; letter-spacing: 0; }
 .splash__content h1 span { color: var(--green); }
