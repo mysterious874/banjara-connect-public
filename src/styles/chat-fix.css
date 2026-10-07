@@ -74,3 +74,6 @@ body:has(.app-shell--chat) {
     transform: none !important;
   }
 }
+
+/* Community group options menu: close cleanly on outside taps. */
+.community-group-screen .chat-screen__actions { position: relative; }
