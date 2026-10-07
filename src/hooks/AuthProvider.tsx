@@ -3,6 +3,7 @@ import type { AuthError, Session, User } from '@supabase/supabase-js'
 import { supabase } from '../utils/supabase'
 import { userFacingError } from '../utils/userFacingError'
 import type { ProfileRecord, ProfileUpdate } from '../types/app'
+import { getCached, setCached } from '../utils/performanceCache'
 
 const profileColumns = 'id,username,display_name,avatar_url,bio,location,is_verified'
 
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [initializationError, setInitializationError] = useState<string | null>(null)
-  const [profile, setProfile] = useState<ProfileRecord | null>(null)
+  const [profile, setProfile] = useState<ProfileRecord | null>(() => getCached<ProfileRecord>('current-profile'))
   const [isProfileLoading, setIsProfileLoading] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set())
@@ -189,11 +190,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return () => { active = false }
     }
 
-    setProfile(null)
+    const cachedProfile = getCached<ProfileRecord>(`current-profile:${user.id}`) ?? getCached<ProfileRecord>('current-profile')
+    if (cachedProfile) setProfile(cachedProfile)
     setProfileError(null)
-    setIsProfileLoading(true)
+    setIsProfileLoading(!cachedProfile)
     loadOrCreateProfile(user).then((nextProfile) => {
-      if (active) setProfile(nextProfile)
+      if (active) {
+        setProfile(nextProfile)
+        setCached(`current-profile:${user.id}`, nextProfile, 120_000)
+        setCached('current-profile', nextProfile, 120_000)
+      }
     }).catch((error: unknown) => {
       if (active) setProfileError(userFacingError(error, 'Could not load your profile.'))
     }).finally(() => {
