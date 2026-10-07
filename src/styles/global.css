@@ -2061,6 +2061,7 @@ a{color:inherit}:focus-visible{outline-color:var(--bc-gold)}
 .chat-theme-option strong, .chat-theme-option small { display: block; }
 .chat-theme-option strong { font-size: 12px; }
 .chat-theme-option small { margin-top: 2px; color: var(--bc-muted); font-size: 9px; }
+.chat-screen--theme-classic { --chat-bg: #f3e9e2; --chat-head: #7b1e2b; --chat-other: #fffaf6; --chat-other-text: #34231f; --chat-own: #9d3b42; --chat-compose: #fffaf6; --chat-line: #e3cfc5; --chat-input: #fffdfb; --chat-muted: #765f58; }
 .chat-screen--theme-midnight { --chat-bg: #101827; --chat-head: #182235; --chat-other: #202c40; --chat-other-text: #eef3fa; --chat-own: #355d9a; --chat-compose: #172133; --chat-line: #2d3b50; --chat-input: #101827; --chat-muted: #aebbd0; }
 .chat-screen--theme-sand { --chat-bg: #f4e6d2; --chat-head: #8b5632; --chat-other: #fff8ed; --chat-other-text: #3d2a20; --chat-own: #b86b3e; --chat-compose: #fff8ed; --chat-line: #dfc8aa; --chat-input: #fffdf8; --chat-muted: #765e4e; }
 .chat-screen--theme-forest { --chat-bg: #e7f0eb; --chat-head: #2d6652; --chat-other: #f8fcfa; --chat-other-text: #20382f; --chat-own: #397b61; --chat-compose: #f8fcfa; --chat-line: #c7ddd2; --chat-input: #f7fbf9; --chat-muted: #5c766b; }
