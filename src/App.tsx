@@ -97,11 +97,6 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => {
-    void import('./pages/Pages')
-    void import('./pages/BanjaraHistoryPage')
-    void import('./pages/DeveloperPage')
-  }, [])
 
   if (showStartupIntro) {
     return (
