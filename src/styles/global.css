@@ -2242,3 +2242,38 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
   .story-fullscreen__touch-left,
   .story-fullscreen__touch-right { width: 42%; }
 }
+
+
+.story-fullscreen__reply {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.story-fullscreen__reply form {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+.story-fullscreen__reply form .field { flex: 1; min-width: 0; }
+.story-share-panel { display: grid; gap: 9px; }
+.story-share-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--bc-line);
+  border-radius: 11px;
+  background: var(--bc-paper);
+  color: var(--bc-text);
+  text-align: left;
+  cursor: pointer;
+}
+.story-share-user > span { min-width: 0; flex: 1; }
+.story-share-user strong,
+.story-share-user small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.story-share-user small { margin-top: 2px; color: var(--bc-muted); font-size: 10px; }
+.story-share-user:hover { border-color: var(--bc-orange); }
+.story-share-user:disabled { opacity: .5; cursor: wait; }
