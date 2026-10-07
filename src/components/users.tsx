@@ -8,7 +8,7 @@ import { loadFollowState, toggleFollow } from '../utils/followData'
 import { Avatar, Button } from './ui'
 import { userFacingError } from '../utils/userFacingError'
 
-export function UserCard({ user, compact = false }: { user: ProfileRecord; compact?: boolean }) {
+export function UserCard({ user, compact = false, suggestion = false }: { user: ProfileRecord; compact?: boolean; suggestion?: boolean }) {
   const { session } = useAuth()
   const [following, setFollowing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -51,5 +51,5 @@ export function UserCard({ user, compact = false }: { user: ProfileRecord; compa
     }
   }
 
-  return <div className={`user-card${compact ? ' user-card--compact' : ''}`}><Link className="user-card__identity" to={`/profile/${profileHandle}`}><Avatar name={name} image={user.avatar_url ?? undefined} /><span className="user-card__copy"><strong>{name}</strong><span>@{user.username || `member-${user.id.slice(0, 8)}`} · {detail}</span></span></Link>{!isSelf && <Button variant={following ? 'quiet' : 'outline'} iconOnly className="user-card__follow" aria-label={following ? `Unfollow ${name}` : `Follow ${name}`} title={error || undefined} disabled={isLoading || isPending} onClick={handleFollow}>{following ? <Check size={17} /> : <Plus size={17} />}</Button>}</div>
+  return <div className={`user-card${compact ? ' user-card--compact' : ''}${suggestion ? ' user-card--suggestion' : ''}`}><Link className="user-card__identity" to={`/profile/${profileHandle}`}><Avatar name={name} image={user.avatar_url ?? undefined} /><span className="user-card__copy"><strong>{name}</strong>{!suggestion && <span>@{user.username || `member-${user.id.slice(0, 8)}`} · {detail}</span>}</span></Link>{!isSelf && <Button variant={following ? 'quiet' : 'outline'} className="user-card__follow" aria-label={following ? `Connected to ${name}` : `Connect with ${name}`} title={error || undefined} disabled={isLoading || isPending} onClick={handleFollow}>{following ? 'Connected' : 'Connect'}</Button>}</div>
 }
