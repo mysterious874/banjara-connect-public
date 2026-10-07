@@ -163,11 +163,6 @@ export async function loadConversationMessages(
   before?: Pick<ChatMessage, 'created_at' | 'id'>,
 ): Promise<{ messages: ChatMessage[]; hasMore: boolean }> {
   const userId = await requireAuthenticatedUserId()
-  const { data: membership, error: membershipError } = await supabase.from('conversation_members')
-    .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', userId).maybeSingle()
-  if (membershipError) throw membershipError
-  if (!membership) throw new Error('You are not a member of this conversation.')
-
   let query = supabase.from('messages').select(messageColumns)
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: false })
@@ -176,7 +171,12 @@ export async function loadConversationMessages(
   if (before) {
     query = query.or(`created_at.lt.${before.created_at},and(created_at.eq.${before.created_at},id.lt.${before.id})`)
   }
-  const { data, error } = await query
+  const [{ data: membership, error: membershipError }, { data, error }] = await Promise.all([
+    supabase.from('conversation_members').select('conversation_id').eq('conversation_id', conversationId).eq('user_id', userId).maybeSingle(),
+    query,
+  ])
+  if (membershipError) throw membershipError
+  if (!membership) throw new Error('You are not a member of this conversation.')
   if (error) throw error
   let page = (data ?? []) as ChatMessage[]
   if (page.length) {
