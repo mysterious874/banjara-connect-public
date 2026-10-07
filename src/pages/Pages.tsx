@@ -57,7 +57,7 @@ function useChatKeyboardViewportLock() {
       if (keyboardOpen && viewport) {
         const top = Math.max(0, viewport.offsetTop)
         chat.style.setProperty('top', '0px')
-        chat.style.setProperty('transform', `translate3d(0, ${top}px, 0)`)
+        chat.style.setProperty('--chat-viewport-offset', `${top}px`)
         chat.style.setProperty('height', `${viewport.height}px`)
         chat.style.setProperty('max-height', `${viewport.height}px`)
         root.style.setProperty('overflow', 'hidden')
@@ -88,7 +88,7 @@ function useChatKeyboardViewportLock() {
       body.style.removeProperty('overflow')
       const chat = document.querySelector('.chat-screen') as HTMLElement | null
       chat?.style.removeProperty('top')
-      chat?.style.removeProperty('transform')
+      chat?.style.removeProperty('--chat-viewport-offset')
       chat?.style.removeProperty('height')
       chat?.style.removeProperty('max-height')
     }
