@@ -10,11 +10,31 @@ import { userFacingError } from '../utils/userFacingError'
 
 export function SplashPage() {
   const navigate = useNavigate()
+
   useEffect(() => {
     const timer = window.setTimeout(() => navigate('/home', { replace: true }), 4000)
     return () => window.clearTimeout(timer)
   }, [navigate])
-  return <main className="splash"><div className="splash__pattern" aria-hidden="true" /><div className="splash__content"><span className="splash__logo-wrap"><span className="splash__logo-ring" /><BrandMark size="large" /></span><h1>Banjara Connect</h1><span className="splash__line" /><p>Apni community. Apni pehchaan. Apna connection.</p><span className="splash__loader" aria-hidden="true"><span /></span></div></main>
+
+  return (
+    <main className="splash" aria-label="Connect intro">
+      <div className="splash__pattern" aria-hidden="true" />
+      <div className="splash__content">
+        <div className="splash-logo-animation" aria-hidden="true">
+          <span className="splash-logo-animation__circle" />
+          <span className="splash-logo-animation__piece splash-logo-animation__piece--top" />
+          <span className="splash-logo-animation__piece splash-logo-animation__piece--right" />
+          <span className="splash-logo-animation__piece splash-logo-animation__piece--bottom" />
+          <span className="splash-logo-animation__piece splash-logo-animation__piece--left" />
+          <span className="splash-logo-animation__center" />
+        </div>
+        <h1 className="splash__brand-name">Connect</h1>
+        <span className="splash__line" />
+        <p className="splash__quote">Where our people connect, share and grow together.</p>
+        <span className="splash__loader" aria-hidden="true"><span /></span>
+      </div>
+    </main>
+  )
 }
 
 export function LoginPage() {
