@@ -1456,7 +1456,7 @@ export function ChatListPage() {
 export function ChatConversationPage() {
   const { conversationId = '' } = useParams()
   const { session, onlineUserIds } = useAuth()
-  const [message, setMessage = useState('')
+  const [message, setMessage] = useState('')
   const [person, setPerson] = useState<ProfileRecord | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
