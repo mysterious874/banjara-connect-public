@@ -1317,31 +1317,40 @@ export function ReelsPage() {
 }
 
 export function ChatListPage() {
-  const { session } = useAuth()
+  const { session, onlineUserIds } = useAuth()
   const [conversations, setConversations] = useState<Awaited<ReturnType<typeof loadConversations>>>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [hiddenIds, setHiddenIds] = useState<string[]>([])
+  const [mutedIds, setMutedIds] = useState<string[]>([])
+  const holdTimer = useRef<number | null>(null)
+  const suppressNextChatClick = useRef(false)
+
+  useEffect(() => {
+    try {
+      setHiddenIds(JSON.parse(window.localStorage.getItem('banjara-chat-hidden') || '[]'))
+      setMutedIds(JSON.parse(window.localStorage.getItem('banjara-chat-muted') || '[]'))
+    } catch {
+      setHiddenIds([])
+      setMutedIds([])
+    }
+  }, [])
+
   useEffect(() => {
     let active = true
     let requestPending = false
     let refreshQueued = false
-    setConversations([])
     setError('')
-    setIsLoading(true)
+    setIsLoading(conversations.length === 0)
     const refresh = async () => {
-      if (requestPending) {
-        refreshQueued = true
-        return
-      }
+      if (requestPending) { refreshQueued = true; return }
       requestPending = true
       do {
         refreshQueued = false
         try {
           const rows = await loadConversations()
-          if (active) {
-            setConversations(rows)
-            setError('')
-          }
+          if (active) { setConversations(rows); setError('') }
         } catch (caught) {
           if (active) setError(userFacingError(caught, 'Could not load conversations.'))
         } finally {
@@ -1350,9 +1359,7 @@ export function ChatListPage() {
       } while (active && refreshQueued)
       requestPending = false
     }
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') void refresh()
-    }
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') void refresh() }
     void refresh()
     window.addEventListener('focus', refreshWhenVisible)
     document.addEventListener('visibilitychange', refreshWhenVisible)
@@ -1362,13 +1369,94 @@ export function ChatListPage() {
       document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
   }, [session?.user.id])
-  return <section className="page-stack"><PageHeading eyebrow="CONVERSATIONS" title="Chat" description="Your conversations." />{isLoading ? <Loading label="Loading conversations" /> : error ? <ErrorState title="Could not load conversations" description={error} /> : conversations.length ? <div className="chat-list">{conversations.map((conversation) => { const name = conversation.member.display_name || conversation.member.username; return <Link to={`/chat/${conversation.id}`} className="chat-row" key={conversation.id}><Avatar name={name} image={conversation.member.avatar_url ?? undefined} /><span className="chat-row__copy"><strong>{name}</strong><span>{conversation.lastMessage?.content || (conversation.lastMessage?.media_type === 'image' ? '📷 Photo' : conversation.lastMessage?.media_type === 'video' ? '🎥 Video' : conversation.lastMessage?.media_type === 'document' ? '📎 Document' : 'No messages yet')}</span></span><span className="chat-row__time">{conversation.unreadCount > 0 ? `${conversation.unreadCount} unread` : conversation.lastMessage ? new Date(conversation.lastMessage.created_at).toLocaleDateString() : ''}</span></Link>})}</div> : <EmptyState title="No conversations yet" description="Start a conversation from a community profile." />}</section>
+
+  function clearHold() {
+    if (holdTimer.current !== null) {
+      window.clearTimeout(holdTimer.current)
+      holdTimer.current = null
+    }
+  }
+  function startHold(id: string) {
+    clearHold()
+    holdTimer.current = window.setTimeout(() => {
+      setSelectedIds((current) => current.includes(id) ? current : [...current, id])
+      suppressNextChatClick.current = true
+      holdTimer.current = null
+    }, 550)
+  }
+  function selectChat(id: string) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  }
+  function persistList(key: string, ids: string[]) {
+    try { window.localStorage.setItem(key, JSON.stringify(ids)) } catch { /* ignore */ }
+  }
+  function hideSelected() {
+    const next = [...new Set([...hiddenIds, ...selectedIds])]
+    setHiddenIds(next); persistList('banjara-chat-hidden', next); setSelectedIds([])
+  }
+  function deleteSelected() {
+    const next = [...new Set([...hiddenIds, ...selectedIds])]
+    setHiddenIds(next); persistList('banjara-chat-hidden', next); setSelectedIds([])
+  }
+  function toggleMuteSelected() {
+    const allMuted = selectedIds.every((id) => mutedIds.includes(id))
+    const next = allMuted ? mutedIds.filter((id) => !selectedIds.includes(id)) : [...new Set([...mutedIds, ...selectedIds])]
+    setMutedIds(next); persistList('banjara-chat-muted', next)
+  }
+  async function blockSelected() {
+    const rows = conversations.filter((item) => selectedIds.includes(item.id))
+    try {
+      for (const row of rows) await toggleBlock(row.member.id, false)
+      setSelectedIds([])
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not block the selected users.'))
+    }
+  }
+  const visibleConversations = conversations.filter((conversation) => !hiddenIds.includes(conversation.id))
+
+  return <section className="page-stack">
+    <PageHeading eyebrow="CONVERSATIONS" title="Chat" description="Your conversations." />
+    {selectedIds.length > 0 && <div className="chat-list-selection" role="toolbar" aria-label="Selected chats">
+      <button type="button" onClick={() => setSelectedIds([])} aria-label="Close selection">×</button>
+      <strong>{selectedIds.length} selected</strong>
+      <button type="button" onClick={hideSelected}>Hide</button>
+      <button type="button" onClick={deleteSelected}>Delete</button>
+      <button type="button" onClick={toggleMuteSelected}>{selectedIds.every((id) => mutedIds.includes(id)) ? 'Unmute' : 'Mute'}</button>
+      <button type="button" onClick={() => void blockSelected()}><Ban size={14} /> Block</button>
+    </div>}
+    {isLoading ? <Loading label="Loading conversations" /> : error && !conversations.length ? <ErrorState title="Could not load conversations" description={error} /> : visibleConversations.length ? <div className="chat-list">
+      {visibleConversations.map((conversation) => {
+        const name = conversation.member.display_name || conversation.member.username
+        const selected = selectedIds.includes(conversation.id)
+        const online = onlineUserIds.has(conversation.member.id)
+        return <Link
+          to={selectedIds.length ? '#' : `/chat/${conversation.id}`}
+          className={`chat-row${selected ? ' chat-row--selected' : ''}`}
+          key={conversation.id}
+          onPointerDown={() => startHold(conversation.id)}
+          onPointerUp={clearHold}
+          onPointerCancel={clearHold}
+          onPointerLeave={clearHold}
+          onContextMenu={(event) => { event.preventDefault(); clearHold(); setSelectedIds((current) => current.includes(conversation.id) ? current : [...current, conversation.id]); suppressNextChatClick.current = true }}
+          onClick={(event) => {
+            if (suppressNextChatClick.current) { event.preventDefault(); suppressNextChatClick.current = false; return }
+            if (selectedIds.length > 0) { event.preventDefault(); selectChat(conversation.id) }
+          }}
+        >
+          <Avatar name={name} image={conversation.member.avatar_url ?? undefined} />
+          <span className="chat-row__copy"><strong>{name}</strong><span>{conversation.lastMessage?.content || (conversation.lastMessage?.media_type === 'image' ? '📷 Photo' : conversation.lastMessage?.media_type === 'video' ? '🎥 Video' : conversation.lastMessage?.media_type === 'document' ? '📎 Document' : 'No messages yet')}</span></span>
+          <span className="chat-row__time"><small className={online ? 'chat-online-dot' : 'chat-offline-dot'}>{online ? 'online' : 'offline'}</small>{mutedIds.includes(conversation.id) && <VolumeX size={13} />}{conversation.unreadCount > 0 ? `${conversation.unreadCount} unread` : conversation.lastMessage ? new Date(conversation.lastMessage.created_at).toLocaleDateString() : ''}</span>
+        </Link>
+      })}
+    </div> : <EmptyState title="No conversations yet" description="Start a conversation from a community profile." />}
+    {error && conversations.length > 0 && <p className="field__error" role="alert">{error}</p>}
+  </section>
 }
 
 export function ChatConversationPage() {
   const { conversationId = '' } = useParams()
-  const { session } = useAuth()
-  const [message, setMessage] = useState('')
+  const { session, onlineUserIds } = useAuth()
+  const [message, setMessage = useState('')
   const [person, setPerson] = useState<ProfileRecord | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -1387,21 +1475,7 @@ export function ChatConversationPage() {
   const [chatMenuOpen, setChatMenuOpen] = useState(false)
   const [chatThemeOpen, setChatThemeOpen] = useState(false)
   const [chatTheme, setChatTheme] = useState('classic')
-  const [peerOnline, setPeerOnline] = useState(false)
-
-  useEffect(() => {
-    if (!person || !session?.user?.id) return
-    const channel = supabase.channel(`chat-presence:${[session.user.id, person.id].sort().join(':')}`, { config: { presence: { key: session.user.id } } })
-    let active = true
-    channel.on('presence', { event: 'sync' }, () => {
-      if (!active) return
-      const state = channel.presenceState()
-      setPeerOnline(Boolean(state[person.id]?.length))
-    }).subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') await channel.track({ online_at: new Date().toISOString() })
-    })
-    return () => { active = false; void channel.untrack(); void supabase.removeChannel(channel) }
-  }, [person?.id, session?.user.id])
+  const peerOnline = Boolean(person?.id && onlineUserIds.has(person.id))
 
   const chatThemes = [
     { id: 'forest', label: 'Gor Forest', preview: '#2D6652' },
@@ -1638,7 +1712,7 @@ export function ChatConversationPage() {
     return
   }
   if (selectedMessageIds.length > 0) toggleMessageSelection(item.id)
-}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" />}{mediaUrl && item.media_type === 'document' && <a className="chat-document" href={mediaUrl} target="_blank" rel="noreferrer"><Paperclip size={17} /><span>Open document</span></a>}{item.content && <p className="chat-message-text">{renderChatMessageContent(item.content)}</p>}</>}<span className="chat-bubble__meta"><time>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{mine && !item.is_deleted_for_everyone && <span className={`chat-read-ticks${item.readByPeer ? ' chat-read-ticks--read' : ''}`} aria-label={item.readByPeer ? 'Read' : 'Sent'}>{item.readByPeer ? '✓✓' : '✓'}</span>}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{isSendingMedia && <div className="chat-media-sending" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending photo/video…</strong><small>You can continue chatting while it sends</small><span className="chat-media-sending__track"><span /></span></span></div>}{selectedMedia && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><input ref={cameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleMediaChange} /><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo, video, or document" onClick={() => mediaInputRef.current?.click()} disabled={isSendingMedia}><Paperclip size={18} /></Button><Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => cameraInputRef.current?.click()} disabled={isSendingMedia}><Camera size={18} /></Button><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form></div></section>
+}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" />}{mediaUrl && item.media_type === 'document' && <a className="chat-document" href={mediaUrl} target="_blank" rel="noreferrer"><Paperclip size={17} /><span>Open document</span></a>}{item.content && <p className="chat-message-text">{renderChatMessageContent(item.content)}</p>}</>}<span className="chat-bubble__meta"><time>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{mine && !item.is_deleted_for_everyone && <span className={`chat-read-ticks${item.readByPeer ? ' chat-read-ticks--read' : ''}`} aria-label={item.readByPeer ? 'Read' : peerOnline ? 'Delivered' : 'Sent'}>{item.readByPeer ? '✓✓✓' : peerOnline ? '✓✓' : '✓'}</span>}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{isSendingMedia && <div className="chat-media-sending" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending photo/video…</strong><small>You can continue chatting while it sends</small><span className="chat-media-sending__track"><span /></span></span></div>}{selectedMedia && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><input ref={cameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleMediaChange} /><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo, video, or document" onClick={() => mediaInputRef.current?.click()} disabled={isSendingMedia}><Paperclip size={18} /></Button><Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => cameraInputRef.current?.click()} disabled={isSendingMedia}><Camera size={18} /></Button><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form></div></section>
 }
 
 
