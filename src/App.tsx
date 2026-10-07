@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
 import { BrandMark } from './components/brand'
@@ -33,6 +33,36 @@ const AboutPage = lazy(() => import('./pages/Pages').then(({ AboutPage }) => ({ 
 const DeveloperPage = lazy(() => import('./pages/DeveloperPage').then(({ DeveloperPage }) => ({ default: DeveloperPage })))
 const NotFoundPage = lazy(() => import('./pages/Pages').then(({ NotFoundPage }) => ({ default: NotFoundPage })))
 
+class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, _info: ErrorInfo) {
+    console.error('Banjara Connect failed to render:', error)
+  }
+
+  handleRetry = () => {
+    window.location.reload()
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+
+    return (
+      <main className="state-block state-block--error" role="alert" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: '24px' }}>
+        <div style={{ maxWidth: '420px', textAlign: 'center' }}>
+          <h2>Banjara Connect could not load</h2>
+          <p>Please reload the app. Your account and data are safe.</p>
+          <button className="button button--primary" type="button" onClick={this.handleRetry}>Reload app</button>
+        </div>
+      </main>
+    )
+  }
+}
+
 export default function App() {
   useEffect(() => {
     const applyTheme = () => {
@@ -62,7 +92,6 @@ export default function App() {
     }
   }, [])
 
-  // Warm the main app chunk while the launch intro is visible so route changes do not wait on it.
   useEffect(() => {
     void import('./pages/Pages')
     void import('./pages/BanjaraHistoryPage')
@@ -70,43 +99,43 @@ export default function App() {
   }, [])
 
   return (
-    <>
+    <AppErrorBoundary>
       <Suspense fallback={<div className="state-block" role="status">Loading page…</div>}>
-      <Routes>
-        <Route path="/" element={<SplashPage />} />
-        <Route path="/splash" element={<SplashPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route element={<AppLayout />}>
-          <Route path="home" element={<HomePage />} />
-          <Route path="connect" element={<ConnectPage />} />
-          <Route path="community" element={<CommunityPage />} />
-          <Route path="community/history" element={<BanjaraHistoryPage />} />
-          <Route path="community/groups/:groupId" element={<CommunityGroupPage />} />
-          <Route path="search" element={<SearchPage />} />
-          <Route path="create" element={<CreatePostPage />} />
-          <Route path="posts/:postId" element={<PostDetailsPage />} />
-          <Route path="posts/:postId/comments" element={<CommentsPage />} />
-          <Route path="profile/:handle?" element={<ProfilePage />} />
-          <Route path="edit-profile" element={<EditProfilePage />} />
-          <Route path="stories" element={<StoriesPage />} />
-          <Route path="reels" element={<ReelsPage />} />
-          <Route path="chat" element={<ChatListPage />} />
-          <Route path="chat/:conversationId" element={<ChatConversationPage />} />
-          <Route path="notifications" element={<NotificationsPage />} />
-          <Route path="assistant" element={<AssistantPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="settings/privacy" element={<PrivacyPage />} />
-          <Route path="settings/security" element={<ChangePasswordPage />} />
-          <Route path="settings/blocked" element={<BlockedUsersPage />} />
-          <Route path="report" element={<ReportPage />} />
-          <Route path="settings/delete-account" element={<DeleteAccountPage />} />
-          <Route path="about" element={<AboutPage />} />
-          <Route path="about/developer" element={<DeveloperPage />} />
-        </Route>
-        <Route path="/404" element={<NotFoundPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+        <Routes>
+          <Route path="/" element={<SplashPage />} />
+          <Route path="/splash" element={<SplashPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route element={<AppLayout />}>
+            <Route path="home" element={<HomePage />} />
+            <Route path="connect" element={<ConnectPage />} />
+            <Route path="community" element={<CommunityPage />} />
+            <Route path="community/history" element={<BanjaraHistoryPage />} />
+            <Route path="community/groups/:groupId" element={<CommunityGroupPage />} />
+            <Route path="search" element={<SearchPage />} />
+            <Route path="create" element={<CreatePostPage />} />
+            <Route path="posts/:postId" element={<PostDetailsPage />} />
+            <Route path="posts/:postId/comments" element={<CommentsPage />} />
+            <Route path="profile/:handle?" element={<ProfilePage />} />
+            <Route path="edit-profile" element={<EditProfilePage />} />
+            <Route path="stories" element={<StoriesPage />} />
+            <Route path="reels" element={<ReelsPage />} />
+            <Route path="chat" element={<ChatListPage />} />
+            <Route path="chat/:conversationId" element={<ChatConversationPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="assistant" element={<AssistantPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings/privacy" element={<PrivacyPage />} />
+            <Route path="settings/security" element={<ChangePasswordPage />} />
+            <Route path="settings/blocked" element={<BlockedUsersPage />} />
+            <Route path="report" element={<ReportPage />} />
+            <Route path="settings/delete-account" element={<DeleteAccountPage />} />
+            <Route path="about" element={<AboutPage />} />
+            <Route path="about/developer" element={<DeveloperPage />} />
+          </Route>
+          <Route path="/404" element={<NotFoundPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
       </Suspense>
       {showLaunchIntro && (
         <main className="splash" aria-label="Banjara Connect intro">
@@ -120,6 +149,6 @@ export default function App() {
           </div>
         </main>
       )}
-    </>
+    </AppErrorBoundary>
   )
 }
