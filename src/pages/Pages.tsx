@@ -5,7 +5,7 @@ import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
 import { PwaInstallControl } from '../components/PwaInstall'
-import { StoriesRail } from '../components/stories'
+import { StoriesRail, markStoryViewed } from '../components/stories'
 import { Avatar, Button, ConfirmationDialog, EmptyState, ErrorState, Input, Loading, Modal } from '../components/ui'
 import { UserCard } from '../components/users'
 import { useAuth } from '../hooks/AuthProvider'
@@ -1193,6 +1193,7 @@ export function StoriesPage() {
   }
 
   const openViewer = (story: StoryRecord) => {
+    markStoryViewed(story)
     setSelectedStory(story)
     setReplyMessage('')
     setSuccess('')
