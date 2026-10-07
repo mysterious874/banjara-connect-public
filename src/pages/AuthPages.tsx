@@ -49,8 +49,8 @@ export function LoginPage() {
     event.preventDefault()
     setError('')
     const normalizedUsername = username.trim()
-    if (!/^[A-Za-z0-9_]{3,30}$/.test(normalizedUsername)) {
-      setError('Enter your username (3–30 letters, numbers, or underscores).')
+    if (!/^[A-Za-z0-9_-]{3,30}$/.test(normalizedUsername)) {
+      setError('Enter your username (3–30 letters, numbers, underscores, or hyphens).')
       return
     }
     if (password.length < 6) {
@@ -105,8 +105,8 @@ export function SignupPage() {
     event.preventDefault()
     setError('')
     const normalizedUsername = username.trim()
-    if (!/^[A-Za-z0-9_]{3,30}$/.test(normalizedUsername)) {
-      setError('Username must be 3–30 characters using only letters, numbers, or underscores.')
+    if (!/^[A-Za-z0-9_-]{3,30}$/.test(normalizedUsername)) {
+      setError('Username must be 3–30 characters using only letters, numbers, underscores, or hyphens.')
       return
     }
     if (password.length < 6) {
