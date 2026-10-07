@@ -17,9 +17,32 @@ function preloadStoryMedia(story?: StoryRecord) {
   }
 }
 
+const STORY_VIEWED_KEY = 'banjara_connect_story_views_v1'
+
+function loadViewedStories() {
+  try {
+    return JSON.parse(localStorage.getItem(STORY_VIEWED_KEY) || '{}') as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+export function markStoryViewed(story?: StoryRecord) {
+  if (!story) return
+  const viewed = loadViewedStories()
+  viewed[story.user_id] = story.id
+  try { localStorage.setItem(STORY_VIEWED_KEY, JSON.stringify(viewed)) } catch { /* ignore storage failures */ }
+}
+
+export function hasViewedStory(story?: StoryRecord) {
+  if (!story) return false
+  return loadViewedStories()[story.user_id] === story.id
+}
+
 export function StoryCard({ story, own = false }: { story?: StoryRecord; own?: boolean }) {
   const name = story?.author?.display_name || story?.author?.username || 'Community member'
-  return <Link to="/stories" state={story ? { story } : undefined} onPointerDown={() => preloadStoryMedia(story)} className={`story-card${own ? ' story-card--own' : ''}`} aria-label={own ? 'Add a story' : `${name}'s story`}>
+  const viewed = !own && hasViewedStory(story)
+  return <Link to="/stories" state={story ? { story } : undefined} onPointerDown={() => preloadStoryMedia(story)} onClick={() => markStoryViewed(story)} className={`story-card${own ? ' story-card--own' : ''}${!viewed && !own ? ' story-card--unread' : ''}`} aria-label={own ? 'Add a story' : `${name}'s story`}>
     <span className="story-card__ring"><Avatar name={name} image={story?.author?.avatar_url ?? undefined} size="large" />{own && <span className="story-card__add"><Plus size={15} /></span>}</span>
     <span className="story-card__name">{own ? 'Your story' : name}</span>
   </Link>
