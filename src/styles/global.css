@@ -2908,3 +2908,24 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 .chat-screen:not([class*="chat-screen--theme-"]) .chat-bubble--you { color: #fff; background: var(--chat-own); border-color: var(--chat-own); }
 .chat-screen:not([class*="chat-screen--theme-"]) .chat-compose-area { background: var(--chat-compose); border-color: var(--chat-line); }
 .chat-screen:not([class*="chat-screen--theme-"]) .chat-compose-area .field__control { background: var(--chat-input); }
+
+
+/* Keep both normal and community chat headers fixed while the message area scrolls. */
+.chat-screen {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+.chat-screen .chat-screen__head {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 30 !important;
+  flex: 0 0 auto !important;
+  transform: none !important;
+}
+.chat-screen .chat-messages {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
