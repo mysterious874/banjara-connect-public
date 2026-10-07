@@ -1521,6 +1521,7 @@ type CommunityGroupMessage = {
   media_url: string | null
   media_type: 'image' | 'video' | null
   media_signed_url?: string | null
+  is_deleted_for_everyone: boolean
   created_at: string
 }
 
@@ -1548,6 +1549,10 @@ export function CommunityGroupPage() {
   const [editDescription, setEditDescription] = useState('')
   const [groupSaving, setGroupSaving] = useState(false)
   const [selectedGroupMedia, setSelectedGroupMedia] = useState<File | null>(null)
+  const [selectedGroupMessageIds, setSelectedGroupMessageIds] = useState<string[]>([])
+  const [pendingGroupDelete, setPendingGroupDelete] = useState('')
+  const groupLongPressTimer = useRef<number | null>(null)
+  const suppressNextGroupMessageClick = useRef(false)
   const [isSendingGroupMedia, setIsSendingGroupMedia] = useState(false)
   const groupMediaInputRef = useRef<HTMLInputElement | null>(null)
   const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(false)
@@ -1585,13 +1590,17 @@ export function CommunityGroupPage() {
         try {
           const { data: latest, error: latestError } = await supabase
             .from('community_group_messages')
-            .select('id,group_id,sender_id,content,media_url,media_type,created_at')
+            .select('id,group_id,sender_id,content,media_url,media_type,is_deleted_for_everyone,created_at')
             .eq('group_id', groupId)
             .order('created_at', { ascending: false })
             .limit(100)
           if (latestError) throw latestError
           if (!active) break
-          const incoming = ((latest ?? []) as CommunityGroupMessage[]).reverse()
+          const latestIds = (latest ?? []).map((row) => row.id)
+          const { data: hiddenRows, error: hiddenError } = latestIds.length ? await supabase.from('community_group_message_deletions').select('message_id').eq('user_id', session?.user.id ?? '').in('message_id', latestIds) : { data: [], error: null }
+          if (hiddenError) throw hiddenError
+          const hiddenIds = new Set((hiddenRows ?? []).map((row) => row.message_id as string))
+          const incoming = ((latest ?? []) as CommunityGroupMessage[]).filter((row) => !hiddenIds.has(row.id)).reverse()
           for (const item of incoming) {
             if (item.media_url) {
               try { item.media_signed_url = await createGroupMediaUrl(item.media_url) } catch { item.media_signed_url = null }
@@ -1662,7 +1671,11 @@ export function CommunityGroupPage() {
         if (messagesError) throw messagesError
         if (membersError) throw membersError
         if (!groupRow) throw new Error('This community no longer exists.')
-        const fetchedRows = (rows ?? []) as CommunityGroupMessage[]
+        const fetchedIds = (rows ?? []).map((row) => row.id)
+        const { data: initialHidden, error: initialHiddenError } = fetchedIds.length ? await supabase.from('community_group_message_deletions').select('message_id').eq('user_id', session.user.id).in('message_id', fetchedIds) : { data: [], error: null }
+        if (initialHiddenError) throw initialHiddenError
+        const initialHiddenIds = new Set((initialHidden ?? []).map((row) => row.message_id as string))
+        const fetchedRows = ((rows ?? []) as CommunityGroupMessage[]).filter((row) => !initialHiddenIds.has(row.id))
         setHasOlderGroupMessages(fetchedRows.length > 100)
         const nextMessages = fetchedRows.slice(0, 100).reverse()
         for (const groupMessage of nextMessages) {
@@ -1810,18 +1823,17 @@ export function CommunityGroupPage() {
     }
   }
 
-  async function addGroupMember(userId: string) {
+  async function requestGroupMember(userId: string) {
     if (!groupId) return
     setMemberAction(userId)
     setMemberError('')
     try {
-      const { error: addError } = await supabase.rpc('add_community_group_member', { p_group_id: groupId, p_user_id: userId })
-      if (addError) throw addError
+      const { error: requestError } = await supabase.rpc('request_community_group_join', { p_group_id: groupId, p_recipient_id: userId })
+      if (requestError) throw requestError
       setMemberResults((current) => current.filter((profile) => profile.id !== userId))
-      await loadGroupMembers()
       setMemberQuery('')
     } catch (caught) {
-      setMemberError(userFacingError(caught, 'Could not add this member.'))
+      setMemberError(userFacingError(caught, 'Could not send this group request.'))
     } finally {
       setMemberAction('')
     }
@@ -1985,6 +1997,66 @@ export function CommunityGroupPage() {
     }
   }
 
+  function clearGroupLongPressTimer() {
+    if (groupLongPressTimer.current !== null) {
+      window.clearTimeout(groupLongPressTimer.current)
+      groupLongPressTimer.current = null
+    }
+  }
+
+  function toggleGroupMessageSelection(messageId: string) {
+    setSelectedGroupMessageIds((current) => current.includes(messageId) ? current.filter((id) => id !== messageId) : [...current, messageId])
+  }
+
+  function startGroupMessageLongPress(messageId: string) {
+    clearGroupLongPressTimer()
+    groupLongPressTimer.current = window.setTimeout(() => {
+      setSelectedGroupMessageIds((current) => current.includes(messageId) ? current : [...current, messageId])
+      suppressNextGroupMessageClick.current = true
+      groupLongPressTimer.current = null
+    }, 550)
+  }
+
+  function handleGroupMessageContextMenu(event: MouseEvent, messageId: string) {
+    event.preventDefault()
+    clearGroupLongPressTimer()
+    suppressNextGroupMessageClick.current = true
+    setSelectedGroupMessageIds((current) => current.includes(messageId) ? current : [...current, messageId])
+  }
+
+  function cancelGroupMessageSelection() {
+    clearGroupLongPressTimer()
+    setSelectedGroupMessageIds([])
+  }
+
+  async function deleteSelectedGroupMessages(mode: 'me' | 'everyone') {
+    if (!selectedGroupMessageIds.length || pendingGroupDelete) return
+    const selected = messages.filter((item) => selectedGroupMessageIds.includes(item.id))
+    setPendingGroupDelete('bulk')
+    setError('')
+    try {
+      if (mode === 'me') {
+        for (const item of selected) {
+          const { error: deleteError } = await supabase.rpc('delete_community_group_message_for_me', { p_message_id: item.id })
+          if (deleteError) throw deleteError
+        }
+        setMessages((current) => current.filter((item) => !selectedGroupMessageIds.includes(item.id)))
+      } else {
+        const own = selected.filter((item) => item.sender_id === session?.user.id || isGroupAdmin)
+        for (const item of own) {
+          const { data: mediaPath, error: deleteError } = await supabase.rpc('delete_community_group_message_for_everyone', { p_message_id: item.id })
+          if (deleteError) throw deleteError
+          if (mediaPath) await deleteGroupMedia([mediaPath as string]).catch(() => undefined)
+        }
+        const ownIds = new Set(own.map((item) => item.id))
+        setMessages((current) => current.map((item) => ownIds.has(item.id) ? { ...item, content: 'Message deleted', media_url: null, media_type: null, media_signed_url: null, is_deleted_for_everyone: true } : item))
+      }
+      setSelectedGroupMessageIds([])
+    } catch (caught) {
+      setError(userFacingError(caught, mode === 'everyone' ? 'Could not delete the selected messages for everyone.' : 'Could not delete the selected messages for you.'))
+    } finally { setPendingGroupDelete('') }
+  }
+
   async function sendGroupMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const textToSend = message.trim()
@@ -2025,21 +2097,8 @@ export function CommunityGroupPage() {
   }
 
   async function deleteGroupMessage(messageId: string) {
-    if (!session?.user || !groupId) return
-    const target = messages.find((item) => item.id === messageId)
-    const canDelete = target?.sender_id === session.user.id || isGroupAdmin
-    if (!canDelete) return
-    try {
-      const { error: deleteError } = await supabase
-        .from('community_group_messages')
-        .delete()
-        .eq('id', messageId)
-      if (deleteError) throw deleteError
-      if (target?.media_url) await deleteGroupMedia([target.media_url]).catch(() => undefined)
-      setMessages((current) => current.filter((item) => item.id !== messageId))
-    } catch (caught) {
-      setError(userFacingError(caught, 'Could not delete this message.'))
-    }
+    setSelectedGroupMessageIds([messageId])
+    await deleteSelectedGroupMessages('everyone')
   }
 
   if (isLoading) return <section className="chat-screen"><Loading label="Loading community" /></section>
@@ -2098,19 +2157,18 @@ export function CommunityGroupPage() {
 
     <div className="chat-messages">
       {hasOlderGroupMessages && <div className="chat-history-loader"><Button variant="outline" onClick={() => void loadOlderGroupMessages()} disabled={isLoadingOlderGroupMessages}>{isLoadingOlderGroupMessages ? 'Loading older messages…' : 'Load older messages'}</Button></div>}
+      {selectedGroupMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelGroupMessageSelection} aria-label="Close message selection">×</button><strong>{selectedGroupMessageIds.length} selected</strong><button type="button" disabled={pendingGroupDelete === 'bulk'} onClick={() => void deleteSelectedGroupMessages('me')}>Delete for me</button><button type="button" disabled={pendingGroupDelete === 'bulk'} onClick={() => void deleteSelectedGroupMessages('everyone')}>Delete for everyone</button></div>}
       {messages.length ? messages.map((item) => {
         const mine = item.sender_id === session?.user.id
+        const selected = selectedGroupMessageIds.includes(item.id)
         const sender = profiles[item.sender_id]
         const senderName = sender?.display_name || sender?.username || 'Community member'
-        return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}`} key={item.id}>
-          <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}`}>
+        return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}`} key={item.id}>
+          <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startGroupMessageLongPress(item.id)} onPointerUp={clearGroupLongPressTimer} onPointerCancel={clearGroupLongPressTimer} onPointerLeave={clearGroupLongPressTimer} onContextMenu={(event) => handleGroupMessageContextMenu(event, item.id)} onClick={() => { if (suppressNextGroupMessageClick.current) { suppressNextGroupMessageClick.current = false; return } if (selectedGroupMessageIds.length > 0) toggleGroupMessageSelection(item.id) }}>
             {!mine && <strong className="community-group-message__sender">{senderName}</strong>}
-            {item.media_signed_url && item.media_type === 'image' && <img className="chat-message-media" src={item.media_signed_url} alt="Shared photo" loading="lazy" />}
-            {item.media_signed_url && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={item.media_signed_url} controls playsInline preload="metadata" />}
-            {item.content && <p className="chat-message-text">{item.content}</p>}
+            {item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{item.media_signed_url && item.media_type === 'image' && <img className="chat-message-media" src={item.media_signed_url} alt="Shared photo" loading="lazy" />}{item.media_signed_url && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={item.media_signed_url} controls playsInline preload="metadata" />}{item.content && <p className="chat-message-text">{item.content}</p>}</>}
             <span>{new Date(item.created_at).toLocaleTimeString()}</span>
-            {(mine || isGroupAdmin) && <button type="button" className="community-group-message__delete" onClick={() => void deleteGroupMessage(item.id)} aria-label={mine ? 'Delete message' : 'Delete message as admin'}>{mine ? 'Delete' : 'Delete · Admin'}</button>}
-            {!mine && <button type="button" className="community-group-message__delete" onClick={() => { setReportTarget({ messageId: item.id, userId: item.sender_id, label: senderName }); setReportError('') }} aria-label="Report message"><Flag size={13} /> Report</button>}
+            {!mine && !selectedGroupMessageIds.length && <button type="button" className="community-group-message__delete" onClick={(event) => { event.stopPropagation(); setReportTarget({ messageId: item.id, userId: item.sender_id, label: senderName }); setReportError('') }} aria-label="Report message"><Flag size={13} /> Report</button>}
           </div>
         </div>
       }) : <p className="micro-note">No messages yet. Say hello to the group.</p>}
@@ -2126,7 +2184,7 @@ export function CommunityGroupPage() {
           try { validateGroupMedia(file); setError(''); setSelectedGroupMedia(file) } catch (caught) { event.target.value = ''; setSelectedGroupMedia(null); setError(userFacingError(caught, 'This media file could not be selected.')) }
         }} />
         <Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" onClick={() => groupMediaInputRef.current?.click()} disabled={isSendingGroupMedia}><Paperclip size={18} /></Button>
-        <Input aria-label="Group message" placeholder={selectedGroupMedia ? 'Add a caption (optional)' : 'Message this community'} value={message} onChange={(event) => setMessage(event.target.value)} />
+        <Input aria-label="Group message" placeholder={selectedGroupMedia ? 'Add a caption (optional)' : 'Message this community'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} />
         <Button type="submit" disabled={(!message.trim() && !selectedGroupMedia) || isSending || isSendingGroupMedia} iconOnly aria-label="Send group message">{isSending || isSendingGroupMedia ? '…' : <Send size={17} />}</Button>
       </form>
       <p className="micro-note">Photos and videos up to 50 MB</p>
@@ -2137,7 +2195,7 @@ export function CommunityGroupPage() {
         <Input aria-label="Search username to add" placeholder="Search username to add" value={memberQuery} onChange={(event) => void searchGroupMembers(event.target.value)} />
         {memberError && <p className="field__error" role="alert">{memberError}</p>}
         {membersLoading && <Loading label="Loading members" />}
-        {memberResults.length > 0 && <div className="community-group-member-results">{memberResults.map((profile) => <div className="community-group-member-row" key={profile.id}><Avatar name={profile.display_name || profile.username} image={profile.avatar_url ?? undefined} /><span><strong>{profile.display_name || profile.username}</strong><small>@{profile.username}</small></span><Button type="button" onClick={() => void addGroupMember(profile.id)} disabled={memberAction === profile.id}>{memberAction === profile.id ? '…' : 'Add'}</Button></div>)}</div>}
+        {memberResults.length > 0 && <div className="community-group-member-results">{memberResults.map((profile) => <div className="community-group-member-row" key={profile.id}><Avatar name={profile.display_name || profile.username} image={profile.avatar_url ?? undefined} /><span><strong>{profile.display_name || profile.username}</strong><small>@{profile.username}</small></span><Button type="button" onClick={() => void requestGroupMember(profile.id)} disabled={memberAction === profile.id}>{memberAction === profile.id ? '…' : 'Request'}</Button></div>)}</div>}
         <div className="community-group-member-list">{members.map((member) => {
           const currentUser = members.find((item) => item.user_id === session?.user.id)
           const isCurrentAdmin = currentUser?.role === 'admin'
