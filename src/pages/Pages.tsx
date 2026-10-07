@@ -1673,7 +1673,8 @@ export function CommunityGroupPage() {
   const groupCameraInputRef = useRef<HTMLInputElement | null>(null)
   const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(false)
   const [isLoadingOlderGroupMessages, setIsLoadingOlderGroupMessages] = useState(false)
-  const isGroupAdmin = Boolean(session?.user && group && (group.created_by === session.user.id || members.some((member) => member.user_id === session.user.id && member.role === 'admin')))
+  const isGroupCreator = Boolean(session?.user && group && group.created_by === session.user.id)
+  const isGroupAdmin = Boolean(session?.user && group && (isGroupCreator || members.some((member) => member.user_id === session.user.id && member.role === 'admin')))
   const [reportsOpen, setReportsOpen] = useState(false)
   const [reports, setReports] = useState<Array<{ id: string; reporter_id: string; reported_user_id: string | null; group_message_id: string | null; reason: string; details: string | null; status: string; created_at: string; resolved_at: string | null }>>([])
   const [reportsLoading, setReportsLoading] = useState(false)
@@ -2240,10 +2241,10 @@ export function CommunityGroupPage() {
           <button type="button" className="chat-options-menu__item" onClick={() => { setGroupMenuOpen(false); setMembersOpen(true); void loadGroupMembers() }}><Users size={17} /><span>Add members</span></button>
           {isGroupAdmin && <button type="button" className="chat-options-menu__item" onClick={() => { setGroupMenuOpen(false); void loadGroupReports() }} disabled={reportsLoading}><Flag size={17} /><span>{reportsLoading ? 'Loading reports…' : 'Reports'}</span></button>}
           {isGroupAdmin && <button type="button" className="chat-options-menu__item" onClick={() => { setGroupMenuOpen(false); setEditName(group.name); setEditDescription(group.description || ''); setMemberError(''); setGroupEditOpen(true) }}><Pencil size={17} /><span>Edit community</span></button>}
-          {isGroupAdmin && <button type="button" className="chat-options-menu__item chat-options-menu__item--danger" onClick={() => { setGroupMenuOpen(false); setMemberError(''); setGroupDeleteOpen(true) }}><Trash2 size={17} /><span>Delete community</span></button>}
+          {isGroupCreator && <button type="button" className="chat-options-menu__item chat-options-menu__item--danger" onClick={() => { setGroupMenuOpen(false); setMemberError(''); setGroupDeleteOpen(true) }}><Trash2 size={17} /><span>Delete community</span></button>}
+          {!isGroupCreator && <button type="button" className="chat-options-menu__item chat-options-menu__item--danger" onClick={() => { setGroupMenuOpen(false); void leaveGroup() }} disabled={memberAction === 'leave'}><LogOut size={17} /><span>{memberAction === 'leave' ? 'Leaving…' : 'Leave community'}</span></button>}
         </div>}
       </div>
-      <button type="button" className="icon-button" aria-label="Leave community" onClick={() => void leaveGroup()} disabled={memberAction === 'leave'}>{memberAction === 'leave' ? '…' : <ArrowRight size={17} />}</button>
     </header>
     <Modal open={groupEditOpen} title="Edit community" onClose={() => setGroupEditOpen(false)}>
       <form className="form-stack" onSubmit={saveGroupDetails}>
