@@ -46,6 +46,7 @@ type AuthContextValue = {
   profile: ProfileRecord | null
   isProfileLoading: boolean
   profileError: string | null
+  onlineUserIds: Set<string>
   refreshProfile: () => Promise<ProfileRecord | null>
   updateProfile: (updates: ProfileUpdate) => Promise<{ data: ProfileRecord | null; error: string | null }>
   signOut: () => Promise<{ error: AuthError | null }>
