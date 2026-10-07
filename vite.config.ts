@@ -11,9 +11,9 @@ export default defineConfig({
       includeAssets: ['banjara-mark.svg', 'banjara-mark-maskable.svg'],
       manifest: {
         id: '/',
-        name: 'Banjara Connect',
-        short_name: 'Banjara Connect',
-        description: 'Banjara Connect brings community stories, culture, and conversations together.',
+        name: 'Connect',
+        short_name: 'Connect',
+        description: 'Connect brings people, community, and culture together.',
         start_url: '/',
         scope: '/',
         display: 'standalone',
