@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useEffect, type ErrorInfo, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
 import { BrandMark } from './components/brand'
@@ -82,17 +82,6 @@ export default function App() {
     }
   }, [])
 
-  const [showLaunchIntro, setShowLaunchIntro] = useState(false)
-
-  useEffect(() => {
-    const isSplashRoute = window.location.pathname === '/' || window.location.pathname === '/splash'
-    if (!isSplashRoute) {
-      setShowLaunchIntro(true)
-      const timer = window.setTimeout(() => setShowLaunchIntro(false), 3500)
-      return () => window.clearTimeout(timer)
-    }
-  }, [])
-
   useEffect(() => {
     void import('./pages/Pages')
     void import('./pages/BanjaraHistoryPage')
@@ -138,18 +127,6 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
-      {showLaunchIntro && (
-        <main className="splash" aria-label="Connect intro">
-          <div className="splash__pattern" aria-hidden="true" />
-          <div className="splash__content">
-            <span className="splash__logo-wrap" aria-hidden="true"><span className="splash__logo-ring" /><BrandMark size="large" /></span>
-            <h1>Connect</h1>
-            <span className="splash__line" />
-            <p>Where our people connect, share and grow together.</p>
-            <span className="splash__loader" aria-hidden="true"><span /></span>
-          </div>
-        </main>
-      )}
     </AppErrorBoundary>
   )
 }
