@@ -4,7 +4,6 @@ import { AppLayout } from './layouts/AppLayout'
 import { BrandMark } from './components/brand'
 
 const SplashPage = lazy(() => import('./pages/AuthPages').then(({ SplashPage }) => ({ default: SplashPage })))
-const InstallPage = lazy(() => import('./pages/InstallPage').then(({ InstallPage }) => ({ default: InstallPage })))
 const LoginPage = lazy(() => import('./pages/AuthPages').then(({ LoginPage }) => ({ default: LoginPage })))
 const SignupPage = lazy(() => import('./pages/AuthPages').then(({ SignupPage }) => ({ default: SignupPage })))
 const HomePage = lazy(() => import('./pages/Pages').then(({ HomePage }) => ({ default: HomePage })))
@@ -107,7 +106,6 @@ export default function App() {
           <Route path="/splash" element={<SplashPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
-          <Route path="/install" element={<InstallPage />} />
           <Route element={<AppLayout />}>
             <Route path="home" element={<HomePage />} />
             <Route path="connect" element={<ConnectPage />} />
