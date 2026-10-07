@@ -28,6 +28,7 @@ import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
 import { deleteMessageForEveryone, deleteMessageForMe, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
 import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostLikesBatch, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
+import { getCached, setCached } from '../utils/performanceCache'
 
 function renderChatMessageContent(content: string) {
   return content.split('\n').map((line, index, lines) => {
@@ -52,15 +53,18 @@ function PreviewNotice({ children = 'FRONTEND PREVIEW · LOCAL SAMPLE CONTENT' }
 
 export function HomePage() {
   const { profile, isProfileLoading, profileError, session } = useAuth()
-  const [posts, setPosts] = useState<FeedPost[]>([])
-  const [isPostsLoading, setIsPostsLoading] = useState(true)
+  const userId = session?.user.id ?? ''
+  const cachedPosts = userId ? getCached<{ posts: FeedPost[]; hasMore: boolean; nextOffset: number }>(`home-posts:${userId}`) : null
+  const cachedPeople = userId ? getCached<ProfileRecord[]>(`home-people:${userId}`) : null
+  const [posts, setPosts] = useState<FeedPost[]>(cachedPosts?.posts ?? [])
+  const [isPostsLoading, setIsPostsLoading] = useState(!cachedPosts)
   const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false)
-  const [postsHasMore, setPostsHasMore] = useState(false)
-  const [postsOffset, setPostsOffset] = useState(0)
+  const [postsHasMore, setPostsHasMore] = useState(cachedPosts?.hasMore ?? false)
+  const [postsOffset, setPostsOffset] = useState(cachedPosts?.nextOffset ?? 0)
   const [postsError, setPostsError] = useState('')
   const [postLikeStates, setPostLikeStates] = useState<Map<string, { count: number; liked: boolean }>>(new Map())
-  const [people, setPeople] = useState<ProfileRecord[]>([])
-  const [isPeopleLoading, setIsPeopleLoading] = useState(true)
+  const [people, setPeople] = useState<ProfileRecord[]>(cachedPeople ?? [])
+  const [isPeopleLoading, setIsPeopleLoading] = useState(!cachedPeople)
   const [peopleError, setPeopleError] = useState('')
 
   useEffect(() => {
@@ -71,13 +75,14 @@ export function HomePage() {
       setIsPeopleLoading(false)
       return () => { active = false }
     }
-    setPeople([])
+    // Keep cached content visible; refresh it silently in the background.
     setPeopleError('')
-    setIsPeopleLoading(true)
-    loadProfiles().then((nextPeople) => {
-      if (active) setPeople(nextPeople)
+    void loadProfiles().then((nextPeople) => {
+      if (!active) return
+      setPeople(nextPeople)
+      setCached(`home-people:${session.user.id}`, nextPeople, 60_000)
     }).catch((error: unknown) => {
-      if (active) setPeopleError(userFacingError(error, 'Could not load profiles.'))
+      if (active && !people.length) setPeopleError(userFacingError(error, 'Could not load profiles.'))
     }).finally(() => {
       if (active) setIsPeopleLoading(false)
     })
@@ -93,25 +98,26 @@ export function HomePage() {
       setIsPostsLoading(false)
       return () => { active = false }
     }
-    setPosts([])
-    setPostsHasMore(false)
-    setIsPostsLoading(true)
     setPostsError('')
     void (async () => {
       try {
         const blockedIds = await loadBlockedUserIds()
         const page = await loadPostsPage({ excludeUserIds: blockedIds })
-        if (active) {
-          setPosts(page.posts)
-          setPostsHasMore(page.hasMore)
-          const likeStates = await loadPostLikesBatch(page.posts.map((post) => post.id))
+        if (!active) return
+        // Render feed immediately; likes are intentionally non-blocking.
+        setPosts(page.posts)
+        setPostsHasMore(page.hasMore)
+        setPostsOffset(page.nextOffset)
+        setIsPostsLoading(false)
+        setCached(`home-posts:${session.user.id}`, page, 30_000)
+        void loadPostLikesBatch(page.posts.map((post) => post.id)).then((likeStates) => {
           if (active) setPostLikeStates(likeStates)
-          setPostsOffset(page.nextOffset)
-        }
+        }).catch(() => {})
       } catch (error) {
-        if (active) setPostsError(userFacingError(error, 'Could not load posts.'))
-      } finally {
-        if (active) setIsPostsLoading(false)
+        if (active) {
+          if (!posts.length) setPostsError(userFacingError(error, 'Could not load posts.'))
+          setIsPostsLoading(false)
+        }
       }
     })()
     return () => { active = false }
@@ -154,73 +160,12 @@ export function HomePage() {
         {isPostsLoading ? <Loading label="Loading posts" /> : postsError && !posts.length ? <ErrorState title="Could not load posts" description={postsError} /> : posts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared with your community will appear here." action={<Button to="/create" variant="outline">Create a post</Button>} /> : <><div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} initialLikeState={postLikeStates.get(post.id)} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>{postsError && <p className="field__error" role="alert">{postsError}</p>}{postsHasMore && <Button variant="outline" onClick={() => void loadMorePosts()} disabled={isLoadingMorePosts}>{isLoadingMorePosts ? 'Loading posts…' : 'Load more posts'}</Button>}</>}
       </div>
       <aside className="home-aside">
-        <section className="aside-section"><div className="aside-section__heading"><h2>People to know</h2><Link className="text-link" to="/connect">More</Link></div>{isPeopleLoading ? <Loading label="Loading profiles" /> : peopleError ? <p className="field__error" role="alert">{peopleError}</p> : <div className="user-list">{people.slice(0, 2).map((user) => <UserCard key={user.id} user={user} compact />)}</div>}</section>
+        <section className="aside-section"><div className="aside-section__heading"><h2>People to know</h2><Link className="text-link" to="/connect">More</Link></div>{isPeopleLoading && !people.length ? <Loading label="Loading profiles" /> : peopleError ? <p className="field__error" role="alert">{peopleError}</p> : <div className="user-list">{people.slice(0, 2).map((user) => <UserCard key={user.id} user={user} compact />)}</div>}</section>
         <section className="community-note"><span className="community-note__symbol">✳</span><div><span className="eyebrow">A NOTE FOR THE CIRCLE</span><p>Carry your stories with pride. Make space for someone else's, too.</p></div></section>
         <Link to="/about" className="aside-about">About Banjara Connect <ChevronRight size={15} /></Link>
       </aside>
     </div>
   )
-}
-
-export function ConnectPage() {
-  const { session } = useAuth()
-  const [connectSearchParams] = useSearchParams()
-  const [people, setPeople] = useState<ProfileRecord[]>([])
-  const [searchResults, setSearchResults] = useState<ProfileRecord[]>([])
-  const [usernameQuery, setUsernameQuery] = useState(() => connectSearchParams.get('q') ?? '')
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSearching, setIsSearching] = useState(false)
-  const [error, setError] = useState('')
-  const [searchError, setSearchError] = useState('')
-  useEffect(() => {
-    let active = true
-    if (!session?.user) {
-      setPeople([])
-      setSearchResults([])
-      setUsernameQuery('')
-      setError('')
-      setIsLoading(false)
-      return () => { active = false }
-    }
-    setPeople([])
-    setError('')
-    setIsLoading(true)
-    loadProfiles().then((nextPeople) => { if (active) setPeople(nextPeople) }).catch((caught: unknown) => { if (active) setError(userFacingError(caught, 'Could not load profiles.')) }).finally(() => { if (active) setIsLoading(false) })
-    return () => { active = false }
-  }, [session?.user.id])
-  useEffect(() => {
-    const next = connectSearchParams.get('q') ?? ''
-    if (next !== usernameQuery) setUsernameQuery(next)
-  }, [connectSearchParams])
-  useEffect(() => {
-    let active = true
-    const value = usernameQuery.trim()
-    setSearchError('')
-    if (value.length < 2) {
-      setSearchResults([])
-      setIsSearching(false)
-      return () => { active = false }
-    }
-    setIsSearching(true)
-    const timer = window.setTimeout(() => {
-      searchProfilesByUsername(value).then((results) => {
-        if (active) setSearchResults(results)
-      }).catch((caught: unknown) => {
-        if (active) {
-          setSearchResults([])
-          setSearchError(userFacingError(caught, 'Could not search usernames.'))
-        }
-      }).finally(() => {
-        if (active) setIsSearching(false)
-      })
-    }, 300)
-    return () => {
-      active = false
-      window.clearTimeout(timer)
-    }
-  }, [session?.user.id, usernameQuery])
-  const showingSearch = usernameQuery.trim().length >= 2
-  return <section className="page-stack"><PageHeading eyebrow="FIND YOUR CIRCLE" title="Connect" description="Meet community members and discover the places, traditions, and ideas they care about." /><div className="connect-search"><Search size={17} aria-hidden="true" /><input type="search" value={usernameQuery} onChange={(event) => setUsernameQuery(event.target.value)} placeholder="Search by username" aria-label="Search by username" autoComplete="off" />{usernameQuery && <button type="button" aria-label="Clear username search" onClick={() => setUsernameQuery('')}><X size={16} /></button>}</div>{showingSearch && <section className="connect-search-results"><div className="section-heading"><h2>{isSearching ? 'Searching…' : `Results for @${usernameQuery.trim()}`}</h2></div>{searchError ? <p className="field__error" role="alert">{searchError}</p> : isSearching ? <Loading label="Searching usernames" /> : searchResults.length ? <div className="connect-list">{searchResults.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title="No username found" description="Try another username." />}</section>}<div className="connect-feature"><div className="connect-feature__icon"><Users size={23} /></div><div><span className="eyebrow">YOUR COMMUNITY</span><h2>Good things grow together.</h2><p>Discover members and shared interests.</p></div><Compass className="connect-feature__watermark" size={74} /></div><div className="section-heading"><h2>People you may know</h2></div>{isLoading ? <Loading label="Loading profiles" /> : error ? <ErrorState title="Could not load profiles" description={error} /> : people.length ? <div className="connect-people-carousel">{people.map((user) => <UserCard key={user.id} user={user} suggestion />)}</div> : <EmptyState title="No profiles to show" description="Other community profiles will appear here when available." />}</section>
 }
 
 export function CommunityPage() {
