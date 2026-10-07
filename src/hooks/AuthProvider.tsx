@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [initializationError, setInitializationError] = useState<string | null>(null)
-  const [profile, setProfile] = useState<ProfileRecord | null>(() => getCached<ProfileRecord>('current-profile'))
+  const [profile, setProfile] = useState<ProfileRecord | null>(null)
   const [isProfileLoading, setIsProfileLoading] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set())
@@ -190,7 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return () => { active = false }
     }
 
-    const cachedProfile = getCached<ProfileRecord>(`current-profile:${user.id}`) ?? getCached<ProfileRecord>('current-profile')
+    const cachedProfile = getCached<ProfileRecord>(`current-profile:${user.id}`)
     if (cachedProfile) setProfile(cachedProfile)
     setProfileError(null)
     setIsProfileLoading(!cachedProfile)
