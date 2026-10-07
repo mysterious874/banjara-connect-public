@@ -40,3 +40,37 @@ body:has(.app-shell--chat) {
     overflow: hidden;
   }
 }
+
+
+/* Community group chat: lock the mobile chat viewport so the keyboard cannot scroll the header out of view. */
+@media (max-width: 799px) {
+  .community-group-screen {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+  }
+
+  .community-group-screen .chat-screen__head {
+    flex: 0 0 auto !important;
+    transform: none !important;
+  }
+
+  .community-group-screen .chat-messages {
+    min-height: 0 !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .community-group-screen .chat-compose-area {
+    position: absolute !important;
+    bottom: 0 !important;
+    transform: none !important;
+  }
+}
