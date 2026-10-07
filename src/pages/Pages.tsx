@@ -1112,7 +1112,7 @@ export function StoriesPage() {
         }
       }
     }
-  }, [selectedStory?.id, activeIndex, grouped])
+  }, [selectedStory?.id, activeIndex, grouped.length])
 
   useEffect(() => {
     if (!selectedStory) return
