@@ -292,6 +292,70 @@ export function CommunityPage() {
   </section>
 }
 
+export function ConnectPage() {
+  const { session } = useAuth()
+  const [query, setQuery] = useState('')
+  const [profiles, setProfiles] = useState<ProfileRecord[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSearching, setIsSearching] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    if (!session?.user) {
+      setProfiles([])
+      setIsLoading(false)
+      return () => { active = false }
+    }
+    setError('')
+    setIsLoading(true)
+    void loadProfilesPage().then(({ profiles: nextProfiles }) => {
+      if (active) setProfiles(nextProfiles)
+    }).catch((caught: unknown) => {
+      if (active) setError(userFacingError(caught, 'Could not load people.'))
+    }).finally(() => {
+      if (active) setIsLoading(false)
+    })
+    return () => { active = false }
+  }, [session?.user.id])
+
+  useEffect(() => {
+    const value = query.trim()
+    if (!value) {
+      setIsSearching(false)
+      setError('')
+      return
+    }
+    let active = true
+    const timer = window.setTimeout(() => {
+      setIsSearching(true)
+      setError('')
+      void searchProfilesByUsername(value).then((results) => {
+        if (active) setProfiles(results)
+      }).catch((caught: unknown) => {
+        if (active) setError(userFacingError(caught, 'Could not search people.'))
+      }).finally(() => {
+        if (active) setIsSearching(false)
+      })
+    }, 250)
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [query])
+
+  return <section className="page-stack">
+    <PageHeading eyebrow="FIND YOUR CIRCLE" title="Connect" description="Discover people from the Banjara Connect community and connect with them." />
+    <label className="connect-search" aria-label="Search username">
+      <Search size={18} aria-hidden="true" />
+      <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by username" autoComplete="off" />
+      {query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')}><X size={17} /></button>}
+    </label>
+    {error && <p className="field__error" role="alert">{error}</p>}
+    {isLoading || isSearching ? <Loading label={isSearching ? 'Searching people' : 'Loading people'} /> : profiles.length ? <div className="connect-list">{profiles.map((user) => <UserCard key={user.id} user={user} />)}</div> : <EmptyState title={query ? 'No people found' : 'No people to show'} description={query ? 'Try another username.' : 'New community members will appear here.'} />}
+  </section>
+}
+
 export function SearchPage() {
   const [params] = useSearchParams()
   const query = params.get('q') ?? ''
