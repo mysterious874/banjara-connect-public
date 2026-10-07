@@ -2356,3 +2356,6 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 
 .profile-avatar-hold { display: inline-flex; width: fit-content; touch-action: pan-y; cursor: zoom-in; }
 .profile-avatar-hold .avatar { user-select: none; -webkit-user-drag: none; }
+
+.profile-avatar-preview-trigger { display: inline-flex; padding: 0; margin: 0; background: transparent; border: 0; border-radius: 50%; cursor: pointer; touch-action: manipulation; }
+.profile-avatar-preview-trigger:disabled { cursor: default; }
