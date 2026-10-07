@@ -49,6 +49,12 @@ export function Avatar({ name, initials, tone = 'green', size = 'medium', image 
 }
 
 export function Loading({ label = 'Loading preview' }: { label?: string }) {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShow(true), 180)
+    return () => window.clearTimeout(timer)
+  }, [])
+  if (!show) return null
   return <div className="state-block" role="status"><LoaderCircle className="state-block__spinner" size={22} /><span>{label}</span></div>
 }
 
