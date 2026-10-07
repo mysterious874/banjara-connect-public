@@ -7,7 +7,7 @@ import { loadActiveStories, type StoryRecord } from '../utils/storyData'
 
 export function StoryCard({ story, own = false }: { story?: StoryRecord; own?: boolean }) {
   const name = story?.author?.display_name || story?.author?.username || 'Community member'
-  return <Link to="/stories" className={`story-card${own ? ' story-card--own' : ''}`} aria-label={own ? 'Add a story' : `${name}'s story`}>
+  return <Link to="/stories" state={story ? { story } : undefined} className={`story-card${own ? ' story-card--own' : ''}`} aria-label={own ? 'Add a story' : `${name}'s story`}>
     <span className="story-card__ring"><Avatar name={name} image={story?.author?.avatar_url ?? undefined} size="large" />{own && <span className="story-card__add"><Plus size={15} /></span>}</span>
     <span className="story-card__name">{own ? 'Your story' : name}</span>
   </Link>
