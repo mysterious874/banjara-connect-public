@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Phone, Camera, Plus, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
@@ -1015,10 +1015,12 @@ export function EditProfilePage() {
 }
 export function StoriesPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [storyParams] = useSearchParams()
   const { session, profile } = useAuth()
+  const initialStory = (location.state as { story?: StoryRecord } | null)?.story ?? null
   const [stories, setStories] = useState<StoryRecord[]>([])
-  const [selectedStory, setSelectedStory] = useState<StoryRecord | null>(null)
+  const [selectedStory, setSelectedStory] = useState<StoryRecord | null>(initialStory)
   const [storyText, setStoryText] = useState('')
   const [storyFile, setStoryFile] = useState<File | null>(null)
   const storyCameraInputRef = useRef<HTMLInputElement | null>(null)
@@ -1079,6 +1081,38 @@ export function StoriesPage() {
       if (storyTimer.current) window.clearTimeout(storyTimer.current)
     }
   }, [selectedStory?.id, activeIndex, grouped.length, navigate])
+
+  useEffect(() => {
+    if (!selectedStory) return
+    const candidates = [
+      activeIndex > 0 ? grouped[activeIndex - 1] : null,
+      selectedStory,
+      activeIndex < grouped.length - 1 ? grouped[activeIndex + 1] : null,
+    ].filter((story): story is StoryRecord => Boolean(story))
+    const preloaded: Array<HTMLImageElement | HTMLVideoElement> = []
+    for (const story of candidates) {
+      if (!story.media_url) continue
+      if (story.media_type === 'video') {
+        const video = document.createElement('video')
+        video.preload = 'auto'
+        video.src = story.media_url
+        preloaded.push(video)
+      } else {
+        const image = new Image()
+        image.src = story.media_url
+        preloaded.push(image)
+      }
+    }
+    return () => {
+      for (const media of preloaded) {
+        if (media instanceof HTMLVideoElement) {
+          media.pause()
+          media.removeAttribute('src')
+          media.load()
+        }
+      }
+    }
+  }, [selectedStory?.id, activeIndex, grouped])
 
   useEffect(() => {
     if (!selectedStory) return
