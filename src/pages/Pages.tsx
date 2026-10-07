@@ -1652,6 +1652,7 @@ export function CommunityGroupPage() {
   const [realtimeError, setRealtimeError] = useState('')
   const [members, setMembers] = useState<Array<{ user_id: string; role: string; username: string; display_name: string | null; avatar_url: string | null }>>([])
   const [membersOpen, setMembersOpen] = useState(false)
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false)
   const [memberQuery, setMemberQuery] = useState('')
   const [memberResults, setMemberResults] = useState<ProfileRecord[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
@@ -2226,19 +2227,24 @@ export function CommunityGroupPage() {
   if (!group) return <section className="page-stack"><EmptyState title="Community unavailable" description="This community could not be found." action={<Button to="/community" variant="outline">Back to community</Button>} /></section>
 
   return <section className="chat-screen community-group-screen">
-    <header className="chat-screen__head">
-      <Button to="/community" variant="quiet" iconOnly aria-label="Back to community"><ArrowLeft size={18} /></Button>
+    <header className="chat-screen__head"><Button to="/community" variant="quiet" iconOnly aria-label="Back to community"><ArrowLeft size={18} /></Button>
       <button type="button" className="chat-screen__profile community-group-header-button" onClick={() => { setMembersOpen(true); void loadGroupMembers() }}>
         <span className="community-group-card__icon"><Users size={20} /></span>
         <span className="chat-screen__identity"><strong>{group.name}</strong><small>{members.length} members · tap for members</small></span>
       </button>
-      {isGroupAdmin && <Button type="button" variant="quiet" onClick={() => void loadGroupReports()} disabled={reportsLoading}>{reportsLoading ? '…' : 'Reports'}</Button>}
+      <div className="chat-screen__actions">
+        <button type="button" className="chat-screen__action" aria-label="Community options" title="Community options" aria-expanded={groupMenuOpen} onClick={() => setGroupMenuOpen((current) => !current)}>
+          <MoreVertical size={20} />
+        </button>
+        {groupMenuOpen && <div className="chat-options-menu">
+          <button type="button" className="chat-options-menu__item" onClick={() => { setGroupMenuOpen(false); setMembersOpen(true); void loadGroupMembers() }}><Users size={17} /><span>Add members</span></button>
+          {isGroupAdmin && <button type="button" className="chat-options-menu__item" onClick={() => { setGroupMenuOpen(false); void loadGroupReports() }} disabled={reportsLoading}><Flag size={17} /><span>{reportsLoading ? 'Loading reports…' : 'Reports'}</span></button>}
+          {isGroupAdmin && <button type="button" className="chat-options-menu__item" onClick={() => { setGroupMenuOpen(false); setEditName(group.name); setEditDescription(group.description || ''); setMemberError(''); setGroupEditOpen(true) }}><Pencil size={17} /><span>Edit community</span></button>}
+          {isGroupAdmin && <button type="button" className="chat-options-menu__item chat-options-menu__item--danger" onClick={() => { setGroupMenuOpen(false); setMemberError(''); setGroupDeleteOpen(true) }}><Trash2 size={17} /><span>Delete community</span></button>}
+        </div>}
+      </div>
       <button type="button" className="icon-button" aria-label="Leave community" onClick={() => void leaveGroup()} disabled={memberAction === 'leave'}>{memberAction === 'leave' ? '…' : <ArrowRight size={17} />}</button>
     </header>
-    {members.find((member) => member.user_id === session?.user.id)?.role === 'admin' && <div className="community-group-admin-bar">
-      <Button variant="quiet" onClick={() => { setEditName(group.name); setEditDescription(group.description || ''); setMemberError(''); setGroupEditOpen(true) }}>Edit community</Button>
-      <Button variant="danger" onClick={() => { setMemberError(''); setGroupDeleteOpen(true) }}>Delete community</Button>
-    </div>}
     <Modal open={groupEditOpen} title="Edit community" onClose={() => setGroupEditOpen(false)}>
       <form className="form-stack" onSubmit={saveGroupDetails}>
         <Input label="Community name" value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={80} required />
