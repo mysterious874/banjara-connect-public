@@ -197,16 +197,15 @@ export async function loadConversationMessages(
       for (const message of messages) message.readByPeer = readSet.has(message.id)
     }
   }
-  for (const chatMessage of messages) {
-    if (chatMessage.media_url) {
-      try {
-        chatMessage.media_signed_url = await createChatMediaUrl(chatMessage.media_url)
-      } catch (mediaError) {
-        if (import.meta.env.DEV) console.error('Could not create chat media URL.', mediaError)
-        chatMessage.media_signed_url = null
-      }
+  await Promise.all(messages.map(async (chatMessage) => {
+    if (!chatMessage.media_url) return
+    try {
+      chatMessage.media_signed_url = await createChatMediaUrl(chatMessage.media_url)
+    } catch (mediaError) {
+      if (import.meta.env.DEV) console.error('Could not create chat media URL.', mediaError)
+      chatMessage.media_signed_url = null
     }
-  }
+  }))
   const unreadIds = messages.filter((message) => message.sender_id !== userId).map((message) => message.id)
   if (unreadIds.length) {
     const { data: existingReads, error: readError } = await supabase.from('message_reads').select('message_id')
