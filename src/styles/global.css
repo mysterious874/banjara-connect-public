@@ -2887,3 +2887,24 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 .connect-people-carousel .user-card--suggestion { box-sizing: border-box; overflow: hidden; }
 .connect-people-carousel .user-card--suggestion .user-card__follow.button { box-sizing: border-box; display: flex; width: 100%; max-width: 100%; min-width: 0; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0 8px; white-space: nowrap; overflow: hidden; }
 .connect-people-carousel .user-card--suggestion .user-card__follow.button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+
+/* Rathod Heritage is the default theme for every chat screen. */
+.chat-screen:not([class*="chat-screen--theme-"]) {
+  --chat-bg: #f3e9e2;
+  --chat-head: #7b1e2b;
+  --chat-other: #fffaf6;
+  --chat-other-text: #34231f;
+  --chat-own: #9d3b42;
+  --chat-compose: #fffaf6;
+  --chat-line: #e3cfc5;
+  --chat-input: #fffdfb;
+  --chat-muted: #765f58;
+  background: var(--chat-bg);
+}
+.chat-screen:not([class*="chat-screen--theme-"]) .chat-screen__head { background: var(--chat-head); }
+.chat-screen:not([class*="chat-screen--theme-"]) .chat-messages { background: var(--chat-bg); }
+.chat-screen:not([class*="chat-screen--theme-"]) .chat-bubble--them { color: var(--chat-other-text); background: var(--chat-other); border-color: var(--chat-line); }
+.chat-screen:not([class*="chat-screen--theme-"]) .chat-bubble--you { color: #fff; background: var(--chat-own); border-color: var(--chat-own); }
+.chat-screen:not([class*="chat-screen--theme-"]) .chat-compose-area { background: var(--chat-compose); border-color: var(--chat-line); }
+.chat-screen:not([class*="chat-screen--theme-"]) .chat-compose-area .field__control { background: var(--chat-input); }
