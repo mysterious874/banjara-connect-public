@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      injectRegister: null,
+      injectRegister: 'auto',
       includeAssets: ['banjara-mark.svg', 'banjara-mark-maskable.svg'],
       manifest: {
         id: '/',
