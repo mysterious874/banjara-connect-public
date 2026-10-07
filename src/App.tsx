@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, type ErrorInfo, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
 import { BrandMark } from './components/brand'
@@ -65,6 +65,19 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
 }
 
 export default function App() {
+  const [showStartupIntro, setShowStartupIntro] = useState(() => {
+    return window.sessionStorage.getItem('connect-startup-intro-seen') !== '1'
+  })
+
+  useEffect(() => {
+    if (!showStartupIntro) return
+    const timer = window.setTimeout(() => {
+      window.sessionStorage.setItem('connect-startup-intro-seen', '1')
+      setShowStartupIntro(false)
+    }, 4000)
+    return () => window.clearTimeout(timer)
+  }, [showStartupIntro])
+
   useEffect(() => {
     const applyTheme = () => {
       const saved = window.localStorage.getItem('banjara-theme') || 'light'
@@ -87,6 +100,16 @@ export default function App() {
     void import('./pages/BanjaraHistoryPage')
     void import('./pages/DeveloperPage')
   }, [])
+
+  if (showStartupIntro) {
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<Loading label="Loading intro…" />}>
+          <SplashPage />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  }
 
   return (
     <AppErrorBoundary>
