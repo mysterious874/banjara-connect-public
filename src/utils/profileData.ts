@@ -2,12 +2,16 @@ import { supabase } from './supabase'
 import type { ProfileRecord } from '../types/app'
 import { loadBlockedUserIds } from './blockData'
 import { requireAuthenticatedUserId } from './authenticatedUser'
+import { getCached, setCached } from './performanceCache'
 
 const profileColumns = 'id,username,display_name,avatar_url,bio,location,is_verified,created_at'
 const profilePageSize = 20
 
 export async function loadProfilesPage(offset = 0): Promise<{ profiles: ProfileRecord[]; hasMore: boolean; nextOffset: number }> {
   const currentUserId = await requireAuthenticatedUserId()
+  const cacheKey = `profiles:${currentUserId}:${offset}`
+  const cached = getCached<{ profiles: ProfileRecord[]; hasMore: boolean; nextOffset: number }>(cacheKey)
+  if (cached) return cached
   const query = supabase.from('profiles')
     .select(profileColumns)
     .order('created_at', { ascending: false })
@@ -20,11 +24,13 @@ export async function loadProfilesPage(offset = 0): Promise<{ profiles: ProfileR
   ])
   if (error) throw error
   const rows = (data ?? []) as ProfileRecord[]
-  return {
+  const result = {
     profiles: rows.filter((profile) => !blockedIds.includes(profile.id)),
     hasMore: rows.length === profilePageSize,
     nextOffset: offset + rows.length,
   }
+  setCached(cacheKey, result, 60_000)
+  return result
 }
 
 export async function loadProfiles(): Promise<ProfileRecord[]> {
