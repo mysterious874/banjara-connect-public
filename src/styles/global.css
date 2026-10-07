@@ -2353,3 +2353,6 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
   .stories-rail { padding: 10px 10px 8px; }
   .stories-rail__items { gap: 11px; padding-top: 8px; }
 }
+
+.profile-avatar-hold { display: inline-flex; width: fit-content; touch-action: pan-y; cursor: zoom-in; }
+.profile-avatar-hold .avatar { user-select: none; -webkit-user-drag: none; }
