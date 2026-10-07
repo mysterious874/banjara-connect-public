@@ -148,7 +148,7 @@ export function HomePage() {
             {profileError && <p className="field__error" role="alert">{profileError}</p>}
           </div>
         </div>
-        <SearchBar showAssistant />
+        <SearchBar showAssistant usernameOnly />
         <StoriesRail />
         <PostComposer name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url} />
         <div className="feed-heading"><div><span className="eyebrow">FROM YOUR COMMUNITY</span><h2>Your feed</h2></div></div>
@@ -165,9 +165,10 @@ export function HomePage() {
 
 export function ConnectPage() {
   const { session } = useAuth()
+  const [connectSearchParams] = useSearchParams()
   const [people, setPeople] = useState<ProfileRecord[]>([])
   const [searchResults, setSearchResults] = useState<ProfileRecord[]>([])
-  const [usernameQuery, setUsernameQuery] = useState('')
+  const [usernameQuery, setUsernameQuery] = useState(() => connectSearchParams.get('q') ?? '')
   const [isLoading, setIsLoading] = useState(true)
   const [isSearching, setIsSearching] = useState(false)
   const [error, setError] = useState('')
@@ -188,6 +189,10 @@ export function ConnectPage() {
     loadProfiles().then((nextPeople) => { if (active) setPeople(nextPeople) }).catch((caught: unknown) => { if (active) setError(userFacingError(caught, 'Could not load profiles.')) }).finally(() => { if (active) setIsLoading(false) })
     return () => { active = false }
   }, [session?.user.id])
+  useEffect(() => {
+    const next = connectSearchParams.get('q') ?? ''
+    if (next !== usernameQuery) setUsernameQuery(next)
+  }, [connectSearchParams])
   useEffect(() => {
     let active = true
     const value = usernameQuery.trim()
@@ -481,7 +486,7 @@ export function CreatePostPage() {
       <textarea id="post-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="What would you like to share?" maxLength={500} />
       <div className="create-post-media-picker">
         <label className="button button--outline" htmlFor="post-media">Add photo or video</label>
-        <input id="post-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} />
+        <input id="post-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf,text/plain,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" onChange={handleMediaChange} />
         {mediaFile && <span className="micro-note">{mediaFile.name} · {(mediaFile.size / (1024 * 1024)).toFixed(1)} MB</span>}
         <span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span>
       </div>
@@ -993,14 +998,14 @@ export function EditProfilePage() {
     <label className="field"><span className="field__label">About you</span><textarea className="field__control field__textarea" value={bio} onChange={(event) => setBio(event.target.value)} maxLength={160} /></label>
     <div className="field location-picker">
       <span className="field__label">Location</span>
+      {(isLoadingSuggestions || locationSuggestions.length > 0) && <div className="location-suggestions location-suggestions--above" role="listbox" aria-label="Location suggestions">
+        {isLoadingSuggestions && <span className="location-suggestions__status">Searching locations…</span>}
+        {locationSuggestions.map((suggestion, index) => <button type="button" className="location-suggestion" key={suggestion.displayName + index} onClick={() => selectLocation(suggestion)}><MapPin size={15} /><span>{suggestion.displayName}</span></button>)}
+      </div>}
       <div className="location-picker__input">
         <Input aria-label="Location" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Search city or place" autoComplete="off" />
         <Button type="button" variant="quiet" onClick={() => void useCurrentLocation()} disabled={isFetchingLocation} title="Use my current location">{isFetchingLocation ? 'Finding…' : <><MapPin size={16} />Use current</>}</Button>
       </div>
-      {(isLoadingSuggestions || locationSuggestions.length > 0) && <div className="location-suggestions" role="listbox" aria-label="Location suggestions">
-        {isLoadingSuggestions && <span className="location-suggestions__status">Searching locations…</span>}
-        {locationSuggestions.map((suggestion, index) => <button type="button" className="location-suggestion" key={suggestion.displayName + index} onClick={() => selectLocation(suggestion)}><MapPin size={15} /><span>{suggestion.displayName}</span></button>)}
-      </div>}
       <span className="micro-note">Type a place for suggestions, or use your current browser location.</span>
     </div>
     {error && <p className="field__error" role="alert">{error}</p>}
@@ -1016,6 +1021,7 @@ export function StoriesPage() {
   const [selectedStory, setSelectedStory] = useState<StoryRecord | null>(null)
   const [storyText, setStoryText] = useState('')
   const [storyFile, setStoryFile] = useState<File | null>(null)
+  const storyCameraInputRef = useRef<HTMLInputElement | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isPublishing, setIsPublishing] = useState(false)
   const [isReplying, setIsReplying] = useState(false)
@@ -1156,7 +1162,7 @@ export function StoriesPage() {
           <form className="story-create-box" onSubmit={publishStory}>
             <div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>Your story</strong><span>Visible for 24 hours</span></span></div>
             <textarea aria-label="Story message" value={storyText} onChange={(event) => setStoryText(event.target.value)} placeholder="Add a message to your story (optional)" maxLength={500} />
-            <div className="story-create-box__media"><label className="button button--outline" htmlFor="story-media">Add photo or video</label><input id="story-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleStoryFile} />{storyFile && <span className="micro-note">{storyFile.name} · {(storyFile.size / (1024 * 1024)).toFixed(1)} MB</span>}<span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span></div>
+            <div className="story-create-box__media"><label className="button button--outline" htmlFor="story-media">Add photo or video</label><button type="button" className="button button--outline" onClick={() => storyCameraInputRef.current?.click()}><Camera size={15} /> Camera</button><input id="story-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleStoryFile} /><input ref={storyCameraInputRef} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={handleStoryFile} />{storyFile && <span className="micro-note">{storyFile.name} · {(storyFile.size / (1024 * 1024)).toFixed(1)} MB</span>}<span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span></div>
             <Button type="submit" disabled={isPublishing || (!storyText.trim() && !storyFile)}>{isPublishing ? 'Publishing…' : 'Post story'} <Send size={15} /></Button>
           </form>
           {error && <p className="field__error" role="alert">{error}</p>}
@@ -1176,6 +1182,8 @@ export function StoriesPage() {
           <button type="button" className="story-fullscreen__close" onClick={() => navigate('/home')} aria-label="Close story"><X size={22} /></button>
         </div>
         <button type="button" className="story-fullscreen__prev" onClick={() => activeIndex > 0 && setSelectedStory(grouped[activeIndex - 1])} disabled={activeIndex <= 0} aria-label="Previous story"><ArrowLeft size={25} /></button>
+        <div className="story-fullscreen__touch-left" role="button" tabIndex={0} aria-label="Previous story" onClick={() => activeIndex > 0 && setSelectedStory(grouped[activeIndex - 1])} />
+        <div className="story-fullscreen__touch-right" role="button" tabIndex={0} aria-label="Next story" onClick={() => activeIndex < grouped.length - 1 ? setSelectedStory(grouped[activeIndex + 1]) : navigate('/home')} />
         <div className="story-fullscreen__content">
           {selectedStory.media_url && selectedStory.media_type === 'video' && <video src={selectedStory.media_url} controls autoPlay playsInline className="story-fullscreen__asset" />}
           {selectedStory.media_url && selectedStory.media_type === 'image' && <img src={selectedStory.media_url} alt="Story" className="story-fullscreen__asset" />}
@@ -1501,7 +1509,7 @@ export function ChatConversationPage() {
     return
   }
   if (selectedMessageIds.length > 0) toggleMessageSelection(item.id)
-}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" />}{item.content && <p className="chat-message-text">{renderChatMessageContent(item.content)}</p>}</>}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{isSendingMedia && <div className="chat-media-sending" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending photo/video…</strong><small>You can continue chatting while it sends</small><span className="chat-media-sending__track"><span /></span></span></div>}{selectedMedia && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><input ref={cameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleMediaChange} /><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" onClick={() => mediaInputRef.current?.click()} disabled={isSendingMedia}><Paperclip size={18} /></Button><Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => cameraInputRef.current?.click()} disabled={isSendingMedia}><Camera size={18} /></Button><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form></div></section>
+}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" />}{mediaUrl && item.media_type === 'document' && <a className="chat-document" href={mediaUrl} target="_blank" rel="noreferrer"><Paperclip size={17} /><span>Open document</span></a>}{item.content && <p className="chat-message-text">{renderChatMessageContent(item.content)}</p>}</>}<span>{new Date(item.created_at).toLocaleTimeString()}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{isSendingMedia && <div className="chat-media-sending" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending photo/video…</strong><small>You can continue chatting while it sends</small><span className="chat-media-sending__track"><span /></span></span></div>}{selectedMedia && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><input ref={cameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleMediaChange} /><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo, video, or document" onClick={() => mediaInputRef.current?.click()} disabled={isSendingMedia}><Paperclip size={18} /></Button><Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => cameraInputRef.current?.click()} disabled={isSendingMedia}><Camera size={18} /></Button><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form></div></section>
 }
 
 
@@ -2222,6 +2230,20 @@ export function NotificationsPage() {
     }
   }, [session?.user.id])
 
+  async function respondToJoinRequest(notification: NotificationRecord, approve: boolean) {
+    if (!notification.group_join_request_id || pendingId) return
+    setPendingId(notification.id)
+    setError('')
+    try {
+      const { error: responseError } = await supabase.rpc('respond_community_group_join_request', { p_request_id: notification.group_join_request_id, p_approve: approve })
+      if (responseError) throw responseError
+      await markNotificationRead(notification.id)
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true } : item))
+    } catch (caught) {
+      setError(userFacingError(caught, approve ? 'Could not approve this group request.' : 'Could not decline this group request.'))
+    } finally { setPendingId('') }
+  }
+
   async function markRead(notification: NotificationRecord) {
     setPendingId(notification.id)
     setError('')
@@ -2244,10 +2266,12 @@ export function NotificationsPage() {
     if (type === 'group_member_added') return 'added you to a community group'
     if (type === 'group_role_changed') return 'changed your role in a community group'
     if (type === 'group_member_removed') return 'removed you from a community group'
+    if (type === 'group_join_request') return 'invited you to join a community group'
+    if (type === 'group_join_request_result') return 'responded to your community group request'
     return 'sent you a notification'
   }
 
-  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => { const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'; const Icon = notification.type.includes('like') ? Heart : notification.type.startsWith('group_') ? Users : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles; return <article className="notification-row" key={notification.id}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__icon"><Icon size={15} /></span><p><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></p>{!notification.is_read && <button type="button" className="icon-button" aria-label={`Mark ${actorName}'s notification read`} disabled={pendingId === notification.id} onClick={() => markRead(notification)}><Check size={17} /></button>}</article>})}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}</section>
+  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => { const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'; const Icon = notification.type.includes('like') ? Heart : notification.type.startsWith('group_') ? Users : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles; return <article className={`notification-row${notification.type === 'group_join_request' ? ' notification-row--request' : ''}`} key={notification.id}><Link className="notification-row__actor" to={notification.actor?.username ? `/profile/${encodeURIComponent(notification.actor.username)}` : '/connect'}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__body"><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></span></Link><span className="notification-row__icon"><Icon size={15} /></span>{notification.type === 'group_join_request' ? <span className="notification-row__request-actions"><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, true)}>Approve</button><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, false)}>Decline</button></span> : !notification.is_read && <button type="button" className="icon-button" aria-label={`Mark ${actorName}'s notification read`} disabled={pendingId === notification.id} onClick={() => markRead(notification)}><Check size={17} /></button>}</article>})}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}</section>
 }
 
 export function AssistantPage() {
