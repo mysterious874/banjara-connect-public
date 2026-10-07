@@ -16,6 +16,7 @@ export type ChatMessage = {
   is_deleted_for_everyone: boolean
   created_at: string
   updated_at: string
+  readByPeer?: boolean
 }
 
 export type ConversationSummary = {
@@ -186,6 +187,16 @@ export async function loadConversationMessages(
     page = page.filter((message) => !hiddenIds.has(message.id))
   }
   const messages = page.reverse()
+  const peerMember = (await supabase.from('conversation_members').select('user_id').eq('conversation_id', conversationId).neq('user_id', userId).maybeSingle()).data
+  if (peerMember?.user_id && messages.length) {
+    const outgoingIds = messages.filter((message) => message.sender_id === userId).map((message) => message.id)
+    if (outgoingIds.length) {
+      const { data: peerReads, error: peerReadError } = await supabase.from('message_reads').select('message_id').eq('user_id', peerMember.user_id).in('message_id', outgoingIds)
+      if (peerReadError) throw peerReadError
+      const readSet = new Set((peerReads ?? []).map((row) => row.message_id as string))
+      for (const message of messages) message.readByPeer = readSet.has(message.id)
+    }
+  }
   for (const chatMessage of messages) {
     if (chatMessage.media_url) {
       try {
