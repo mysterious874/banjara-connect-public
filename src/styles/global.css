@@ -2329,3 +2329,22 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
     height: 88px;
   }
 }
+
+/* Compact home layout */
+.home-grid { gap: 24px; }
+.home-main { gap: 15px; }
+.home-intro h1 { font-size: 28px; }
+.home-intro p { margin-top: 3px; }
+.stories-rail { padding: 12px 14px 10px; }
+.stories-rail__items { gap: 14px; padding-top: 10px; }
+.composer { padding: 8px 10px; }
+.composer__prompt { padding: 9px 11px; }
+.feed-heading { margin-top: 0; }
+.home-aside { gap: 14px; }
+@media (max-width: 760px) {
+  .home-grid { gap: 16px; }
+  .home-main { gap: 11px; }
+  .home-intro h1 { font-size: 24px; }
+  .stories-rail { padding: 10px 10px 8px; }
+  .stories-rail__items { gap: 11px; padding-top: 8px; }
+}
