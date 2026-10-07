@@ -2,6 +2,7 @@ import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type Re
 import { Route, Routes } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
 import { BrandMark } from './components/brand'
+import { Loading } from './components/ui'
 
 const SplashPage = lazy(() => import('./pages/AuthPages').then(({ SplashPage }) => ({ default: SplashPage })))
 const LoginPage = lazy(() => import('./pages/AuthPages').then(({ LoginPage }) => ({ default: LoginPage })))
@@ -100,7 +101,7 @@ export default function App() {
 
   return (
     <AppErrorBoundary>
-      <Suspense fallback={<div className="state-block" role="status">Loading page…</div>}>
+      <Suspense fallback={<Loading label="Loading page…" />}>
         <Routes>
           <Route path="/" element={<SplashPage />} />
           <Route path="/splash" element={<SplashPage />} />
