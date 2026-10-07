@@ -5,9 +5,21 @@ import { Avatar } from './ui'
 import { useAuth } from '../hooks/AuthProvider'
 import { loadActiveStories, type StoryRecord } from '../utils/storyData'
 
+function preloadStoryMedia(story?: StoryRecord) {
+  if (!story?.media_url) return
+  if (story.media_type === 'video') {
+    const video = document.createElement('video')
+    video.preload = 'auto'
+    video.src = story.media_url
+  } else {
+    const image = new Image()
+    image.src = story.media_url
+  }
+}
+
 export function StoryCard({ story, own = false }: { story?: StoryRecord; own?: boolean }) {
   const name = story?.author?.display_name || story?.author?.username || 'Community member'
-  return <Link to="/stories" state={story ? { story } : undefined} className={`story-card${own ? ' story-card--own' : ''}`} aria-label={own ? 'Add a story' : `${name}'s story`}>
+  return <Link to="/stories" state={story ? { story } : undefined} onPointerDown={() => preloadStoryMedia(story)} className={`story-card${own ? ' story-card--own' : ''}`} aria-label={own ? 'Add a story' : `${name}'s story`}>
     <span className="story-card__ring"><Avatar name={name} image={story?.author?.avatar_url ?? undefined} size="large" />{own && <span className="story-card__add"><Plus size={15} /></span>}</span>
     <span className="story-card__name">{own ? 'Your story' : name}</span>
   </Link>
