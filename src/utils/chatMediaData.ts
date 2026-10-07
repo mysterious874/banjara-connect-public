@@ -11,11 +11,20 @@ const ALLOWED_CHAT_MEDIA_TYPES = new Set([
   'video/mp4',
   'video/webm',
   'video/quicktime',
+  'application/pdf',
+  'text/plain',
+  'application/zip',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ])
 
 export type ChatMediaData = {
   path: string
-  type: 'image' | 'video'
+  type: 'image' | 'video' | 'document'
   mimeType: string
 }
 
@@ -30,13 +39,22 @@ function extensionForChatMedia(file: File) {
     'video/mp4': 'mp4',
     'video/webm': 'webm',
     'video/quicktime': 'mov',
+    'application/pdf': 'pdf',
+    'text/plain': 'txt',
+    'application/zip': 'zip',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
   }
   return fallback[file.type] ?? 'bin'
 }
 
 export function validateChatMedia(file: File) {
   if (!ALLOWED_CHAT_MEDIA_TYPES.has(file.type)) {
-    throw new Error('Only JPG, PNG, WEBP, GIF, MP4, WebM, and MOV files are supported.')
+    throw new Error('Photos, videos, PDF and common document files are supported.')
   }
   if (file.size > MAX_CHAT_MEDIA_SIZE) {
     throw new Error('Photo and video files must be 50 MB or smaller.')
@@ -54,7 +72,7 @@ export async function uploadChatMedia(file: File, userId: string, conversationId
   if (error) throw error
   return {
     path,
-    type: file.type.startsWith('video/') ? 'video' : 'image',
+    type: file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : 'document',
     mimeType: file.type,
   }
 }
