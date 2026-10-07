@@ -27,7 +27,7 @@ import { loadNotifications, markNotificationRead, markAllNotificationsRead, type
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
 import { deleteMessageForEveryone, deleteMessageForMe, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
-import { createComment, deleteComment, loadCommentLikes, loadComments, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
+import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostLikesBatch, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 
 function renderChatMessageContent(content: string) {
   return content.split('\n').map((line, index, lines) => {
@@ -2182,11 +2182,6 @@ export function CommunityGroupPage() {
       setIsSending(false)
       setIsSendingGroupMedia(false)
     }
-  }
-
-  async function deleteGroupMessage(messageId: string) {
-    setSelectedGroupMessageIds([messageId])
-    await deleteSelectedGroupMessages('everyone')
   }
 
   if (isLoading) return <section className="chat-screen"><Loading label="Loading community" /></section>
