@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import type { FeedPost, ProfileRecord, PostRecord } from '../types/app'
 import { createPostMediaUrls } from './mediaData'
+import { getCached, setCached } from './performanceCache'
 
 const postColumns = 'id,user_id,content,created_at,visibility,media_urls,media_type'
 
@@ -39,10 +40,16 @@ export async function loadPostsPage(
   query = query.range(offset, offset + limit - 1)
   if (options.excludeUserIds?.length) query = query.not('user_id', 'in', `(${options.excludeUserIds.join(',')})`)
 
+  const cacheKey = `posts:${options.userId ?? 'feed'}:${offset}:${limit}:${(options.excludeUserIds ?? []).slice().sort().join(',')}`
+  const cached = getCached<{ posts: FeedPost[]; hasMore: boolean; nextOffset: number }>(cacheKey)
+  if (cached) return cached
+
   const { data, error } = await query
   if (error) throw error
   const rows = (data ?? []) as PostRecord[]
-  return { posts: await attachAuthors(rows), hasMore: rows.length === limit, nextOffset: offset + rows.length }
+  const result = { posts: await attachAuthors(rows), hasMore: rows.length === limit, nextOffset: offset + rows.length }
+  setCached(cacheKey, result, 30_000)
+  return result
 }
 
 export async function loadPosts(options: { userId?: string; postId?: string; excludeUserIds?: string[] } = {}): Promise<FeedPost[]> {
