@@ -22,7 +22,7 @@ async function attachAuthors(posts: PostRecord[]): Promise<FeedPost[]> {
       path,
       type: post.media_type === 'video' ? 'video' as const : 'image' as const,
       mimeType: post.media_type === 'video' ? 'video/*' : 'image/*',
-      signedUrl: signedUrls.get(path),
+      signedUrl: signedUrls.get(path) ?? '',
     }))
     return { ...post, media }
   }))
