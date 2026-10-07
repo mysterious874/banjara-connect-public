@@ -9,19 +9,11 @@ import { supabase } from '../utils/supabase'
 import { userFacingError } from '../utils/userFacingError'
 
 export function SplashPage() {
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => navigate('/home', { replace: true }), 4000)
-    return () => window.clearTimeout(timer)
-  }, [navigate])
-
   return (
     <main className="splash" aria-label="Connect intro">
       <div className="splash__pattern" aria-hidden="true" />
       <div className="splash__content">
         <div className="splash-logo-animation" aria-hidden="true">
-          <span className="splash-logo-animation__circle" />
           <span className="splash-logo-animation__piece splash-logo-animation__piece--top" />
           <span className="splash-logo-animation__piece splash-logo-animation__piece--right" />
           <span className="splash-logo-animation__piece splash-logo-animation__piece--bottom" />
