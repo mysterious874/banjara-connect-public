@@ -2434,3 +2434,14 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 
 .profile-avatar-preview-trigger { display: inline-flex; padding: 0; margin: 0; background: transparent; border: 0; border-radius: 50%; cursor: pointer; touch-action: manipulation; }
 .profile-avatar-preview-trigger:disabled { cursor: default; }
+
+
+/* Connect page: Instagram-style people suggestions */
+.connect-people-carousel { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 8px; margin: 0 -2px; scroll-snap-type: x proximity; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.connect-people-carousel::-webkit-scrollbar { display: none; }
+.connect-people-carousel .user-card--suggestion { flex: 0 0 142px; min-width: 142px; min-height: 174px; padding: 14px 10px 10px; flex-direction: column; justify-content: flex-start; align-items: center; gap: 9px; text-align: center; border-radius: 14px; scroll-snap-align: start; }
+.connect-people-carousel .user-card--suggestion .user-card__identity { width: 100%; flex-direction: column; gap: 7px; justify-content: flex-start; }
+.connect-people-carousel .user-card--suggestion .user-card__copy { width: 100%; display: block; }
+.connect-people-carousel .user-card--suggestion .user-card__copy strong { display: block; width: 100%; font-size: 11px; }
+.connect-people-carousel .user-card--suggestion .user-card__follow { width: 100%; min-width: 0; min-height: 31px; margin-top: auto; border-radius: 8px; font-size: 10px; }
+@media (max-width: 560px) { .connect-people-carousel { gap: 8px; } .connect-people-carousel .user-card--suggestion { flex-basis: 132px; min-width: 132px; min-height: 166px; } }
