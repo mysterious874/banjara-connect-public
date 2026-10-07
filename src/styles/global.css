@@ -2526,3 +2526,35 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 .chat-screen__identity small { display:block; margin-top:2px; }
 .chat-screen__identity small::first-letter { color:inherit; }
 @media (max-width:560px) { .chat-screen[class*="chat-screen--theme-"] .chat-bubble { max-width:82%; font-size:13px; } .chat-list-selection { overflow-x:auto; } }
+
+
+/* Final chat bubble containment + three-state delivery receipts. */
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-message-text {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble__meta {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.chat-read-ticks { letter-spacing: -2px; font-size: 10px; font-weight: 800; }
+.chat-read-ticks--delivered { color: inherit; }
+.chat-read-ticks--read { color: #43a5ff; opacity: 1; }
+.chat-online-dot { color: #238a55; font-size: 9px; font-weight: 800; }
+.chat-offline-dot { color: var(--bc-muted); font-size: 9px; font-weight: 700; }
+.chat-list .chat-row { touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.chat-list-selection { overflow-x: auto; scrollbar-width: none; }
+.chat-list-selection::-webkit-scrollbar { display: none; }
+.chat-list-selection button { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
