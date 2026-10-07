@@ -2277,3 +2277,55 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 .story-share-user small { margin-top: 2px; color: var(--bc-muted); font-size: 10px; }
 .story-share-user:hover { border-color: var(--bc-orange); }
 .story-share-user:disabled { opacity: .5; cursor: wait; }
+
+/* Splash logo alignment: keep the emblem perfectly centered inside its ring. */
+.splash__logo-wrap {
+  position: relative;
+  display: grid;
+  width: 124px;
+  height: 124px;
+  flex: 0 0 124px;
+  place-items: center;
+  margin: 0 0 23px;
+}
+.splash__logo-wrap .brand-mark {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 100px;
+  height: 100px;
+  margin: 0;
+  place-items: center;
+}
+.splash__logo-wrap .brand-mark svg,
+.splash__logo-wrap .brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  object-fit: contain;
+}
+.splash__logo-ring {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  display: block;
+  box-sizing: border-box;
+  margin: 0;
+  border: 1px solid rgb(122 38 58 / 20%);
+  border-radius: 50%;
+  box-shadow: 0 0 0 8px rgb(201 154 50 / 7%), 0 14px 45px rgb(122 38 58 / 10%);
+  pointer-events: none;
+}
+@media (max-width: 480px) {
+  .splash__logo-wrap {
+    width: 102px;
+    height: 102px;
+    flex-basis: 102px;
+    margin-bottom: 20px;
+  }
+  .splash__logo-wrap .brand-mark {
+    width: 88px;
+    height: 88px;
+  }
+}
