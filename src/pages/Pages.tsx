@@ -1931,6 +1931,28 @@ export function CommunityGroupPage() {
   const [reportSaving, setReportSaving] = useState(false)
   const [reportError, setReportError] = useState('')
 
+  useEffect(() => {
+    if (!groupMenuOpen) return
+    function handleDocumentPointerDown(event: PointerEvent) {
+      const target = event.target
+      if (target instanceof Element && !target.closest('.chat-screen__actions')) setGroupMenuOpen(false)
+    }
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setGroupMenuOpen(false)
+    }
+    function handleBack() {
+      setGroupMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', handleDocumentPointerDown)
+    document.addEventListener('keydown', handleEscape)
+    window.addEventListener('popstate', handleBack)
+    return () => {
+      document.removeEventListener('pointerdown', handleDocumentPointerDown)
+      document.removeEventListener('keydown', handleEscape)
+      window.removeEventListener('popstate', handleBack)
+    }
+  }, [groupMenuOpen])
+
   function handleGroupMediaFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null
     if (!file) return
@@ -2528,7 +2550,7 @@ export function CommunityGroupPage() {
   if (error && !group) return <section className="page-stack"><ErrorState title="Could not load community" description={error} /></section>
   if (!group) return <section className="page-stack"><EmptyState title="Community unavailable" description="This community could not be found." action={<Button to="/community" variant="outline">Back to community</Button>} /></section>
 
-  return <section className="chat-screen chat-screen--theme-classic community-group-screen">
+  return <section className="chat-screen chat-screen--theme-rathod community-group-screen">
     <header className="chat-screen__head"><Button to="/community" variant="quiet" iconOnly aria-label="Back to community"><ArrowLeft size={18} /></Button>
       <button type="button" className="chat-screen__profile community-group-header-button" onClick={() => { setMembersOpen(true); void loadGroupMembers() }}>
         <span className="community-group-card__icon"><Users size={20} /></span>
