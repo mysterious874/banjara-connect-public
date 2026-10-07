@@ -70,6 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true
     let receivedAuthEvent = false
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (nextSession?.access_token) {
+        void supabase.realtime.setAuth(nextSession.access_token)
+      }
       if (active) {
         receivedAuthEvent = true
         setSession(nextSession)
@@ -80,6 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return
+      if (data.session?.access_token) {
+        void supabase.realtime.setAuth(data.session.access_token)
+      }
       if (!receivedAuthEvent) {
         setSession(data.session)
         setInitializationError(error ? userFacingError(error, 'Could not check your session. Please try again.') : null)
