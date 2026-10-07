@@ -14,9 +14,9 @@ export function BrandMark({ size = 'medium' }: BrandMarkProps) {
 
 export function BrandLockup({ compact = false }: { compact?: boolean }) {
   return (
-    <Link to="/home" className={`brand-lockup${compact ? ' brand-lockup--compact' : ''}`} aria-label="Banjara Connect home">
+    <Link to="/home" className={`brand-lockup${compact ? ' brand-lockup--compact' : ''}`} aria-label="Connect home">
       <BrandMark size={compact ? 'small' : 'medium'} />
-      <span className="brand-lockup__copy"><span className="brand-lockup__name">Banjara Connect</span><span className="brand-lockup__tagline">People · Community · Culture</span></span>
+      <span className="brand-lockup__copy"><span className="brand-lockup__name">Connect</span><span className="brand-lockup__tagline">People · Community · Culture</span></span>
     </Link>
   )
 }
