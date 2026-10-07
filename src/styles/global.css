@@ -2584,10 +2584,10 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
   width: 38px;
   height: 38px;
   box-sizing: border-box;
-  border: 5px solid #fff0c8;
-  border-radius: 2px;
-  background: transparent;
-  box-shadow: 0 5px 14px rgb(123 30 43 / 12%);
+  border: 0;
+  border-radius: 5px;
+  background: linear-gradient(145deg, var(--bc-orange), #e59a32);
+  box-shadow: 0 6px 16px rgb(230 120 48 / 24%), 0 1px 0 rgb(255 240 200 / 35%) inset;
   opacity: 0;
   transform-origin: center;
 }
@@ -2724,7 +2724,7 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 @media (max-width: 480px) {
   .splash-logo-animation { width: 116px; height: 116px; }
   .splash-logo-animation__circle { width: 68px; height: 68px; }
-  .splash-logo-animation__piece { width: 34px; height: 34px; border-width: 4px; }
+   .splash-logo-animation__piece { width: 34px; height: 34px; }
   .splash__quote { max-width: 280px; font-size: 11px !important; }
 }
 @media (prefers-reduced-motion: reduce) {
