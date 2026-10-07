@@ -1488,6 +1488,7 @@ export function ChatConversationPage() {
   useEffect(() => {
     let active = true
     let unsubscribe: (() => void) | null = null
+    let unsubscribeReads: (() => void) | null = null
     let messageRefreshPending = false
     let messageRefreshQueued = false
     setIsLoading(true)
@@ -1540,6 +1541,12 @@ export function ChatConversationPage() {
           if (!active) return
           setRealtimeError(status === 'SUBSCRIBED' ? '' : `Live message updates are unavailable (${status.toLowerCase().replace('_', ' ')}).`)
         })
+        if (peer?.id) {
+          unsubscribeReads = subscribeToPostgresChanges(
+            { topic: `chat-reads:${conversationId}`, event: '*', table: 'message_reads', filter: `user_id=eq.${peer.id}` },
+            () => { void refreshLatestMessages() },
+          )
+        }
       } catch (caught) {
         if (active) setError(userFacingError(caught, 'Could not load this conversation.'))
       } finally {
@@ -1549,6 +1556,7 @@ export function ChatConversationPage() {
     return () => {
       active = false
       unsubscribe?.()
+      unsubscribeReads?.()
     }
   }, [conversationId, session?.user.id])
 
