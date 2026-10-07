@@ -2163,3 +2163,82 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
   outline: 2px solid var(--bc-orange);
   outline-offset: 1px;
 }
+
+
+/* Launch polish: documents, notification profile links, story touch zones, location menu */
+.chat-document {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  margin: 0 0 7px;
+  padding: 9px 11px;
+  border: 1px solid var(--bc-line);
+  border-radius: 10px;
+  color: var(--bc-text);
+  background: var(--bc-paper);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 700;
+}
+.chat-document:hover { border-color: var(--bc-orange); color: var(--bc-orange); }
+
+.notification-row__actor {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  flex: 1;
+  color: inherit;
+  text-decoration: none;
+}
+.notification-row__body {
+  min-width: 0;
+  color: #505b51;
+  font-size: 11px;
+}
+.notification-row__body strong { color: #26332a; }
+.notification-row__body small { display: block; margin-top: 5px; color: #879087; font-size: 9px; }
+.notification-row--request { flex-wrap: wrap; padding: 9px 0; }
+.notification-row__request-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: 47px;
+  width: calc(100% - 47px);
+}
+.notification-row__request-actions button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--bc-line);
+  border-radius: 9px;
+  background: var(--bc-paper);
+  color: var(--bc-text);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.notification-row__request-actions button:first-child { border-color: var(--bc-maroon); color: var(--bc-maroon); }
+.notification-row__request-actions button:disabled { opacity: .5; cursor: wait; }
+
+.location-suggestions--above {
+  top: auto;
+  bottom: calc(100% + 7px);
+  box-shadow: 0 -12px 28px rgba(15, 23, 42, .18);
+}
+
+.story-fullscreen__touch-left,
+.story-fullscreen__touch-right {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  width: 38%;
+  cursor: pointer;
+}
+.story-fullscreen__touch-left { left: 0; }
+.story-fullscreen__touch-right { right: 0; }
+@media (max-width: 560px) {
+  .story-fullscreen__touch-left,
+  .story-fullscreen__touch-right { width: 42%; }
+}
