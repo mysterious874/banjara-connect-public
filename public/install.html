@@ -23,7 +23,7 @@ button,a{font:inherit}.install{width:100%;border:0;border-radius:16px;padding:15
 <p>People · Community · Culture<br>Get the full Connect experience right on your phone.</p>
 <button class="install" id="install">Install Connect</button>
 <a class="open" href="/">Open Connect</a>
-<script>if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }</script>
+<script>if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {})); }</script>
 <div class="steps" id="steps" hidden>
 <div class="step"><span class="n">1</span><span>Tap <b>Install App</b> when the browser offers installation.</span></div>
 <div class="step"><span class="n">2</span><span>Confirm <b>Install</b> to add Connect to your home screen.</span></div>
