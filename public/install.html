@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#7A263A">
+<title>Install Connect</title>
+<link rel="icon" href="/banjara-mark.svg">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at 50% 8%,#fff0c8 0,#fff8e9 24%,#f8efe0 60%,#f4e5d3 100%);color:#421523;min-height:100dvh;display:grid;place-items:center;padding:24px}
+main{width:min(430px,100%);text-align:center;padding:34px 24px 28px;border:1px solid rgba(122,38,58,.12);border-radius:32px;background:rgba(255,252,245,.84);box-shadow:0 24px 70px rgba(122,38,58,.16),0 0 35px rgba(230,120,48,.12);backdrop-filter:blur(18px)}
+.logo{width:92px;height:92px;margin:0 auto 18px;border-radius:25px;box-shadow:0 12px 30px rgba(122,38,58,.25);display:block}
+h1{margin:0;font-size:34px;letter-spacing:-1px;color:#7A263A}p{line-height:1.55;color:#684653;margin:10px 0 24px}
+button,a{font:inherit}.install{width:100%;border:0;border-radius:16px;padding:15px 18px;background:linear-gradient(135deg,#7A263A,#C9672E);color:#fff;font-weight:800;box-shadow:0 10px 25px rgba(122,38,58,.24);cursor:pointer}.open{display:block;margin-top:12px;padding:12px;color:#7A263A;text-decoration:none;font-weight:700}
+.steps{margin-top:25px;text-align:left;border-top:1px solid rgba(122,38,58,.1);padding-top:18px}.step{display:flex;gap:12px;margin:12px 0;color:#684653;font-size:14px}.n{width:25px;height:25px;flex:0 0 25px;border-radius:50%;display:grid;place-items:center;background:#fff0c8;color:#7A263A;font-weight:800}.status{margin-top:14px;font-size:13px;color:#8a6872}
+</style>
+</head>
+<body>
+<main>
+<img class="logo" src="/banjara-mark.svg" alt="Connect">
+<h1>Install Connect</h1>
+<p>People · Community · Culture<br>Get the full Connect experience right on your phone.</p>
+<button class="install" id="install">Install App</button>
+<a class="open" href="/">Open Connect</a>
+<div class="steps" id="steps">
+<div class="step"><span class="n">1</span><span>Tap <b>Install App</b> when the browser offers installation.</span></div>
+<div class="step"><span class="n">2</span><span>Confirm <b>Install</b> to add Connect to your home screen.</span></div>
+<div class="step"><span class="n">3</span><span>Open Connect from your phone like a normal app.</span></div>
+</div>
+<div class="status" id="status"></div>
+</main>
+<script>
+let deferredPrompt;
+const btn=document.getElementById("install"),status=document.getElementById("status");
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e});
+btn.addEventListener("click",async()=>{
+ if(deferredPrompt){deferredPrompt.prompt();const {outcome}=await deferredPrompt.userChoice;status.textContent=outcome==="accepted"?"Connect is being installed.":"Installation cancelled.";deferredPrompt=null;return}
+ if(/iphone|ipad|ipod/i.test(navigator.userAgent)){status.textContent="On iPhone: tap Share → Add to Home Screen."}
+ else if(/android/i.test(navigator.userAgent)){status.textContent="On Android: open your browser menu and choose Install app or Add to Home screen."}
+ else{status.textContent="Open this page in a supported browser and choose Install app from the browser menu."}
+});
+window.addEventListener("appinstalled",()=>{status.textContent="Connect is installed. ❤️"});
+</script>
+</body>
+</html>
