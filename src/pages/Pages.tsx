@@ -1028,6 +1028,12 @@ export function StoriesPage() {
   const [error, setError] = useState('')
   const [replyMessage, setReplyMessage] = useState('')
   const [success, setSuccess] = useState('')
+  const [storyShareOpen, setStoryShareOpen] = useState(false)
+  const [storyShareQuery, setStoryShareQuery] = useState('')
+  const [storyShareResults, setStoryShareResults] = useState<ProfileRecord[]>([])
+  const [storyShareLoading, setStoryShareLoading] = useState(false)
+  const [storyShareSending, setStoryShareSending] = useState(false)
+  const [storyShareError, setStoryShareError] = useState('')
   const storyTimer = useRef<number | null>(null)
 
   const grouped = Array.from(new Map(stories.map((story) => [story.user_id, story])).values())
@@ -1156,6 +1162,46 @@ export function StoriesPage() {
     setSuccess('')
   }
 
+  useEffect(() => {
+    let active = true
+    const value = storyShareQuery.trim()
+    setStoryShareError('')
+    if (value.length < 2 || !storyShareOpen) {
+      setStoryShareResults([])
+      setStoryShareLoading(false)
+      return () => { active = false }
+    }
+    setStoryShareLoading(true)
+    const timer = window.setTimeout(() => {
+      void searchProfilesByUsername(value).then((results) => {
+        if (active) setStoryShareResults(results.slice(0, 8))
+      }).catch((caught) => {
+        if (active) setStoryShareError(userFacingError(caught, 'Could not search usernames.'))
+      }).finally(() => {
+        if (active) setStoryShareLoading(false)
+      })
+    }, 250)
+    return () => { active = false; window.clearTimeout(timer) }
+  }, [storyShareQuery, storyShareOpen])
+
+  async function sendStoryToUser(user: ProfileRecord) {
+    if (!selectedStory || storyShareSending) return
+    setStoryShareSending(true)
+    setStoryShareError('')
+    try {
+      const conversation = await getOrCreateConversation(user.id)
+      await sendConversationMessage(conversation, `Story: /stories?story=${selectedStory.id}`)
+      setStoryShareOpen(false)
+      setStoryShareQuery('')
+      setStoryShareResults([])
+      setSuccess(`Story sent to @${user.username}`)
+    } catch (caught) {
+      setStoryShareError(userFacingError(caught, 'Could not send this story.'))
+    } finally {
+      setStoryShareSending(false)
+    }
+  }
+
   return <section className="page-stack">
     {!isLoading && !selectedStory && <>
           <PageHeading eyebrow="LITTLE WINDOWS INTO TODAY" title="Stories" description="Share a photo, video, or message. Stories disappear after 24 hours." />
@@ -1191,7 +1237,16 @@ export function StoriesPage() {
           {selectedStory.media_url && selectedStory.content && <div className="story-fullscreen__caption">{selectedStory.content}</div>}
         </div>
         <button type="button" className="story-fullscreen__next" onClick={() => activeIndex < grouped.length - 1 ? setSelectedStory(grouped[activeIndex + 1]) : navigate('/home')} aria-label="Next story"><ArrowRight size={25} /></button>
-        {selectedStory.user_id !== session?.user.id && <form className="story-fullscreen__reply" onSubmit={replyToStory}><Input aria-label="Reply to story" placeholder="Send message…" value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /><Button type="submit" iconOnly aria-label="Send message" disabled={!replyMessage.trim() || isReplying}>{isReplying ? '…' : <Send size={17} />}</Button></form>}
+        {selectedStory.user_id !== session?.user.id && <div className="story-fullscreen__reply"><form onSubmit={replyToStory}><Input aria-label="Reply to story" placeholder="Send message…" value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /><Button type="submit" iconOnly aria-label="Send message" disabled={!replyMessage.trim() || isReplying}>{isReplying ? '…' : <Send size={17} />}</Button></form><Button type="button" variant="quiet" iconOnly aria-label="Share story" title="Share story" onClick={() => { setStoryShareOpen(true); setStoryShareError('') }}><Send size={17} /></Button></div>}
+        {storyShareOpen && <Modal open={storyShareOpen} title="Send story" onClose={() => !storyShareSending && setStoryShareOpen(false)}>
+          <div className="story-share-panel">
+            <Input aria-label="Search username" placeholder="Search username" value={storyShareQuery} onChange={(event) => setStoryShareQuery(event.target.value)} autoComplete="off" autoFocus />
+            {storyShareError && <p className="field__error" role="alert">{storyShareError}</p>}
+            {storyShareLoading && <Loading label="Searching usernames" />}
+            {!storyShareLoading && storyShareResults.map((user) => <button type="button" className="story-share-user" key={user.id} onClick={() => void sendStoryToUser(user)} disabled={storyShareSending}><Avatar name={user.display_name || user.username} image={user.avatar_url ?? undefined} /><span><strong>{user.display_name || user.username}</strong><small>@{user.username}</small></span><Send size={16} /></button>)}
+            {!storyShareLoading && storyShareQuery.trim().length >= 2 && !storyShareResults.length && !storyShareError && <p className="micro-note">No username found.</p>}
+          </div>
+        </Modal>}
         {selectedStory.user_id === session?.user.id && <button type="button" className="story-fullscreen__delete" onClick={() => void removeStory(selectedStory)}><Trash2 size={16} /> Delete story</button>}
       </div>
     </div>}
