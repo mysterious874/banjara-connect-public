@@ -2491,3 +2491,21 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
     max-width: calc(100vw - 24px);
   }
 }
+
+
+/* Chat readability: slightly larger, bolder message text without changing layout. */
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble span {
+  font-size: inherit;
+  font-weight: inherit;
+}
+@media (max-width: 560px) {
+  .chat-screen[class*="chat-screen--theme-"] .chat-bubble {
+    font-size: 15px;
+    font-weight: 650;
+  }
+}
