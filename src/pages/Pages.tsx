@@ -1317,7 +1317,7 @@ export function ReelsPage() {
 }
 
 export function ChatListPage() {
-  const { session, onlineUserIds } = useAuth()
+  const { session, onlineUserIds, activeUserIds } = useAuth()
   const [conversations, setConversations] = useState<Awaited<ReturnType<typeof loadConversations>>>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1429,6 +1429,7 @@ export function ChatListPage() {
         const name = conversation.member.display_name || conversation.member.username
         const selected = selectedIds.includes(conversation.id)
         const online = onlineUserIds.has(conversation.member.id)
+        const inApp = activeUserIds.has(conversation.member.id)
         return <Link
           to={selectedIds.length ? '#' : `/chat/${conversation.id}`}
           className={`chat-row${selected ? ' chat-row--selected' : ''}`}
@@ -1445,7 +1446,7 @@ export function ChatListPage() {
         >
           <Avatar name={name} image={conversation.member.avatar_url ?? undefined} />
           <span className="chat-row__copy"><strong>{name}</strong><span>{conversation.lastMessage?.content || (conversation.lastMessage?.media_type === 'image' ? '📷 Photo' : conversation.lastMessage?.media_type === 'video' ? '🎥 Video' : conversation.lastMessage?.media_type === 'document' ? '📎 Document' : 'No messages yet')}</span></span>
-          <span className="chat-row__time"><small className={online ? 'chat-online-dot' : 'chat-offline-dot'}>{online ? 'online' : 'offline'}</small>{mutedIds.includes(conversation.id) && <VolumeX size={13} />}{conversation.unreadCount > 0 ? `${conversation.unreadCount} unread` : conversation.lastMessage ? new Date(conversation.lastMessage.created_at).toLocaleDateString() : ''}</span>
+          <span className="chat-row__time"><small className={online ? 'chat-online-dot' : 'chat-offline-dot'}>{online ? (inApp ? 'online' : 'online · not in app') : 'offline'}</small>{mutedIds.includes(conversation.id) && <VolumeX size={13} />}{conversation.unreadCount > 0 ? `${conversation.unreadCount} unread` : conversation.lastMessage ? new Date(conversation.lastMessage.created_at).toLocaleDateString() : ''}</span>
         </Link>
       })}
     </div> : <EmptyState title="No conversations yet" description="Start a conversation from a community profile." />}
@@ -1455,7 +1456,7 @@ export function ChatListPage() {
 
 export function ChatConversationPage() {
   const { conversationId = '' } = useParams()
-  const { session, onlineUserIds } = useAuth()
+  const { session, onlineUserIds, activeUserIds } = useAuth()
   const [message, setMessage] = useState('')
   const [person, setPerson] = useState<ProfileRecord | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -1476,6 +1477,7 @@ export function ChatConversationPage() {
   const [chatThemeOpen, setChatThemeOpen] = useState(false)
   const [chatTheme, setChatTheme] = useState('classic')
   const peerOnline = Boolean(person?.id && onlineUserIds.has(person.id))
+  const peerInApp = Boolean(person?.id && activeUserIds.has(person.id))
 
   const chatThemes = [
     { id: 'forest', label: 'Gor Forest', preview: '#2D6652' },
@@ -1713,7 +1715,7 @@ export function ChatConversationPage() {
     setChatMenuOpen(false)
     try { window.localStorage.setItem(`banjara-chat-theme-${conversationId}`, themeId) } catch { /* local storage may be unavailable */ }
   }
-  return <section className={`chat-screen chat-screen--theme-${chatTheme}`}><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Link to={`/profile/${encodeURIComponent(person.username)}`} className="chat-screen__profile"><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>{peerOnline ? "online" : "offline"}</small></span></Link><div className="chat-screen__actions"><button type="button" className="chat-screen__action" aria-label="Voice call" title="Voice call"><Phone size={18} /></button><button type="button" className="chat-screen__action" aria-label="Video call" title="Video call"><Video size={19} /></button><button type="button" className="chat-screen__action" aria-label="Chat options" title="Chat options" aria-expanded={chatMenuOpen} onClick={() => { setChatMenuOpen((current) => !current); setChatThemeOpen(false) }}><MoreVertical size={20} /></button>{chatMenuOpen && <div className="chat-options-menu"><button type="button" className="chat-options-menu__item" onClick={() => { setChatThemeOpen(true); setChatMenuOpen(false) }}><Palette size={17} /><span>Chat Background</span><ChevronRight size={15} /></button></div>}</div></header>{chatThemeOpen && <Modal open={chatThemeOpen} title="Chat background" onClose={() => setChatThemeOpen(false)}><div className="chat-theme-picker">{chatThemes.map((theme) => <button type="button" key={theme.id} className={`chat-theme-option${chatTheme === theme.id ? ' chat-theme-option--active' : ''}`} onClick={() => selectChatTheme(theme.id)}><span className="chat-theme-option__swatch" style={{ background: theme.preview }} /><span><strong>{theme.label}</strong><small>{theme.id === 'classic' ? 'Banjara Connect default' : 'Apply only to this chat'}</small></span>{chatTheme === theme.id && <Check size={17} />}</button>)}</div></Modal>}
+  return <section className={`chat-screen chat-screen--theme-${chatTheme}`}><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Link to={`/profile/${encodeURIComponent(person.username)}`} className="chat-screen__profile"><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>{peerOnline ? (peerInApp ? "online" : "online · not in app") : "offline"}</small></span></Link><div className="chat-screen__actions"><button type="button" className="chat-screen__action" aria-label="Voice call" title="Voice call"><Phone size={18} /></button><button type="button" className="chat-screen__action" aria-label="Video call" title="Video call"><Video size={19} /></button><button type="button" className="chat-screen__action" aria-label="Chat options" title="Chat options" aria-expanded={chatMenuOpen} onClick={() => { setChatMenuOpen((current) => !current); setChatThemeOpen(false) }}><MoreVertical size={20} /></button>{chatMenuOpen && <div className="chat-options-menu"><button type="button" className="chat-options-menu__item" onClick={() => { setChatThemeOpen(true); setChatMenuOpen(false) }}><Palette size={17} /><span>Chat Background</span><ChevronRight size={15} /></button></div>}</div></header>{chatThemeOpen && <Modal open={chatThemeOpen} title="Chat background" onClose={() => setChatThemeOpen(false)}><div className="chat-theme-picker">{chatThemes.map((theme) => <button type="button" key={theme.id} className={`chat-theme-option${chatTheme === theme.id ? ' chat-theme-option--active' : ''}`} onClick={() => selectChatTheme(theme.id)}><span className="chat-theme-option__swatch" style={{ background: theme.preview }} /><span><strong>{theme.label}</strong><small>{theme.id === 'classic' ? 'Banjara Connect default' : 'Apply only to this chat'}</small></span>{chatTheme === theme.id && <Check size={17} />}</button>)}</div></Modal>}
     <div className="chat-messages">{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{selectedMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelMessageSelection} aria-label="Close message selection">×</button><strong>{selectedMessageIds.length} selected</strong><button type="button" onClick={() => void copySelectedMessages()}>Copy</button><button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('me')}>Delete for me</button>{messages.some((item) => selectedMessageIds.includes(item.id) && item.sender_id === session?.user.id && !item.is_deleted_for_everyone && (item.media_type === 'image' || item.media_type === 'video' || item.content)) && <button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('everyone')}>Delete for everyone</button>}</div>}{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; const selected = selectedMessageIds.includes(item.id); const mediaUrl = item.media_signed_url; return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startMessageLongPress(item.id)} onPointerUp={clearLongPressTimer} onPointerCancel={clearLongPressTimer} onPointerLeave={clearLongPressTimer} onContextMenu={(event) => handleMessageContextMenu(event, item.id)} onClick={() => {
   if (suppressNextMessageClick.current) {
     suppressNextMessageClick.current = false
