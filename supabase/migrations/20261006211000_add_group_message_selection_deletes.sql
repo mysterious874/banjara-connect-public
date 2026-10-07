@@ -11,6 +11,7 @@ create table if not exists public.community_group_message_deletions (
 alter table public.community_group_message_deletions enable row level security;
 create index if not exists community_group_message_deletions_user_idx on public.community_group_message_deletions(user_id);
 grant select,insert on public.community_group_message_deletions to authenticated;
+drop policy if exists "users manage their group message deletions" on public.community_group_message_deletions;
 create policy "users manage their group message deletions" on public.community_group_message_deletions for all to authenticated using ((select auth.uid())=user_id) with check ((select auth.uid())=user_id);
 create or replace function public.delete_community_group_message_for_me(p_message_id uuid)
 returns void language plpgsql security definer set search_path=public as $function$
