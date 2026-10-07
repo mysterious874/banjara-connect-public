@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Route, Routes, useNavigate } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
 import { BrandMark } from './components/brand'
 import { Loading } from './components/ui'
@@ -65,6 +65,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
 }
 
 export default function App() {
+  const navigate = useNavigate()
   const [showStartupIntro, setShowStartupIntro] = useState(() => {
     return window.sessionStorage.getItem('connect-startup-intro-seen') !== '1'
   })
@@ -74,9 +75,10 @@ export default function App() {
     const timer = window.setTimeout(() => {
       window.sessionStorage.setItem('connect-startup-intro-seen', '1')
       setShowStartupIntro(false)
+      navigate('/home', { replace: true })
     }, 4000)
     return () => window.clearTimeout(timer)
-  }, [showStartupIntro])
+  }, [navigate, showStartupIntro])
 
   useEffect(() => {
     const applyTheme = () => {
