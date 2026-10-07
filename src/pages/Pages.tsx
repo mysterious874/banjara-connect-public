@@ -1269,6 +1269,8 @@ export function ChatListPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [mutedIds, setMutedIds] = useState<string[]>([])
   const holdTimer = useRef<number | null>(null)
+  const holdPointerId = useRef<number | null>(null)
+  const holdStartPoint = useRef<{ x: number; y: number } | null>(null)
   const suppressNextChatClick = useRef(false)
 
 
@@ -1310,14 +1312,25 @@ export function ChatListPage() {
       window.clearTimeout(holdTimer.current)
       holdTimer.current = null
     }
+    holdPointerId.current = null
+    holdStartPoint.current = null
   }
-  function startHold(id: string) {
+  function startHold(id: string, event: React.PointerEvent<HTMLAnchorElement>) {
     clearHold()
+    holdPointerId.current = event.pointerId
+    holdStartPoint.current = { x: event.clientX, y: event.clientY }
+    try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* ignore */ }
     holdTimer.current = window.setTimeout(() => {
-      setSelectedIds((current) => current.includes(id) ? current : [...current, id])
+      setSelectedIds([id])
       suppressNextChatClick.current = true
       holdTimer.current = null
     }, 550)
+  }
+  function handleHoldMove(event: React.PointerEvent<HTMLAnchorElement>) {
+    if (holdPointerId.current !== event.pointerId || !holdStartPoint.current) return
+    const dx = event.clientX - holdStartPoint.current.x
+    const dy = event.clientY - holdStartPoint.current.y
+    if (Math.hypot(dx, dy) > 10) clearHold()
   }
   function selectChat(id: string) {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
@@ -1364,11 +1377,12 @@ export function ChatListPage() {
           to={selectedIds.length ? '#' : `/chat/${conversation.id}`}
           className={`chat-row${selected ? ' chat-row--selected' : ''}`}
           key={conversation.id}
-          onPointerDown={() => startHold(conversation.id)}
+          onPointerDown={(event) => startHold(conversation.id, event)}
+          onPointerMove={handleHoldMove}
           onPointerUp={clearHold}
           onPointerCancel={clearHold}
           onPointerLeave={clearHold}
-          onContextMenu={(event) => { event.preventDefault(); clearHold(); setSelectedIds((current) => current.includes(conversation.id) ? current : [...current, conversation.id]); suppressNextChatClick.current = true }}
+          onContextMenu={(event) => { event.preventDefault(); clearHold(); setSelectedIds([conversation.id]); suppressNextChatClick.current = true }}
           onClick={(event) => {
             if (suppressNextChatClick.current) { event.preventDefault(); suppressNextChatClick.current = false; return }
             if (selectedIds.length > 0) { event.preventDefault(); selectChat(conversation.id) }
