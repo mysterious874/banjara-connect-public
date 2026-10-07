@@ -61,28 +61,33 @@ export async function loadActiveStories() {
     .in('id', userIds)
   if (profileError) throw profileError
   const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
-  return await Promise.all(rows.map(async (item) => {
-    const mediaPath = item.media_url
-    let mediaUrl = mediaPath
-    if (mediaUrl) {
-      try {
-        const { data: signed, error: signedError } = await supabase.storage
-          .from(BANJARA_STORIES_BUCKET)
-          .createSignedUrl(mediaUrl, 60 * 60)
-        if (signedError) throw signedError
-        mediaUrl = signed.signedUrl
-      } catch {
-        mediaUrl = null
+  const mediaPaths = rows.map((item) => item.media_url).filter((path): path is string => Boolean(path))
+  const signedByPath = new Map<string, string>()
+  if (mediaPaths.length) {
+    try {
+      const { data: signedUrls, error: signedError } = await supabase.storage
+        .from(BANJARA_STORIES_BUCKET)
+        .createSignedUrls(mediaPaths, 60 * 60)
+      if (!signedError) {
+        for (const signed of signedUrls ?? []) {
+          if (signed.path && signed.signedUrl) signedByPath.set(signed.path, signed.signedUrl)
+        }
       }
+    } catch {
+      // Individual media failures should not block the stories list.
     }
+  }
+
+  return rows.map((item) => {
+    const mediaPath = item.media_url
     return {
       ...item,
-      media_url: mediaUrl,
+      media_url: mediaPath ? (signedByPath.get(mediaPath) ?? null) : null,
       media_path: mediaPath,
       media_type: item.media_type === 'video' ? 'video' : item.media_type === 'image' ? 'image' : null,
       author: byId.get(item.user_id) ?? null,
     }
-  })) as StoryRecord[]
+  }) as StoryRecord[]
 }
 
 export async function createStory(userId: string, content: string, mediaFile?: File | null) {
