@@ -2603,13 +2603,27 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 }
 .splash-logo-animation__center {
   position: absolute;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--bc-gold, #c99a32);
+  width: 26px;
+  height: 26px;
   opacity: 0;
   transform: scale(.3);
-  animation: splash-center-in 450ms ease 1.52s forwards;
+  animation: splash-center-in 450ms cubic-bezier(.2,.8,.2,1) 1.52s forwards;
+}
+.splash-logo-animation__center::before,
+.splash-logo-animation__center::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bc-gold, #c99a32);
+  box-shadow: 0 3px 8px rgb(123 30 43 / 18%);
+  transform: translate(-50%, -50%);
+}
+.splash-logo-animation__center::after {
+  transform: translate(-50%, -50%) rotate(90deg);
 }
 .splash__brand-name {
   margin: 0;
@@ -2685,8 +2699,9 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
   100% { opacity: 1; transform: translate(16px, 0) rotate(45deg) scale(.86); }
 }
 @keyframes splash-center-in {
-  from { opacity: 0; transform: scale(.3); }
-  to { opacity: 1; transform: scale(1); }
+  0% { opacity: 0; transform: scale(.3) rotate(0deg); }
+  55% { opacity: 1; transform: scale(1.08) rotate(0deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
 }
 @keyframes splash-text-in {
   to { opacity: 1; transform: translateY(0); }
