@@ -22,6 +22,7 @@ button,a{font:inherit}.install{width:100%;border:0;border-radius:16px;padding:15
 <p>People · Community · Culture<br>Get the full Connect experience right on your phone.</p>
 <button class="install" id="install">Install App</button>
 <a class="open" href="/">Open Connect</a>
+<script>if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }</script>
 <div class="steps" id="steps">
 <div class="step"><span class="n">1</span><span>Tap <b>Install App</b> when the browser offers installation.</span></div>
 <div class="step"><span class="n">2</span><span>Confirm <b>Install</b> to add Connect to your home screen.</span></div>
@@ -36,7 +37,7 @@ window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPro
 btn.addEventListener("click",async()=>{
  if(deferredPrompt){deferredPrompt.prompt();const {outcome}=await deferredPrompt.userChoice;status.textContent=outcome==="accepted"?"Connect is being installed.":"Installation cancelled.";deferredPrompt=null;return}
  if(/iphone|ipad|ipod/i.test(navigator.userAgent)){status.textContent="On iPhone: tap Share → Add to Home Screen."}
- else if(/android/i.test(navigator.userAgent)){status.textContent="On Android: open your browser menu and choose Install app or Add to Home screen."}
+ else if(/android/i.test(navigator.userAgent)){status.textContent="Install prompt is not available yet. Reload once, then tap Install App again."}
  else{status.textContent="Open this page in a supported browser and choose Install app from the browser menu."}
 });
 window.addEventListener("appinstalled",()=>{status.textContent="Connect is installed. ❤️"});
