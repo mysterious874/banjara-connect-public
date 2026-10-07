@@ -926,7 +926,7 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
 @media (min-width: 800px) {
   .app-shell--chat { justify-content: center; background: var(--bc-cream); }
   .chat-screen { width: min(760px, calc(100% - 48px)); height: min(86dvh, 820px); min-height: 560px; flex: none; overflow: hidden; border-radius: 18px; box-shadow: var(--bc-shadow); }
-  .app-shell--chat .chat-compose-area { right: 12px; bottom: 0; left: 12px; width: auto; }
+  .app-shell--chat .chat-compose-area { right: 12px; bottom: 12px; left: 12px; width: auto; }
 }
 
 .about-focus-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
