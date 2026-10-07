@@ -144,7 +144,7 @@ export default function App() {
             <span className="splash__logo-wrap"><span className="splash__logo-ring" /><BrandMark size="large" /></span>
             <h1>Connect</h1>
             <span className="splash__line" />
-            <p>The communication platform for our people.</p>
+            <p>Where our people connect, share and grow together.</p>
             <span className="splash__loader" aria-hidden="true"><span /></span>
           </div>
         </main>
