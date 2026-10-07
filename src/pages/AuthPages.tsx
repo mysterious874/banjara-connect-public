@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { BrandLockup, BrandMark } from '../components/brand'
+import { BrandLockup } from '../components/brand'
 import { Button, Input } from '../components/ui'
 import { useAuth } from '../hooks/AuthProvider'
 import { mobileAuthEmail, normalizeMobileNumber } from '../utils/authIdentity'
