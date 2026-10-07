@@ -57,7 +57,7 @@ export default function App() {
     const isSplashRoute = window.location.pathname === '/' || window.location.pathname === '/splash'
     if (!isSplashRoute) {
       setShowLaunchIntro(true)
-      const timer = window.setTimeout(() => setShowLaunchIntro(false), 3000)
+      const timer = window.setTimeout(() => setShowLaunchIntro(false), 3500)
       return () => window.clearTimeout(timer)
     }
   }, [])
