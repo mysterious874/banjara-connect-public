@@ -3042,3 +3042,38 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
     max-width: 132px;
   }
 }
+
+
+/* Final containment: the community group search rail must never widen the page. */
+.community-discover-list {
+  display: flex !important;
+  flex-direction: row !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  flex: 0 1 100% !important;
+  box-sizing: border-box !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  overscroll-behavior-x: contain !important;
+  touch-action: pan-x !important;
+  contain: inline-size !important;
+}
+.community-discover-list > .community-discover-card {
+  flex: 0 0 132px !important;
+  width: 132px !important;
+  min-width: 132px !important;
+  max-width: 132px !important;
+}
+.community-discover-list,
+.community-discover-list * {
+  max-width: 100%;
+}
+@media (min-width: 561px) {
+  .community-discover-list > .community-discover-card {
+    flex-basis: 142px !important;
+    width: 142px !important;
+    min-width: 142px !important;
+    max-width: 142px !important;
+  }
+}
