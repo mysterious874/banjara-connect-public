@@ -23,6 +23,28 @@ export type HeritageTopic = {
   sources: string[]
 }
 
+
+export const nangaraMuseum = {
+  name: 'Banjara Virasat Nangara Museum',
+  location: 'Poharadevi, Manora, Washim, Maharashtra',
+  address: 'Museum Road, Poharadevi, Manora, Maharashtra 444404',
+  summary: 'A four-storey museum dedicated to documenting and presenting Banjara history, culture, traditions and stories. Poharadevi is an important pilgrimage centre for the Banjara community.',
+  details: [
+    'The museum was inaugurated on 5 October 2024.',
+    'The complex includes historical and cultural galleries, immersive theatre experiences and a large Seva Dhwaj.',
+    'A 150-foot Seva Dhwaj is one of the prominent features of the museum complex.',
+    'The museum site describes a 21-foot Panchdhatu equestrian statue of Sant Sevalal Maharaj within the complex.',
+  ],
+  photos: [
+    { src: 'https://nagaramuseum.com/wp-content/uploads/2025/10/IMG_20250826_104056663_HDR-1-1-2.png', alt: 'Banjara Virasat Nangara Museum complex at Poharadevi', caption: 'Museum complex, Poharadevi' },
+    { src: 'https://nagaramuseum.com/wp-content/uploads/2025/08/Container-img-3.png', alt: 'Seva Dhwaj at Banjara Virasat Nangara Museum', caption: 'Seva Dhwaj and museum complex' },
+    { src: 'https://nagaramuseum.com/wp-content/uploads/2025/08/about-img-3.png', alt: 'Banjara Virasat Nangara Museum heritage exhibit', caption: 'Museum heritage presentation' },
+  ],
+  officialUrl: 'https://nagaramuseum.com/',
+  galleryUrl: 'https://nagaramuseum.com/photo-gallery/',
+  districtUrl: 'https://washim.gov.in/en/tourist-place/banjara-virasat-nangara-museum/',
+}
+
 export const heritageTimeline = [
   {
     period: 'Long historical background',
@@ -196,7 +218,14 @@ export const heritageTopics: HeritageTopic[] = [
   { id: 'today', title: 'Modern Community', description: 'Contemporary and varied Banjara experiences.', sources: ['bikku', 'pib-renke'] },
 ]
 
-export const heritageSources: HeritageSource[] = [
+export const heritageSources: HeritageSource[] = [  {
+    id: 'nangara',
+    title: 'Banjara Virasat Nangara Museum, Poharadevi',
+    author: 'District Washim, Government of Maharashtra', publisher: 'District Washim', year: '2024–2026',
+    scope: 'Official district information on the museum, its purpose, location, galleries and major features.',
+    url: 'https://washim.gov.in/en/tourist-place/banjara-virasat-nangara-museum/',
+  },
+
   {
     id: 'bikku',
     title: 'Colonial Impact on Pastoral Nomads and Caravan Traders in India: The Raika and the Banjara',
