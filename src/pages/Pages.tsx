@@ -685,26 +685,31 @@ export function CreatePostPage() {
       setGroupsLoading(false)
       return () => { active = false }
     }
-    supabase.from('community_group_members')
-      .select('group_id')
-      .eq('user_id', session.user.id)
-      .then(async ({ data: memberships, error: membershipError }) => {
+    void (async () => {
+      try {
+        const { data: memberships, error: membershipError } = await supabase
+          .from('community_group_members')
+          .select('group_id')
+          .eq('user_id', session.user.id)
         if (membershipError) throw membershipError
         const ids = (memberships ?? []).map((row) => row.group_id)
         if (!ids.length) {
           if (active) setGroups([])
           return
         }
-        const { data, error: groupError } = await supabase.from('community_groups').select('id,name').in('id', ids).order('name')
+        const { data, error: groupError } = await supabase
+          .from('community_groups')
+          .select('id,name')
+          .in('id', ids)
+          .order('name')
         if (groupError) throw groupError
         if (active) setGroups((data ?? []) as Array<{ id: string; name: string }>)
-      })
-      .catch((caught) => {
+      } catch (caught) {
         if (active) setError(userFacingError(caught, 'Could not load your communities.'))
-      })
-      .finally(() => {
+      } finally {
         if (active) setGroupsLoading(false)
-      })
+      }
+    })()
     return () => { active = false }
   }, [session?.user.id])
 
