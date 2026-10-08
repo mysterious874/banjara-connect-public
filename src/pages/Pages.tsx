@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Phone, Camera, Plus, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Ban, LogOut } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Phone, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Ban, LogOut } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
@@ -20,7 +20,7 @@ import { deleteProfileAvatar, profileAvatarPathFromUrl, uploadProfileAvatar, val
 import { fetchCurrentLocation, searchLocationSuggestions, type LocationSuggestion } from '../utils/locationData'
 import { validateChatMedia } from '../utils/chatMediaData'
 import { createGroupMediaUrl, deleteGroupMedia, uploadGroupMedia, validateGroupMedia } from '../utils/groupMediaData'
-import { createStory, deleteStory, loadActiveStories, validateStoryMedia, type StoryRecord } from '../utils/storyData'
+import { createStory, deleteStory, loadActiveStories, loadStoryViewers, recordStoryView, validateStoryMedia, type StoryRecord, type StoryViewer } from '../utils/storyData'
 import { userFacingError } from '../utils/userFacingError'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
@@ -1407,6 +1407,9 @@ export function StoriesPage() {
   const [storyShareLoading, setStoryShareLoading] = useState(false)
   const [storyShareSending, setStoryShareSending] = useState(false)
   const [storyShareError, setStoryShareError] = useState('')
+  const [storyViewersOpen, setStoryViewersOpen] = useState(false)
+  const [storyViewers, setStoryViewers] = useState<StoryViewer[]>([])
+  const [storyViewersLoading, setStoryViewersLoading] = useState(false)
   const storyTimer = useRef<number | null>(null)
 
   const grouped = Array.from(new Map(stories.map((story) => [story.user_id, story])).values())
@@ -1452,6 +1455,24 @@ export function StoriesPage() {
       if (storyTimer.current) window.clearTimeout(storyTimer.current)
     }
   }, [selectedStory?.id, activeIndex, grouped.length, navigate])
+
+  useEffect(() => {
+    if (!selectedStory || !session?.user.id || selectedStory.user_id === session.user.id) return
+    void recordStoryView(selectedStory.id, session.user.id).catch(() => undefined)
+  }, [selectedStory?.id, selectedStory?.user_id, session?.user.id])
+
+  async function openStoryViewers() {
+    if (!selectedStory || selectedStory.user_id !== session?.user.id) return
+    setStoryViewersOpen(true)
+    setStoryViewersLoading(true)
+    try {
+      setStoryViewers(await loadStoryViewers(selectedStory.id, session.user.id))
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not load story viewers.'))
+    } finally {
+      setStoryViewersLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!selectedStory) return
@@ -1625,10 +1646,12 @@ export function StoriesPage() {
           })}</div></div>}
       
     </>}
+      {storyViewersOpen && selectedStory?.user_id === session?.user.id && <div className="story-viewers-modal-backdrop" onClick={() => setStoryViewersOpen(false)}><div className="story-viewers-modal" role="dialog" aria-modal="true" aria-label="Story viewers" onClick={(event) => event.stopPropagation()}><div className="story-viewers-modal__head"><div><strong>Story viewers</strong><span>{storyViewers.length} {storyViewers.length === 1 ? 'view' : 'views'}</span></div><button type="button" onClick={() => setStoryViewersOpen(false)} aria-label="Close"><X size={19} /></button></div><div className="story-viewers-modal__list">{storyViewersLoading ? <Loading label="Loading viewers" /> : storyViewers.length === 0 ? <EmptyState title="No views yet" description="People who view your story will appear here." /> : storyViewers.map((viewer) => { const name = viewer.display_name || viewer.username || 'Community member'; return <div className="story-viewer-row" key={viewer.id}><Avatar name={name} image={viewer.avatar_url ?? undefined} /><div><strong>{name}</strong>{viewer.username && <span>@{viewer.username}</span>}</div></div> })}</div></div></div>}
     {selectedStory && (grouped.length > 0 || Boolean(initialStory)) && <div className="story-fullscreen" role="dialog" aria-modal="true" aria-label="Story viewer">
       <div className="story-fullscreen__backdrop" onClick={() => navigate('/home')} />
       <div className="story-fullscreen__card">
         <div className="story-fullscreen__progress">{grouped.map((story, index) => <span key={story.user_id} className={`story-fullscreen__progress-segment${index < activeIndex ? ' is-complete' : index === activeIndex ? ' is-active' : ''}`} />)}</div>
+        {selectedStory.user_id === session?.user.id ? <button type="button" className="story-fullscreen__view-button" onClick={(event) => { event.stopPropagation(); void openStoryViewers() }} aria-label="View story viewers"><Eye size={16} /> <span>View</span></button> : null}
         <div className="story-fullscreen__head">
           <div className="post-card__author"><Avatar name={selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'} image={selectedStory.author?.avatar_url ?? undefined} /><span><strong>{selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'}</strong><span>{new Date(selectedStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span></div>
           <button type="button" className="story-fullscreen__close" onClick={() => navigate('/home')} aria-label="Close story"><X size={22} /></button>
