@@ -274,7 +274,7 @@ export function CommunityPage() {
   const [error, setError] = useState('')
   const [groups, setGroups] = useState<Array<{ id: string; name: string; description: string; member_count: number; unread_count: number }>>([])
   const [groupsLoading, setGroupsLoading] = useState(true)
-  const [discoverGroups, setDiscoverGroups] = useState<Array<{ id: string; name: string; description: string }>>([])
+  const [discoverGroups, setDiscoverGroups] = useState<Array<{ id: string; name: string; description: string; member_count: number }>>([])
   const [groupSearch, setGroupSearch] = useState('')
   const [groupSearchLoading, setGroupSearchLoading] = useState(false)
   const [groupRequesting, setGroupRequesting] = useState('')
@@ -341,7 +341,20 @@ export function CommunityPage() {
         .order('created_at', { ascending: false })
         .limit(20)
       if (searchError) throw searchError
-      setDiscoverGroups((data ?? []) as Array<{ id: string; name: string; description: string }>)
+      const foundGroups = (data ?? []) as Array<{ id: string; name: string; description: string }>
+      if (!foundGroups.length) {
+        setDiscoverGroups([])
+        return
+      }
+      const groupIds = foundGroups.map((group) => group.id)
+      const { data: members, error: membersError } = await supabase
+        .from('community_group_members')
+        .select('group_id')
+        .in('group_id', groupIds)
+      if (membersError) throw membersError
+      const counts = new Map<string, number>()
+      for (const member of members ?? []) counts.set(member.group_id, (counts.get(member.group_id) ?? 0) + 1)
+      setDiscoverGroups(foundGroups.map((group) => ({ ...group, member_count: counts.get(group.id) ?? 0 })))
     } catch (caught) {
       setGroupError(userFacingError(caught, 'Could not search communities.'))
       setDiscoverGroups([])
@@ -451,16 +464,20 @@ export function CommunityPage() {
         <input type="search" value={groupSearch} onChange={(event) => void loadGroupSearch(event.target.value)} aria-label="Search groups" placeholder="Search for a group" />
       </form>
       {groupSearchLoading && <Loading label="Searching groups" />}
-      {!groupSearchLoading && groupSearch.trim().length >= 2 && <div className="community-discover-list">{discoverGroups.length ? discoverGroups.map((group) => {
+      {!groupSearchLoading && groupSearch.trim().length >= 2 && <div className="community-discover-list" aria-label="Community search suggestions">{discoverGroups.length ? discoverGroups.map((group) => {
         const isMember = groups.some((item) => item.id === group.id)
         const isPending = groupRequestIds.has(group.id)
-        return <div className="community-discover-card" key={group.id}>
-          <span className="community-group-card__icon"><Users size={20} /></span>
-          <div><strong>{group.name}</strong><p>{group.description || 'A Banjara Connect community group.'}</p></div>
+        return <article className="community-discover-card" key={group.id}>
+          <span className="community-discover-card__avatar"><Users size={24} /></span>
+          <div className="community-discover-card__copy">
+            <strong>{group.name}</strong>
+            <small>{group.description || 'Banjara Connect community'}</small>
+            <span>{group.member_count} {group.member_count === 1 ? 'member' : 'members'}</span>
+          </div>
           <Button type="button" variant={isMember || isPending ? 'quiet' : 'outline'} disabled={isMember || isPending || groupRequesting === group.id} onClick={() => void requestGroupJoin(group.id)}>
             {isMember ? 'Joined' : isPending ? 'Request sent' : groupRequesting === group.id ? 'Sending…' : 'Join'}
           </Button>
-        </div>
+        </article>
       }) : <EmptyState title="No groups found" description="Try another group name." />}</div>}
     </div>
 
