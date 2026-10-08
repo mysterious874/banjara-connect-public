@@ -33,6 +33,10 @@ const conversationListCache = new Map<string, { expiresAt: number; value: Conver
 const conversationListRequests = new Map<string, Promise<ConversationSummary[]>>()
 const CONVERSATION_LIST_CACHE_TTL_MS = 1500
 
+export function invalidateConversationListCache() {
+  conversationListCache.clear()
+}
+
 export async function getOrCreateConversation(targetUserId: string) {
   const userId = await requireAuthenticatedUserId()
   if (userId === targetUserId) throw new Error('You cannot start a conversation with yourself.')
