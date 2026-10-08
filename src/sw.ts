@@ -7,6 +7,7 @@ declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<unknown>
 }
 
+// deployment refresh marker — keep production build moving to the latest main
 clientsClaim()
 
 // Allow the in-app Update button to activate the waiting service worker.
