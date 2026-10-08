@@ -822,7 +822,6 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   .app-shell__body { width: min(1180px, calc(100% - 48px)); }
   .community-preview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
-@medi
 .nangara-feature {
   display: grid;
   grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
