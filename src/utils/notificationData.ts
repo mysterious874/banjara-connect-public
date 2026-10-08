@@ -34,6 +34,7 @@ export async function loadNotifications(): Promise<NotificationRecord[]> {
   const { data, error } = await supabase.from('notifications')
     .select('id,user_id,actor_id,type,post_id,comment_id,message_id,group_id,group_message_id,group_join_request_id,is_read,created_at')
     .eq('user_id', userId)
+    .not('type', 'in', '(message,group_message)')
     .order('created_at', { ascending: false })
     .limit(100)
   if (error) throw error
