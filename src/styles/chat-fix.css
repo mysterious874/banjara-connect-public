@@ -440,3 +440,23 @@ body:has(.community-group-screen) {
     padding-right: 8px !important;
   }
 }
+
+
+/* Group chat: keep sent bubbles at the same small right inset as direct chats. */
+.community-group-screen .chat-message-row--you {
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  justify-content: flex-end !important;
+  box-sizing: border-box !important;
+}
+
+.community-group-screen .chat-message-row--you .chat-bubble,
+.community-group-screen .chat-message-row--you .chat-bubble--you {
+  margin-left: 0 !important;
+  margin-right: 8px !important;
+  box-sizing: border-box !important;
+}
