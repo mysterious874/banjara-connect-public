@@ -1,3 +1,5 @@
+/// <reference lib="webworker" />
+
 import { clientsClaim } from 'workbox-core'
 import { precacheAndRoute } from 'workbox-precaching'
 
