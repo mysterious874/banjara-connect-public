@@ -262,6 +262,13 @@ export async function sendConversationMessage(conversationId: string, content: s
   }).select(messageColumns).single()
   if (error) throw error
   const created = data as ChatMessage
+
+  // Fire-and-forget server push. The Edge Function authenticates the sender,
+  // finds the other conversation member, and sends to their registered devices.
+  void supabase.functions.invoke('send-chat-push', {
+    body: { message_id: created.id },
+  }).catch(() => {})
+
   if (!mediaFile) return created
 
   let uploadedPath = ''
