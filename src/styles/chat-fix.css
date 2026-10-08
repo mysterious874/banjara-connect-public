@@ -1,419 +1,257 @@
-/* Mobile chat viewport fix: prevent the global mobile nav spacer from creating a white strip. */
-body:has(.app-shell--chat) {
+/* Chat-only layout guard.
+   Loaded after global.css so these rules are the single source of truth for chat sizing.
+   Backend, auth and routing are intentionally untouched. */
+
+body:has(.app-shell--chat),
+body:has(.community-group-screen) {
+  overflow: hidden !important;
   padding-bottom: 0 !important;
-  overflow: hidden;
 }
 
-.app-shell--chat,
+.app-shell--chat {
+  display: flex !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.app-shell--chat > .topbar,
+.app-shell--chat > .desktop-nav,
+.app-shell--chat > .bottom-nav {
+  display: none !important;
+}
+
 .app-shell--chat .app-shell__body,
-.app-shell--chat .route-content,
-.app-shell--chat .chat-screen {
-  height: 100dvh;
-  max-height: 100dvh;
-  min-height: 0;
+.app-shell--chat .route-content {
+  display: flex !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
 }
 
-@media (max-width: 759px) {
-  body:has(.app-shell--chat) {
-    padding-bottom: 0 !important;
-  }
-
-  .app-shell--chat .chat-compose-area {
-    bottom: 0;
-    padding-bottom: max(7px, env(safe-area-inset-bottom));
-  }
-}
-/* Community group chat: keep the composer inside the visual viewport when the mobile keyboard opens. */
-@media (max-width: 799px) {
-  .community-group-screen .chat-compose-area {
-    bottom: 0 !important;
-    padding-bottom: max(7px, env(safe-area-inset-bottom)) !important;
-  }
-
-  .community-group-screen .chat-messages {
-    padding-bottom: 74px;
-    overscroll-behavior: contain;
-  }
-
-  body:has(.community-group-screen) {
-    padding-bottom: 0 !important;
-    overflow: hidden;
-  }
+.app-shell--chat .chat-screen,
+.community-group-screen {
+  position: relative !important;
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  transform: none !important;
 }
 
-
-/* Community group chat: lock the mobile chat viewport so the keyboard cannot scroll the header out of view. */
-@media (max-width: 799px) {
-  .community-group-screen {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100dvh !important;
-    max-height: 100dvh !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-    overflow: hidden !important;
-    overscroll-behavior: none !important;
-  }
-
-  .community-group-screen .chat-screen__head {
-    flex: 0 0 auto !important;
-    transform: none !important;
-  }
-
-  .community-group-screen .chat-messages {
-    min-height: 0 !important;
-    overscroll-behavior: contain !important;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .community-group-screen .chat-compose-area {
-    position: absolute !important;
-    bottom: 0 !important;
-    transform: none !important;
-  }
+.chat-screen__head {
+  position: relative !important;
+  inset: auto !important;
+  flex: 0 0 auto !important;
+  z-index: 100 !important;
+  transform: none !important;
 }
 
-/* Community group options menu: close cleanly on outside taps. */
-.community-group-screen .chat-screen__actions { position: relative; }
+.chat-messages {
+  position: relative !important;
+  display: flex !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  flex-direction: column !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding-bottom: 72px !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+}
 
+.chat-message-row {
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex: 0 0 auto !important;
+}
 
-/* Mobile keyboard hard-lock: keep the entire chat viewport anchored to the visual viewport.
-   The document itself must not scroll when an input receives focus. */
+.chat-message-row--you {
+  justify-content: flex-end !important;
+  padding-right: 0 !important;
+}
+
+.chat-message-row--them {
+  justify-content: flex-start !important;
+  padding-left: 0 !important;
+}
+
+.chat-bubble {
+  flex: 0 0 auto !important;
+  max-width: min(84%, 520px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  overflow-wrap: anywhere !important;
+}
+
+.chat-bubble__meta {
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.chat-compose-area {
+  position: absolute !important;
+  top: auto !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  flex: 0 0 auto !important;
+  z-index: 1001 !important;
+  transform: none !important;
+  box-sizing: border-box !important;
+}
+
+/* The keyboard hook in Pages.tsx temporarily switches the composer to fixed
+   positioning and supplies the visual-viewport bottom inset. */
 @media (max-width: 799px) {
   html:has(.app-shell--chat),
-  body:has(.app-shell--chat) {
+  body:has(.app-shell--chat),
+  html:has(.community-group-screen),
+  body:has(.community-group-screen) {
     width: 100% !important;
-    height: 100% !important;
+    max-width: 100% !important;
     min-height: 100% !important;
-    max-height: 100% !important;
     overflow: hidden !important;
     overscroll-behavior: none !important;
   }
 
-  body:has(.app-shell--chat) .app-shell--chat {
+  .app-shell--chat,
+  body:has(.app-shell--chat) .app-shell--chat,
+  .community-group-screen {
     position: fixed !important;
     inset: 0 !important;
     width: 100vw !important;
     height: 100dvh !important;
-    min-height: 0 !important;
     max-height: 100dvh !important;
+    min-height: 0 !important;
     margin: 0 !important;
-    overflow: hidden !important;
   }
 
   body:has(.app-shell--chat) .app-shell--chat .app-shell__body,
   body:has(.app-shell--chat) .app-shell--chat .route-content {
-    width: 100% !important;
     height: 100% !important;
-    min-height: 0 !important;
     max-height: 100% !important;
-    margin: 0 !important;
+    min-height: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
   }
 
-  body:has(.app-shell--chat) .app-shell--chat .chat-screen {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    min-height: 0 !important;
-    max-height: 100dvh !important;
-    margin: 0 !important;
-    overflow: hidden !important;
-    transform: translate3d(0, var(--chat-viewport-offset, 0px), 0) !important;
-  }
-
-  body:has(.app-shell--chat) .app-shell--chat .chat-screen__head {
+  body:has(.app-shell--chat) .app-shell--chat .chat-screen,
+  body:has(.community-group-screen) .community-group-screen {
     position: relative !important;
-    top: auto !important;
-    flex: 0 0 auto !important;
-    z-index: 100 !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    flex: 1 1 auto !important;
     transform: none !important;
   }
 
-  body:has(.app-shell--chat) .app-shell--chat .chat-messages {
+  .chat-screen__head {
+    flex: 0 0 auto !important;
+    transform: none !important;
+  }
+
+  .chat-messages {
     flex: 1 1 auto !important;
     min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
     overflow-y: auto !important;
-    overflow-x: hidden !important;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
+    padding-bottom: 72px !important;
   }
 
-  body:has(.app-shell--chat) .app-shell--chat .chat-compose-area {
-    flex: 0 0 auto !important;
-    transform: none !important;
-  }
-}
-
-
-/* Keep the message composer above the mobile keyboard/accessory strip. */
-@media (max-width: 799px) {
-  body:has(.app-shell--chat) .app-shell--chat .chat-compose-area {
+  .chat-compose-area {
     position: absolute !important;
-    left: 0 !important;
+    top: auto !important;
     right: 0 !important;
     bottom: 0 !important;
+    left: 0 !important;
     width: 100% !important;
-    z-index: 120 !important;
-    transform: none !important;
-    box-sizing: border-box !important;
-    padding-bottom: max(7px, env(safe-area-inset-bottom)) !important;
-  }
-
-  body:has(.app-shell--chat) .app-shell--chat .chat-messages {
-    padding-bottom: 118px !important;
-  }
-}
-
-
-/* Final mobile keyboard fix: pin the composer to the visual viewport instead of the chat flex box. */
-@media (max-width: 799px) {
-  body:has(.app-shell--chat) .app-shell--chat .chat-compose-area {
-    position: fixed !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 100vw !important;
     max-width: none !important;
-    margin: 0 !important;
-    z-index: 9999 !important;
-    transform: none !important;
-    box-sizing: border-box !important;
-    border-radius: 18px 18px 0 0 !important;
-  }
-
-  body:has(.app-shell--chat) .app-shell--chat .chat-messages {
-    padding-bottom: 125px !important;
-  }
-}
-
-
-/* Keep community-group header anchored exactly like the one-to-one chat while the keyboard is open. */
-@media (max-width: 799px) {
-  body:has(.community-group-screen) .community-group-screen .chat-screen__head {
-    position: sticky !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    flex: 0 0 auto !important;
-    z-index: 1000 !important;
+    z-index: 1001 !important;
     transform: none !important;
   }
 
-  body:has(.community-group-screen) .community-group-screen .chat-messages {
-    position: relative !important;
-    z-index: 1 !important;
-  }
-
-  body:has(.community-group-screen) .community-group-screen .chat-compose-area {
-    position: fixed !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100vw !important;
-    z-index: 99999 !important;
-    transform: none !important;
-  }
-}
-
-
-/* WhatsApp-style mobile keyboard layout: one shared model for direct and group chats. */
-@media (max-width: 799px) {
-  body:has(.app-shell--chat) .app-shell--chat .chat-screen,
-  .community-group-screen {
-    display: flex !important;
-    flex-direction: column !important;
-    overflow: hidden !important;
-    min-height: 0 !important;
-    box-sizing: border-box !important;
-  }
-
-  body:has(.app-shell--chat) .app-shell--chat .chat-screen__head,
+  /* Keep group and direct chat headers in exactly the same layout contract. */
   .community-group-screen .chat-screen__head {
     position: relative !important;
     inset: auto !important;
+    width: 100% !important;
     flex: 0 0 auto !important;
-    z-index: 1000 !important;
     transform: none !important;
   }
 
-  body:has(.app-shell--chat) .app-shell--chat .chat-messages,
   .community-group-screen .chat-messages {
     flex: 1 1 auto !important;
     min-height: 0 !important;
-    height: auto !important;
-    max-height: none !important;
-    overflow-x: hidden !important;
     overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    overscroll-behavior: contain !important;
-    scroll-behavior: auto !important;
-    padding-bottom: 118px !important;
+    padding-bottom: 72px !important;
   }
 
-  body:has(.app-shell--chat) .app-shell--chat .chat-compose-area,
   .community-group-screen .chat-compose-area {
-    position: fixed !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 100vw !important;
-    max-width: none !important;
-    flex: 0 0 auto !important;
-    z-index: 99999 !important;
-    transform: none !important;
-    box-sizing: border-box !important;
-  }
-}
-
-
-/* Final guard: never let the keyboard composer jump into the header area. */
-@media (max-width: 799px) {
-  body:has(.app-shell--chat) .app-shell--chat .chat-screen,
-  body:has(.community-group-screen) .community-group-screen {
-    position: fixed !important;
-    inset: 0 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    overflow: hidden !important;
-  }
-
-  body:has(.app-shell--chat) .app-shell--chat .chat-screen__head,
-  body:has(.community-group-screen) .community-group-screen .chat-screen__head {
-    position: relative !important;
-    top: auto !important;
-    bottom: auto !important;
-    flex: 0 0 auto !important;
-    z-index: 1000 !important;
-  }
-
-  body:has(.app-shell--chat) .app-shell--chat .chat-messages,
-  body:has(.community-group-screen) .community-group-screen .chat-messages {
-    position: relative !important;
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-  }
-
-  body:has(.app-shell--chat) .app-shell--chat .chat-compose-area,
-  body:has(.community-group-screen) .community-group-screen .chat-compose-area {
-    top: auto !important;
-    left: 0 !important;
-    right: 0 !important;
-    transform: none !important;
-    position: fixed !important;
-    z-index: 99999 !important;
-  }
-}
-
-/* Group chat: same keyboard-aware viewport contract as direct chat. */
-@media (max-width: 799px) {
-  body:has(.community-group-screen) .community-group-screen {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    max-height: 100dvh !important;
-    min-height: 0 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    overflow: hidden !important;
-    transform: none !important;
-  }
-
-  body:has(.community-group-screen) .community-group-screen .chat-screen__head {
-    position: relative !important;
-    inset: auto !important;
-    top: auto !important;
-    bottom: auto !important;
-    flex: 0 0 auto !important;
-    width: 100% !important;
-    z-index: 100000 !important;
-    transform: none !important;
-  }
-
-  body:has(.community-group-screen) .community-group-screen .chat-messages {
-    position: relative !important;
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    height: auto !important;
-    max-height: none !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    padding-bottom: 130px !important;
-    z-index: 1 !important;
-    -webkit-overflow-scrolling: touch !important;
-    overscroll-behavior: contain !important;
-  }
-
-  body:has(.community-group-screen) .community-group-screen .chat-compose-area {
-    position: fixed !important;
-    left: 0 !important;
-    right: 0 !important;
-    top: auto !important;
-    bottom: 0 !important;
-    width: 100vw !important;
-    max-width: none !important;
-    z-index: 100001 !important;
-    transform: none !important;
-  }
-}
-
-/* Definitive mobile chat layout: composer belongs to the chat viewport, not the page. */
-@media (max-width: 799px) {
-  body:has(.app-shell--chat) .app-shell--chat .chat-screen,
-  body:has(.community-group-screen) .community-group-screen {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    min-height: 0 !important;
-    max-height: 100dvh !important;
-    display: flex !important;
-    flex-direction: column !important;
-    overflow: hidden !important;
-    transform: none !important;
-  }
-
-  body:has(.app-shell--chat) .app-shell--chat .chat-screen__head,
-  body:has(.community-group-screen) .community-group-screen .chat-screen__head {
-    position: relative !important;
-    inset: auto !important;
-    flex: 0 0 auto !important;
-    z-index: 1000 !important;
-    transform: none !important;
-  }
-
-  body:has(.app-shell--chat) .app-shell--chat .chat-messages,
-  body:has(.community-group-screen) .community-group-screen .chat-messages {
-    position: relative !important;
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    height: auto !important;
-    max-height: none !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    padding-bottom: 130px !important;
-    z-index: 1 !important;
-    -webkit-overflow-scrolling: touch !important;
-    overscroll-behavior: contain !important;
-  }
-
-  body:has(.app-shell--chat) .app-shell--chat .chat-compose-area,
-  body:has(.community-group-screen) .community-group-screen .chat-compose-area {
     position: absolute !important;
-    left: 0 !important;
-    right: 0 !important;
     top: auto !important;
+    right: 0 !important;
     bottom: 0 !important;
+    left: 0 !important;
     width: 100% !important;
-    max-width: none !important;
-    flex: 0 0 auto !important;
     z-index: 1001 !important;
-    transform: none !important;
-    margin: 0 !important;
   }
+}
+
+@media (min-width: 800px) {
+  .app-shell--chat {
+    justify-content: center !important;
+    background: var(--bc-cream) !important;
+  }
+
+  .app-shell--chat .chat-screen {
+    width: min(760px, calc(100% - 48px)) !important;
+    height: min(86dvh, 820px) !important;
+    min-height: 560px !important;
+    flex: 0 0 auto !important;
+    border-radius: 18px !important;
+    box-shadow: var(--bc-shadow) !important;
+  }
+
+  .app-shell--chat .chat-compose-area {
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+  }
+}
+
+/* Keep the options menu anchored to the action area. */
+.chat-screen__actions,
+.community-group-screen .chat-screen__actions {
+  position: relative !important;
+}
+
+.chat-options-menu {
+  z-index: 10000 !important;
 }
