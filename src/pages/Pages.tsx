@@ -2147,6 +2147,26 @@ export function CommunityGroupPage() {
   const [reportDetails, setReportDetails] = useState('')
   const [reportSaving, setReportSaving] = useState(false)
   const [reportError, setReportError] = useState('')
+  const initialGroupBottomScrollDone = useRef(false)
+
+  useEffect(() => {
+    initialGroupBottomScrollDone.current = false
+  }, [groupId])
+
+  useEffect(() => {
+    if (isLoading || !messages.length || initialGroupBottomScrollDone.current) return
+    initialGroupBottomScrollDone.current = true
+    const scrollToLatest = () => {
+      const pane = document.querySelector('.community-group-screen .chat-messages') as HTMLElement | null
+      if (!pane) return
+      pane.scrollTop = Math.max(0, pane.scrollHeight - pane.clientHeight)
+    }
+    const frame = window.requestAnimationFrame(() => {
+      scrollToLatest()
+      window.requestAnimationFrame(scrollToLatest)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [groupId, isLoading, messages.length])
 
   useEffect(() => {
     if (!groupMenuOpen) return
