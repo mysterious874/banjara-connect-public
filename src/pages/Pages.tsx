@@ -49,17 +49,38 @@ function useChatKeyboardViewportLock() {
     const root = document.documentElement
     const body = document.body
     const viewport = window.visualViewport
+
     const apply = () => {
       const active = document.activeElement
-      const keyboardOpen = Boolean(active && (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) && viewport && viewport.height < window.innerHeight - 80)
+      const keyboardOpen = Boolean(
+        active &&
+        (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
+        viewport &&
+        viewport.height < window.innerHeight - 80,
+      )
       const chat = document.querySelector('.chat-screen') as HTMLElement | null
+      const composer = document.querySelector('.chat-compose-area') as HTMLElement | null
       if (!chat) return
+
       if (keyboardOpen && viewport) {
-        const top = Math.max(0, viewport.offsetTop)
+        // Do not transform the whole chat. Move only the composer above the
+        // part of the screen occupied by the Android keyboard/toolbar.
+        const keyboardInset = Math.max(
+          0,
+          window.innerHeight - viewport.height - viewport.offsetTop,
+        )
         chat.style.setProperty('top', '0px')
-        chat.style.setProperty('--chat-viewport-offset', `${top}px`)
+        chat.style.setProperty('--chat-viewport-offset', '0px')
+        chat.style.setProperty('transform', 'none')
         chat.style.setProperty('height', `${viewport.height}px`)
         chat.style.setProperty('max-height', `${viewport.height}px`)
+
+        if (composer) {
+          composer.style.setProperty('bottom', `${keyboardInset}px`, 'important')
+          composer.style.setProperty('position', 'fixed', 'important')
+          composer.style.setProperty('z-index', '99999', 'important')
+        }
+
         root.style.setProperty('overflow', 'hidden')
         body.style.setProperty('overflow', 'hidden')
         window.requestAnimationFrame(() => window.scrollTo(0, 0))
@@ -69,19 +90,33 @@ function useChatKeyboardViewportLock() {
         chat.style.removeProperty('transform')
         chat.style.removeProperty('height')
         chat.style.removeProperty('max-height')
+
+        if (composer) {
+          composer.style.removeProperty('bottom')
+          composer.style.removeProperty('position')
+          composer.style.removeProperty('z-index')
+        }
+
         root.style.removeProperty('overflow')
         body.style.removeProperty('overflow')
       }
     }
+
     const resetScroll = () => window.requestAnimationFrame(() => window.scrollTo(0, 0))
-    const onFocus = () => { window.setTimeout(apply, 50); window.setTimeout(apply, 250) }
-    const onBlur = () => window.setTimeout(apply, 50)
+    const onFocus = () => {
+      window.setTimeout(apply, 50)
+      window.setTimeout(apply, 180)
+      window.setTimeout(apply, 400)
+    }
+    const onBlur = () => window.setTimeout(apply, 100)
+
     viewport?.addEventListener('resize', apply)
     viewport?.addEventListener('scroll', apply)
     document.addEventListener('focusin', onFocus)
     document.addEventListener('focusout', onBlur)
     window.addEventListener('scroll', resetScroll, { passive: true })
     apply()
+
     return () => {
       viewport?.removeEventListener('resize', apply)
       viewport?.removeEventListener('scroll', apply)
@@ -91,10 +126,15 @@ function useChatKeyboardViewportLock() {
       root.style.removeProperty('overflow')
       body.style.removeProperty('overflow')
       const chat = document.querySelector('.chat-screen') as HTMLElement | null
+      const composer = document.querySelector('.chat-compose-area') as HTMLElement | null
       chat?.style.removeProperty('top')
       chat?.style.removeProperty('--chat-viewport-offset')
+      chat?.style.removeProperty('transform')
       chat?.style.removeProperty('height')
       chat?.style.removeProperty('max-height')
+      composer?.style.removeProperty('bottom')
+      composer?.style.removeProperty('position')
+      composer?.style.removeProperty('z-index')
     }
   }, [])
 }
