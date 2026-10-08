@@ -259,7 +259,7 @@ body:has(.community-group-screen) {
 
 /* Final chat scroll + right-edge correction */
 .app-shell--chat .chat-screen .chat-messages {
-  justify-content: flex-start !important;
+  justify-content: flex-end !important;
   padding-left: 0 !important;
   padding-right: 0 !important;
   padding-bottom: 84px !important;
@@ -281,7 +281,7 @@ body:has(.community-group-screen) {
 }
 @media (max-width: 799px) {
   .app-shell--chat .chat-screen .chat-messages {
-    justify-content: flex-start !important;
+    justify-content: flex-end !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
     padding-bottom: 84px !important;
