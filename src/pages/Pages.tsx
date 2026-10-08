@@ -51,42 +51,39 @@ function useChatKeyboardViewportLock() {
     const viewport = window.visualViewport
     let keyboardWasOpen = false
 
-    const scrollMessagesToBottom = (force = false) => {
+    const getKeyboardInset = () => {
+      if (!viewport) return 0
+      return Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+    }
+
+    const isKeyboardOpen = () => {
+      const active = document.activeElement
+      const editing = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement
+      return Boolean(viewport && (getKeyboardInset() > 80 || (editing && viewport.height < window.innerHeight - 80)))
+    }
+
+    const scrollMessagesToBottom = () => {
       const messages = document.querySelector('.chat-messages') as HTMLElement | null
       if (!messages) return
-      if (force) {
-        messages.scrollTop = messages.scrollHeight
-        return
-      }
-      const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight
-      if (distanceFromBottom < 180) messages.scrollTop = messages.scrollHeight
+      messages.scrollTop = Math.max(0, messages.scrollHeight - messages.clientHeight)
     }
 
     const apply = () => {
-      const active = document.activeElement
-      const keyboardOpen = Boolean(
-        active &&
-        (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
-        viewport &&
-        viewport.height < window.innerHeight - 80,
-      )
       const chat = document.querySelector('.chat-screen') as HTMLElement | null
       const composer = document.querySelector('.chat-compose-area') as HTMLElement | null
       if (!chat) return
 
+      const keyboardOpen = isKeyboardOpen()
       if (keyboardOpen && viewport) {
-        const keyboardInset = Math.max(
-          0,
-          window.innerHeight - viewport.height - viewport.offsetTop,
-        )
-        const justOpened = !keyboardWasOpen
-        keyboardWasOpen = true
+        const keyboardInset = getKeyboardInset()
+        const visibleHeight = Math.max(0, viewport.height)
 
         chat.style.setProperty('top', '0px')
+        chat.style.setProperty('left', '0px')
         chat.style.setProperty('--chat-viewport-offset', '0px')
         chat.style.setProperty('transform', 'none')
-        chat.style.setProperty('height', `${Math.max(0, window.innerHeight - keyboardInset)}px`)
-        chat.style.setProperty('max-height', `${Math.max(0, window.innerHeight - keyboardInset)}px`)
+        chat.style.setProperty('height', `${visibleHeight}px`, 'important')
+        chat.style.setProperty('max-height', `${visibleHeight}px`, 'important')
 
         if (composer) {
           composer.style.setProperty('bottom', `${keyboardInset}px`, 'important')
@@ -97,18 +94,19 @@ function useChatKeyboardViewportLock() {
         root.style.setProperty('overflow', 'hidden')
         body.style.setProperty('overflow', 'hidden')
 
+        const justOpened = !keyboardWasOpen
+        keyboardWasOpen = true
         window.requestAnimationFrame(() => {
           window.scrollTo(0, 0)
-          // On the keyboard-open transition always reveal the newest message.
-          // Subsequent viewport resizes preserve the user's current chat position.
-          scrollMessagesToBottom(justOpened)
-          window.requestAnimationFrame(() => {
-            scrollMessagesToBottom(justOpened)
-          })
+          if (justOpened) {
+            scrollMessagesToBottom()
+            window.requestAnimationFrame(scrollMessagesToBottom)
+          }
         })
       } else {
         keyboardWasOpen = false
         chat.style.removeProperty('top')
+        chat.style.removeProperty('left')
         chat.style.removeProperty('--chat-viewport-offset')
         chat.style.removeProperty('transform')
         chat.style.removeProperty('height')
@@ -125,19 +123,20 @@ function useChatKeyboardViewportLock() {
       }
     }
 
-    const resetScroll = () => window.requestAnimationFrame(() => window.scrollTo(0, 0))
+    const resetDocumentScroll = () => window.requestAnimationFrame(() => window.scrollTo(0, 0))
     const onFocus = () => {
-      window.setTimeout(apply, 50)
-      window.setTimeout(apply, 180)
-      window.setTimeout(apply, 400)
+      window.setTimeout(apply, 0)
+      window.setTimeout(apply, 80)
+      window.setTimeout(apply, 220)
+      window.setTimeout(apply, 450)
     }
-    const onBlur = () => window.setTimeout(apply, 100)
+    const onBlur = () => window.setTimeout(apply, 120)
 
     viewport?.addEventListener('resize', apply)
     viewport?.addEventListener('scroll', apply)
     document.addEventListener('focusin', onFocus)
     document.addEventListener('focusout', onBlur)
-    window.addEventListener('scroll', resetScroll, { passive: true })
+    window.addEventListener('scroll', resetDocumentScroll, { passive: true })
     apply()
 
     return () => {
@@ -145,12 +144,13 @@ function useChatKeyboardViewportLock() {
       viewport?.removeEventListener('scroll', apply)
       document.removeEventListener('focusin', onFocus)
       document.removeEventListener('focusout', onBlur)
-      window.removeEventListener('scroll', resetScroll)
+      window.removeEventListener('scroll', resetDocumentScroll)
       root.style.removeProperty('overflow')
       body.style.removeProperty('overflow')
       const chat = document.querySelector('.chat-screen') as HTMLElement | null
       const composer = document.querySelector('.chat-compose-area') as HTMLElement | null
       chat?.style.removeProperty('top')
+      chat?.style.removeProperty('left')
       chat?.style.removeProperty('--chat-viewport-offset')
       chat?.style.removeProperty('transform')
       chat?.style.removeProperty('height')
