@@ -49,14 +49,17 @@ function useChatKeyboardViewportLock() {
     const root = document.documentElement
     const body = document.body
     const viewport = window.visualViewport
+    let keyboardWasOpen = false
 
     const scrollMessagesToBottom = (force = false) => {
       const messages = document.querySelector('.chat-messages') as HTMLElement | null
       if (!messages) return
-      const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight
-      if (force || distanceFromBottom < 180) {
+      if (force) {
         messages.scrollTop = messages.scrollHeight
+        return
       }
+      const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight
+      if (distanceFromBottom < 180) messages.scrollTop = messages.scrollHeight
     }
 
     const apply = () => {
@@ -69,7 +72,6 @@ function useChatKeyboardViewportLock() {
       )
       const chat = document.querySelector('.chat-screen') as HTMLElement | null
       const composer = document.querySelector('.chat-compose-area') as HTMLElement | null
-      const messages = document.querySelector('.chat-messages') as HTMLElement | null
       if (!chat) return
 
       if (keyboardOpen && viewport) {
@@ -77,9 +79,9 @@ function useChatKeyboardViewportLock() {
           0,
           window.innerHeight - viewport.height - viewport.offsetTop,
         )
+        const justOpened = !keyboardWasOpen
+        keyboardWasOpen = true
 
-        // Resize the actual chat viewport to the visible area. The message
-        // list must end above the keyboard, not continue underneath it.
         chat.style.setProperty('top', '0px')
         chat.style.setProperty('--chat-viewport-offset', '0px')
         chat.style.setProperty('transform', 'none')
@@ -94,11 +96,18 @@ function useChatKeyboardViewportLock() {
 
         root.style.setProperty('overflow', 'hidden')
         body.style.setProperty('overflow', 'hidden')
+
         window.requestAnimationFrame(() => {
           window.scrollTo(0, 0)
-          scrollMessagesToBottom()
+          // On the keyboard-open transition always reveal the newest message.
+          // Subsequent viewport resizes preserve the user's current chat position.
+          scrollMessagesToBottom(justOpened)
+          window.requestAnimationFrame(() => {
+            scrollMessagesToBottom(justOpened)
+          })
         })
       } else {
+        keyboardWasOpen = false
         chat.style.removeProperty('top')
         chat.style.removeProperty('--chat-viewport-offset')
         chat.style.removeProperty('transform')
@@ -152,7 +161,6 @@ function useChatKeyboardViewportLock() {
     }
   }, [])
 }
-
 function PageHeading({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
   return <div className="page-heading"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h1>{title}</h1>{description && <p>{description}</p>}</div>{action}</div>
 }
