@@ -321,3 +321,29 @@ body:has(.community-group-screen) {
   margin-right: 8px !important;
   box-sizing: border-box !important;
 }
+
+/* Make the message region a clearly scrollable touch surface. */
+.app-shell--chat .chat-screen .chat-messages,
+.community-group-screen .chat-messages {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-y: contain !important;
+  overscroll-behavior-x: none !important;
+  scroll-behavior: auto !important;
+  overflow-anchor: auto !important;
+  scrollbar-width: thin !important;
+  box-sizing: border-box !important;
+}
+
+/* Do not let message press/selection handling interfere with vertical swipes. */
+.app-shell--chat .chat-screen .chat-message-row,
+.app-shell--chat .chat-screen .chat-bubble,
+.community-group-screen .chat-message-row,
+.community-group-screen .chat-bubble {
+  touch-action: pan-y !important;
+}
