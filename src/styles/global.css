@@ -3478,3 +3478,38 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
     padding:5px 7px calc(5px + env(safe-area-inset-bottom))!important;
   }
 }
+
+
+/* ===== Final chat bottom anchoring + edge spacing ===== */
+.app-shell--chat .chat-screen .chat-messages{
+  justify-content:flex-end!important;
+  gap:0!important;
+  padding:6px 2px 0!important;
+}
+.app-shell--chat .chat-screen .chat-message-row{
+  margin:0!important;
+  padding:0!important;
+}
+.app-shell--chat .chat-screen .chat-message-row:last-of-type{
+  margin-bottom:0!important;
+}
+.app-shell--chat .chat-screen .chat-message-row--you{
+  padding-right:0!important;
+}
+.app-shell--chat .chat-screen .chat-message-row--them{
+  padding-left:0!important;
+}
+.app-shell--chat .chat-screen .chat-compose-area{
+  margin:0!important;
+  padding:2px 2px calc(2px + env(safe-area-inset-bottom))!important;
+}
+@media(max-width:560px){
+  .app-shell--chat .chat-screen .chat-messages{
+    justify-content:flex-end!important;
+    gap:0!important;
+    padding:4px 1px 0!important;
+  }
+  .app-shell--chat .chat-screen .chat-compose-area{
+    padding:2px 2px calc(2px + env(safe-area-inset-bottom))!important;
+  }
+}
