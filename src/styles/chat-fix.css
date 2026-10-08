@@ -255,3 +255,35 @@ body:has(.community-group-screen) {
 .chat-options-menu {
   z-index: 10000 !important;
 }
+
+
+/* Final chat scroll + right-edge correction */
+.app-shell--chat .chat-screen .chat-messages {
+  justify-content: flex-start !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  padding-bottom: 84px !important;
+}
+.app-shell--chat .chat-screen .chat-message-row {
+  display: flex !important;
+  width: 100% !important;
+  flex: 0 0 auto !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+.app-shell--chat .chat-screen .chat-message-row--you {
+  justify-content: flex-end !important;
+}
+.app-shell--chat .chat-screen .chat-bubble--you {
+  margin-right: 0 !important;
+}
+@media (max-width: 799px) {
+  .app-shell--chat .chat-screen .chat-messages {
+    justify-content: flex-start !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 84px !important;
+  }
+}
