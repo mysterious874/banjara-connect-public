@@ -3014,3 +3014,31 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
   .community-discover-list { gap: 8px; }
   .community-discover-card { flex-basis: 132px; min-width: 132px; min-height: 170px; }
 }
+
+
+/* Keep community search scrolling inside the suggestion rail, never the whole page. */
+.community-discover-list {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: auto !important;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+}
+.community-discover-list > .community-discover-card {
+  flex: 0 0 142px;
+  max-width: 142px;
+}
+.community-discover-list > .state-block,
+.community-discover-list > .empty-state {
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 560px) {
+  .community-discover-list > .community-discover-card {
+    flex-basis: 132px;
+    max-width: 132px;
+  }
+}
