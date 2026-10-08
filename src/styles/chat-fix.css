@@ -379,3 +379,24 @@ body:has(.community-group-screen) {
   flex-shrink: 0 !important;
   touch-action: pan-y !important;
 }
+
+
+/* Final scroll fix: do not use justify-content:flex-end on an overflowing flex scroller.
+   The first message absorbs free space when the conversation is short; once content
+   overflows, the auto margin collapses and the pane gets a normal scroll range. */
+.app-shell--chat .chat-screen .chat-messages,
+.community-group-screen .chat-messages {
+  justify-content: flex-start !important;
+  align-items: stretch !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row--first,
+.community-group-screen .chat-message-row--first {
+  margin-top: auto !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row,
+.community-group-screen .chat-message-row {
+  touch-action: pan-y !important;
+  flex-shrink: 0 !important;
+}
