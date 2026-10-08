@@ -3439,3 +3439,42 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
   background:#fffaf3!important;
   border-color:#ead7c4!important;
 }
+
+
+/* ===== Tight Instagram-style chat spacing ===== */
+.app-shell--chat .chat-screen .chat-messages{
+  padding-bottom:4px!important;
+  padding-left:8px!important;
+  padding-right:8px!important;
+  gap:2px!important;
+}
+.app-shell--chat .chat-screen .chat-message-row{
+  margin:1px 0!important;
+  padding:0!important;
+}
+.app-shell--chat .chat-screen .chat-message-row--you{
+  padding-right:0!important;
+  justify-content:flex-end!important;
+}
+.app-shell--chat .chat-screen .chat-message-row--them{
+  padding-left:0!important;
+  justify-content:flex-start!important;
+}
+.app-shell--chat .chat-screen .chat-bubble{
+  max-width:min(78%,390px)!important;
+}
+.app-shell--chat .chat-screen .chat-compose-area{
+  padding-top:5px!important;
+}
+@media(max-width:560px){
+  .app-shell--chat .chat-screen .chat-messages{
+    padding:10px 5px 3px!important;
+    gap:1px!important;
+  }
+  .app-shell--chat .chat-screen .chat-bubble{
+    max-width:84%!important;
+  }
+  .app-shell--chat .chat-screen .chat-compose-area{
+    padding:5px 7px calc(5px + env(safe-area-inset-bottom))!important;
+  }
+}
