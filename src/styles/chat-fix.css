@@ -318,6 +318,6 @@ body:has(.community-group-screen) {
 .app-shell--chat .chat-screen .chat-message-row--you .chat-bubble,
 .app-shell--chat .chat-screen .chat-message-row--you .chat-bubble--you {
   margin-left: 0 !important;
-  margin-right: 0 !important;
+  margin-right: 8px !important;
   box-sizing: border-box !important;
 }
