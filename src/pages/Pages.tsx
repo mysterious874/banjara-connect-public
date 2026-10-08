@@ -238,8 +238,9 @@ export function HomePage() {
     setPostsError('')
     void (async () => {
       try {
-        const blockedIds = await loadBlockedUserIds()
-        const page = await loadPostsPage({ excludeUserIds: blockedIds })
+        const blockedPromise = loadBlockedUserIds()
+        const pagePromise = blockedPromise.then((blockedIds) => loadPostsPage({ excludeUserIds: blockedIds }))
+        const page = await pagePromise
         if (!active) return
         // Render feed immediately; likes are intentionally non-blocking.
         setPosts(page.posts)
@@ -1648,14 +1649,35 @@ export function ChatListPage() {
       } while (active && refreshQueued)
       requestPending = false
     }
-    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') void refresh() }
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
     void refresh()
+    const unsubscribeMessages = subscribeToPostgresChanges({
+      topic: `chat-list:${session?.user.id}`,
+      event: '*',
+      table: 'messages',
+    }, () => {
+      conversationListCache.clear?.()
+      void refresh()
+    })
+    const unsubscribeReads = subscribeToPostgresChanges({
+      topic: `chat-list-reads:${session?.user.id}`,
+      event: '*',
+      table: 'message_reads',
+      filter: `user_id=eq.${session?.user.id}`,
+    }, () => {
+      conversationListCache.clear?.()
+      void refresh()
+    })
     window.addEventListener('focus', refreshWhenVisible)
     document.addEventListener('visibilitychange', refreshWhenVisible)
     return () => {
       active = false
       window.removeEventListener('focus', refreshWhenVisible)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
+      unsubscribeMessages()
+      unsubscribeReads()
     }
   }, [session?.user.id])
 
@@ -2225,11 +2247,10 @@ export function CommunityGroupPage() {
         const fetchedRows = ((rows ?? []) as CommunityGroupMessage[]).filter((row) => !initialHiddenIds.has(row.id))
         setHasOlderGroupMessages(fetchedRows.length > 100)
         const nextMessages = fetchedRows.slice(0, 100).reverse()
-        for (const groupMessage of nextMessages) {
-          if (groupMessage.media_url) {
-            try { groupMessage.media_signed_url = await createGroupMediaUrl(groupMessage.media_url) } catch { groupMessage.media_signed_url = null }
-          }
-        }
+        await Promise.all(nextMessages.map(async (groupMessage) => {
+          if (!groupMessage.media_url) return
+          try { groupMessage.media_signed_url = await createGroupMediaUrl(groupMessage.media_url) } catch { groupMessage.media_signed_url = null }
+        }))
         const senderIds = [...new Set([...nextMessages.map((row) => row.sender_id), ...((memberRows ?? []) as Array<{ user_id: string }>).map((row) => row.user_id)])]
         const { data: senderProfiles, error: profilesError } = senderIds.length
           ? await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', senderIds)
