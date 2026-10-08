@@ -43,10 +43,45 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
 
   componentDidCatch(error: Error, _info: ErrorInfo) {
     console.error('Banjara Connect failed to render:', error)
+
+    // A previous PWA build can remain in the service-worker cache after a rollback.
+    // Recover once automatically from stale cached JavaScript instead of trapping
+    // the user on the error screen.
+    const message = error?.message || ''
+    const looksLikeStaleBuild =
+      /dynamically imported module|loading chunk|failed to fetch|importing a module script|module script/i.test(message)
+
+    if (looksLikeStaleBuild && window.sessionStorage.getItem('connect-cache-recovery') !== '1') {
+      window.sessionStorage.setItem('connect-cache-recovery', '1')
+      void (async () => {
+        try {
+          const registrations = await navigator.serviceWorker?.getRegistrations()
+          await Promise.all((registrations ?? []).map((registration) => registration.unregister()))
+          if ('caches' in window) {
+            const keys = await caches.keys()
+            await Promise.all(keys.map((key) => caches.delete(key)))
+          }
+        } finally {
+          window.location.reload()
+        }
+      })()
+    }
   }
 
   handleRetry = () => {
-    window.location.reload()
+    window.sessionStorage.removeItem('connect-cache-recovery')
+    void (async () => {
+      try {
+        const registrations = await navigator.serviceWorker?.getRegistrations()
+        await Promise.all((registrations ?? []).map((registration) => registration.unregister()))
+        if ('caches' in window) {
+          const keys = await caches.keys()
+          await Promise.all(keys.map((key) => caches.delete(key)))
+        }
+      } finally {
+        window.location.reload()
+      }
+    })()
   }
 
   render() {
