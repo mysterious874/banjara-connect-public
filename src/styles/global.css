@@ -3353,3 +3353,89 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
   .app-shell--chat .chat-screen .chat-bubble{max-width:80%!important;font-size:14px!important}
   .app-shell--chat .chat-screen .chat-compose-area{padding-left:8px!important;padding-right:8px!important}
 }
+
+
+/* ===== Rathod Heritage chat theme — Instagram layout, heritage colors ===== */
+.app-shell--chat .chat-screen{
+  --chat-bg:#f7efe5!important;
+  --chat-head:#fff8ef!important;
+  --chat-other:#fffaf3!important;
+  --chat-own:#7a263a!important;
+  --chat-line:#ead7c4!important;
+  background:#f7efe5!important;
+  color:#2d211d!important;
+}
+.app-shell--chat .chat-screen .chat-screen__head{
+  background:linear-gradient(180deg,#fff8ef,#fdf2e5)!important;
+  color:#2d211d!important;
+  border-bottom:1px solid #ead7c4!important;
+}
+.app-shell--chat .chat-screen .chat-screen__head>.button,
+.app-shell--chat .chat-screen .chat-screen__action{
+  color:#7a263a!important;
+}
+.app-shell--chat .chat-screen .chat-screen__action:hover,
+.app-shell--chat .chat-screen .chat-screen__head>.button:hover{
+  background:#f2e2d9!important;
+}
+.app-shell--chat .chat-screen .chat-screen__identity strong{
+  color:#5e1b2c!important;
+}
+.app-shell--chat .chat-screen .chat-screen__identity small{
+  color:#967d70!important;
+}
+.app-shell--chat .chat-screen .chat-messages{
+  background:
+    radial-gradient(circle at 12% 0%,rgb(201 154 50 / 9%),transparent 28%),
+    radial-gradient(circle at 90% 80%,rgb(122 38 58 / 5%),transparent 30%),
+    #f7efe5!important;
+}
+.app-shell--chat .chat-screen .chat-bubble{
+  color:#2d211d!important;
+  background:#fffaf3!important;
+  border:1px solid #ead7c4!important;
+  box-shadow:0 1px 3px rgb(93 45 28 / 7%)!important;
+}
+.app-shell--chat .chat-screen .chat-bubble *,
+.app-shell--chat .chat-screen .chat-bubble p,
+.app-shell--chat .chat-screen .chat-bubble span{
+  color:inherit!important;
+}
+.app-shell--chat .chat-screen .chat-bubble--you{
+  color:#fff!important;
+  background:linear-gradient(135deg,#7a263a,#641d30)!important;
+  border-color:#7a263a!important;
+}
+.app-shell--chat .chat-screen .chat-bubble--you *,
+.app-shell--chat .chat-screen .chat-bubble--you p,
+.app-shell--chat .chat-screen .chat-bubble--you span{
+  color:#fff!important;
+}
+.app-shell--chat .chat-screen .chat-bubble__meta{
+  color:#927c70!important;
+}
+.app-shell--chat .chat-screen .chat-bubble--you .chat-bubble__meta{
+  color:rgb(255 255 255 / 78%)!important;
+}
+.app-shell--chat .chat-screen .chat-compose-area{
+  background:#fff8ef!important;
+  border-top:1px solid #ead7c4!important;
+}
+.app-shell--chat .chat-screen .chat-compose-area .field__control{
+  color:#2d211d!important;
+  background:#f5e8dc!important;
+  border-color:#dec9b7!important;
+}
+.app-shell--chat .chat-screen .chat-compose-area .field__control::placeholder{
+  color:#9a8477!important;
+}
+.app-shell--chat .chat-screen .chat-compose-area .button--icon{
+  color:#7a263a!important;
+}
+.app-shell--chat .chat-screen .chat-compose-area .button[type="submit"]{
+  color:#7a263a!important;
+}
+.app-shell--chat .chat-screen .chat-options-menu{
+  background:#fffaf3!important;
+  border-color:#ead7c4!important;
+}
