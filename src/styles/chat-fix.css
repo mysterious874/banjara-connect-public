@@ -400,3 +400,43 @@ body:has(.community-group-screen) {
   touch-action: pan-y !important;
   flex-shrink: 0 !important;
 }
+
+
+/* Full-width message selection highlight.
+   Selection belongs to the row, not the message bubble. */
+.app-shell--chat .chat-screen .chat-message-row--selected,
+.community-group-screen .chat-message-row--selected {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 48px !important;
+  box-sizing: border-box !important;
+  padding: 6px 10px !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-radius: 0 !important;
+  background: rgba(184, 124, 32, 0.20) !important;
+  box-shadow: inset 0 0 0 1px rgba(184, 124, 32, 0.28) !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row--selected .chat-bubble,
+.community-group-screen .chat-message-row--selected .chat-bubble {
+  background: inherit !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row--selected .chat-bubble--you,
+.app-shell--chat .chat-screen .chat-message-row--selected .chat-bubble--them,
+.community-group-screen .chat-message-row--selected .chat-bubble--you,
+.community-group-screen .chat-message-row--selected .chat-bubble--them {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+@media (max-width: 799px) {
+  .app-shell--chat .chat-screen .chat-message-row--selected,
+  .community-group-screen .chat-message-row--selected {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+}
