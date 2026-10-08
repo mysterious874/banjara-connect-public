@@ -123,7 +123,25 @@ export function SignupPage() {
       const { data, error: functionError } = await supabase.functions.invoke('username-auth', {
         body: { mode: 'signup', username: normalizedUsername, password },
       })
-      if (functionError) throw functionError
+
+      // Supabase treats any non-2xx Edge Function response as functionError.
+      // The username-auth function intentionally uses 409/400 for expected
+      // signup validation, so read the JSON response before showing a generic error.
+      if (functionError) {
+        let serverMessage = ''
+        try {
+          const context = (functionError as { context?: Response }).context
+          if (context) {
+            const payload = await context.clone().json() as { error?: string }
+            serverMessage = payload?.error ?? ''
+          }
+        } catch {
+          // Keep the friendly fallback below if the response body is unavailable.
+        }
+        setError(serverMessage || userFacingError(functionError, 'Could not create your account. Please try again.'))
+        return
+      }
+
       if (data?.error || !data?.session?.access_token || !data?.session?.refresh_token) {
         setError(data?.error || 'Could not create your account. Please try again.')
         return
