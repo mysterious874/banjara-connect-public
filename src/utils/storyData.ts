@@ -129,3 +129,23 @@ export async function deleteStory(story: StoryRecord) {
     await deleteStoryMedia([path])
   }
 }
+
+
+export type StoryViewer = Pick<ProfileRecord, 'id' | 'username' | 'display_name' | 'avatar_url'> & { viewed_at: string }
+
+export async function recordStoryView(storyId: string, viewerId: string) {
+  if (!storyId || !viewerId) return
+  await supabase.from('story_views').upsert({ story_id: storyId, viewer_id: viewerId, viewed_at: new Date().toISOString() }, { onConflict: 'story_id,viewer_id' })
+}
+
+export async function loadStoryViewers(storyId: string, ownerId: string) {
+  if (!storyId || !ownerId) return [] as StoryViewer[]
+  const { data, error } = await supabase.from('story_views').select('viewer_id,viewed_at').eq('story_id', storyId).order('viewed_at', { ascending: false })
+  if (error) throw error
+  const viewerIds = [...new Set((data ?? []).map((row) => row.viewer_id).filter((id) => id !== ownerId))]
+  if (!viewerIds.length) return [] as StoryViewer[]
+  const { data: profiles, error: profileError } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', viewerIds)
+  if (profileError) throw profileError
+  const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
+  return (data ?? []).filter((row) => row.viewer_id !== ownerId).map((row) => ({ ...(byId.get(row.viewer_id) ?? { id: row.viewer_id, username: null, display_name: 'Community member', avatar_url: null }), viewed_at: row.viewed_at })) as StoryViewer[]
+}
