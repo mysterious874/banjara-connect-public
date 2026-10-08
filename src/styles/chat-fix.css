@@ -268,3 +268,43 @@ body:has(.app-shell--chat) {
     box-sizing: border-box !important;
   }
 }
+
+
+/* Final guard: never let the keyboard composer jump into the header area. */
+@media (max-width: 799px) {
+  body:has(.app-shell--chat) .app-shell--chat .chat-screen,
+  body:has(.community-group-screen) .community-group-screen {
+    position: fixed !important;
+    inset: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  body:has(.app-shell--chat) .app-shell--chat .chat-screen__head,
+  body:has(.community-group-screen) .community-group-screen .chat-screen__head {
+    position: relative !important;
+    top: auto !important;
+    bottom: auto !important;
+    flex: 0 0 auto !important;
+    z-index: 1000 !important;
+  }
+
+  body:has(.app-shell--chat) .app-shell--chat .chat-messages,
+  body:has(.community-group-screen) .community-group-screen .chat-messages {
+    position: relative !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  body:has(.app-shell--chat) .app-shell--chat .chat-compose-area,
+  body:has(.community-group-screen) .community-group-screen .chat-compose-area {
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    position: fixed !important;
+    z-index: 99999 !important;
+  }
+}
