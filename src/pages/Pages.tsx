@@ -73,8 +73,60 @@ function useChatKeyboardViewportLock() {
       const composer = document.querySelector('.chat-compose-area') as HTMLElement | null
       if (!chat) return
 
+      const activeElement = document.activeElement
+      const composerElement = document.querySelector('.chat-compose-area') as HTMLElement | null
+      const activeIsChatComposer = Boolean(composerElement && activeElement instanceof HTMLElement && composerElement.contains(activeElement))
+      const activeIsGroupMemberSearch = Boolean(activeElement instanceof HTMLElement && activeElement.closest('.community-group-members-panel'))
       const keyboardOpen = isKeyboardOpen()
-      if (keyboardOpen && viewport) {
+
+      // The chat composer must only react to the chat message input. Group-member
+      // search is a separate modal input and must never pull the composer above
+      // its keyboard or move the chat viewport.
+      if (keyboardOpen && activeIsGroupMemberSearch && viewport) {
+        const keyboardInset = Math.min(
+          Math.max(0, getKeyboardInset()),
+          Math.max(0, window.innerHeight - 250),
+        )
+        const visibleHeight = Math.max(250, viewport.height)
+        document.querySelectorAll('.modal-backdrop:has(.community-group-members-panel)').forEach((element) => {
+          const backdrop = element as HTMLElement
+          backdrop.style.setProperty('height', String(visibleHeight) + 'px', 'important')
+          backdrop.style.setProperty('bottom', String(keyboardInset) + 'px', 'important')
+          backdrop.style.setProperty('top', '0px', 'important')
+          backdrop.style.setProperty('padding', '10px 12px', 'important')
+          backdrop.style.setProperty('align-items', 'flex-end', 'important')
+        })
+        chat.style.removeProperty('position')
+        chat.style.removeProperty('top')
+        chat.style.removeProperty('right')
+        chat.style.removeProperty('bottom')
+        chat.style.removeProperty('left')
+        chat.style.removeProperty('width')
+        chat.style.removeProperty('--chat-viewport-offset')
+        chat.style.removeProperty('transform')
+        chat.style.removeProperty('height')
+        chat.style.removeProperty('max-height')
+        if (composer) {
+          composer.style.removeProperty('bottom')
+          composer.style.removeProperty('position')
+          composer.style.removeProperty('z-index')
+        }
+        keyboardWasOpen = false
+        root.style.setProperty('overflow', 'hidden')
+        body.style.setProperty('overflow', 'hidden')
+        return
+      }
+
+      document.querySelectorAll('.modal-backdrop:has(.community-group-members-panel)').forEach((element) => {
+        const backdrop = element as HTMLElement
+        backdrop.style.removeProperty('height')
+        backdrop.style.removeProperty('bottom')
+        backdrop.style.removeProperty('top')
+        backdrop.style.removeProperty('padding')
+        backdrop.style.removeProperty('align-items')
+      })
+
+      if (keyboardOpen && activeIsChatComposer && viewport) {
         const rawKeyboardInset = getKeyboardInset()
         // Ignore transient visualViewport values during keyboard animation.
         if (viewport.height < 250) return
