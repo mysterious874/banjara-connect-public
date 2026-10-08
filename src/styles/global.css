@@ -2998,3 +2998,130 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 .community-group-card:hover{transform:translateY(-2px);border-color:#d8b9aa;box-shadow:0 8px 22px rgb(45 33 29 / 8%)}.community-group-card .community-group-card__icon{display:grid;width:46px;height:46px;place-items:center;color:#7a263a;background:#f2e2d9;border-radius:14px}
 .community-group-card>div{min-width:0}.community-group-card strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:800}.community-group-card p{margin:3px 0;overflow:hidden;color:#806f67;font-size:10px;line-height:1.45;text-overflow:ellipsis;white-space:nowrap}.community-group-card small{color:#9b8980;font-size:9px;font-weight:700}
 @media(max-width:560px){.chat-screen .chat-bubble{max-width:82%}.chat-screen .chat-messages{padding:12px 9px 14px}.chat-screen .chat-screen__head{min-height:60px;padding:6px 9px}.chat-screen .chat-disabled-compose{padding-left:8px}.community-group-screen .chat-screen__head{min-height:62px}}
+
+
+/* ===== Chat route is a true fullscreen surface ===== */
+.app-shell--chat {
+  display: flex !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+.app-shell--chat .app-shell__body {
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.app-shell--chat .route-content {
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.app-shell--chat .chat-screen {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Chat header: back | profile | actions. Actions never wrap underneath the name. */
+.app-shell--chat .chat-screen .chat-screen__head {
+  display: grid !important;
+  grid-template-columns: 40px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  column-gap: 8px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  flex: 0 0 auto !important;
+}
+.app-shell--chat .chat-screen .chat-screen__head > .button {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.app-shell--chat .chat-screen .chat-screen__profile {
+  display: flex !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  flex: none !important;
+  align-items: center !important;
+  overflow: hidden !important;
+}
+.app-shell--chat .chat-screen .chat-screen__identity {
+  display: flex !important;
+  min-width: 0 !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+.app-shell--chat .chat-screen .chat-screen__identity strong,
+.app-shell--chat .chat-screen .chat-screen__identity small {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.app-shell--chat .chat-screen .chat-screen__actions {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  width: max-content !important;
+  max-width: none !important;
+  min-width: max-content !important;
+  margin: 0 !important;
+  gap: 2px !important;
+  position: relative !important;
+}
+.app-shell--chat .chat-screen .chat-screen__action {
+  flex: 0 0 38px !important;
+  width: 38px !important;
+  min-width: 38px !important;
+  height: 38px !important;
+  padding: 0 !important;
+}
+.app-shell--chat .chat-screen .chat-options-menu {
+  top: calc(100% + 6px) !important;
+  right: 0 !important;
+}
+@media (max-width: 560px) {
+  .app-shell--chat .chat-screen .chat-screen__head {
+    grid-template-columns: 38px minmax(0, 1fr) auto !important;
+    column-gap: 5px !important;
+    padding: 6px 8px !important;
+  }
+  .app-shell--chat .chat-screen .chat-screen__head > .button {
+    width: 38px !important;
+    min-width: 38px !important;
+    height: 38px !important;
+  }
+  .app-shell--chat .chat-screen .chat-screen__action {
+    flex-basis: 35px !important;
+    width: 35px !important;
+    min-width: 35px !important;
+    height: 35px !important;
+  }
+  .app-shell--chat .chat-screen .chat-screen__profile .avatar {
+    flex: 0 0 38px !important;
+  }
+}
