@@ -26,7 +26,7 @@ import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
-import { deleteMessageForEveryone, deleteMessageForMe, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
+import { deleteMessageForEveryone, deleteMessageForMe, invalidateConversationListCache, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
 import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostLikesBatch, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 import { getCached, setCached } from '../utils/performanceCache'
 
@@ -1658,7 +1658,7 @@ export function ChatListPage() {
       event: '*',
       table: 'messages',
     }, () => {
-      conversationListCache.clear?.()
+      invalidateConversationListCache()
       void refresh()
     })
     const unsubscribeReads = subscribeToPostgresChanges({
@@ -1667,7 +1667,7 @@ export function ChatListPage() {
       table: 'message_reads',
       filter: `user_id=eq.${session?.user.id}`,
     }, () => {
-      conversationListCache.clear?.()
+      invalidateConversationListCache()
       void refresh()
     })
     window.addEventListener('focus', refreshWhenVisible)
