@@ -135,11 +135,23 @@ function useChatKeyboardViewportLock() {
       window.setTimeout(apply, 80)
       window.setTimeout(apply, 220)
       window.setTimeout(apply, 450)
+      window.setTimeout(settleLatestMessage, 500)
     }
     const onBlur = () => window.setTimeout(apply, 120)
 
+    const settleLatestMessage = () => {
+      if (!isKeyboardOpen()) return
+      window.requestAnimationFrame(() => {
+        scrollMessagesToBottom()
+        window.setTimeout(scrollMessagesToBottom, 60)
+        window.setTimeout(scrollMessagesToBottom, 180)
+        window.setTimeout(scrollMessagesToBottom, 350)
+      })
+    }
+
     viewport?.addEventListener('resize', apply)
     viewport?.addEventListener('scroll', apply)
+    document.addEventListener('input', settleLatestMessage)
     document.addEventListener('focusin', onFocus)
     document.addEventListener('focusout', onBlur)
     window.addEventListener('scroll', resetDocumentScroll, { passive: true })
@@ -150,6 +162,7 @@ function useChatKeyboardViewportLock() {
       viewport?.removeEventListener('scroll', apply)
       document.removeEventListener('focusin', onFocus)
       document.removeEventListener('focusout', onBlur)
+      document.removeEventListener('input', settleLatestMessage)
       window.removeEventListener('scroll', resetDocumentScroll)
       root.style.removeProperty('overflow')
       body.style.removeProperty('overflow')
