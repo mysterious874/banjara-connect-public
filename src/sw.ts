@@ -8,6 +8,12 @@ declare const self: ServiceWorkerGlobalScope & {
 }
 
 clientsClaim()
+
+// Allow the in-app Update button to activate the waiting service worker.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') void self.skipWaiting()
+})
+
 precacheAndRoute(self.__WB_MANIFEST)
 
 self.addEventListener('push', (event) => {
