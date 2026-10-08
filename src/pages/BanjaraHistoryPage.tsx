@@ -23,20 +23,28 @@ export function BanjaraHistoryPage() {
     <div className="heritage-notice" role="note"><BookOpen size={18} /><p><strong>Many histories, many living traditions.</strong> Names, language use, clothing, customs and celebration differ across regions and communities. Examples below are identified by their source location; none is presented as universal.</p></div>
 
     <section className="nangara-feature" aria-labelledby="nangara-title">
-      <div className="nangara-feature__copy">
-        <span className="eyebrow">FEATURED HERITAGE PLACE · POHARADEVI</span>
-        <h2 id="nangara-title">{nangaraMuseum.name}</h2>
-        <p className="nangara-feature__location">{nangaraMuseum.location}</p>
-        <p>{nangaraMuseum.summary}</p>
-        <ul>{nangaraMuseum.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>
-        <div className="nangara-feature__actions">
-          <a className="button button--primary" href={nangaraMuseum.officialUrl} target="_blank" rel="noreferrer">Official museum site</a>
-          <a className="button button--outline" href={nangaraMuseum.galleryUrl} target="_blank" rel="noreferrer">Official photo gallery</a>
-          <a className="button button--quiet" href={nangaraMuseum.districtUrl} target="_blank" rel="noreferrer">District information</a>
+      <div className="nangara-feature__hero">
+        <img src={nangaraMuseum.photos[0].src} alt={nangaraMuseum.photos[0].alt} />
+        <div className="nangara-feature__hero-overlay">
+          <span className="eyebrow">BANJARA VIRASAT · POHARADEVI</span>
+          <h2 id="nangara-title">{nangaraMuseum.name}</h2>
+          <p>{nangaraMuseum.location}</p>
         </div>
       </div>
-      <div className="nangara-photos" aria-label="Nangara Museum photographs">
-        {nangaraMuseum.photos.map((photo) => <figure className="nangara-photo" key={photo.src}><img src={photo.src} alt={photo.alt} loading="lazy" /><figcaption>{photo.caption}</figcaption></figure>)}
+      <div className="nangara-feature__copy">
+        <span className="nangara-feature__kicker">A PLACE TO EXPERIENCE BANJARA HERITAGE</span>
+        <p>{nangaraMuseum.summary}</p>
+        <div className="nangara-feature__facts">
+          {nangaraMuseum.details.map((detail, index) => <div key={detail}><span>{String(index + 1).padStart(2, '0')}</span><p>{detail}</p></div>)}
+        </div>
+        <div className="nangara-feature__actions">
+          <a className="button button--primary" href={nangaraMuseum.officialUrl} target="_blank" rel="noreferrer">Museum website</a>
+          <a className="button button--outline" href={nangaraMuseum.galleryUrl} target="_blank" rel="noreferrer">View gallery</a>
+          <a className="button button--quiet" href={nangaraMuseum.districtUrl} target="_blank" rel="noreferrer">District info</a>
+        </div>
+      </div>
+      <div className="nangara-feature__thumbs" aria-label="More museum photographs">
+        {nangaraMuseum.photos.slice(1).map((photo) => <figure key={photo.src}><img src={photo.src} alt={photo.alt} loading="lazy" /><figcaption>{photo.caption}</figcaption></figure>)}
       </div>
     </section>
 
