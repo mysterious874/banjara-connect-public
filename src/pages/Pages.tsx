@@ -50,6 +50,15 @@ function useChatKeyboardViewportLock() {
     const body = document.body
     const viewport = window.visualViewport
 
+    const scrollMessagesToBottom = (force = false) => {
+      const messages = document.querySelector('.chat-messages') as HTMLElement | null
+      if (!messages) return
+      const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight
+      if (force || distanceFromBottom < 180) {
+        messages.scrollTop = messages.scrollHeight
+      }
+    }
+
     const apply = () => {
       const active = document.activeElement
       const keyboardOpen = Boolean(
@@ -60,20 +69,22 @@ function useChatKeyboardViewportLock() {
       )
       const chat = document.querySelector('.chat-screen') as HTMLElement | null
       const composer = document.querySelector('.chat-compose-area') as HTMLElement | null
+      const messages = document.querySelector('.chat-messages') as HTMLElement | null
       if (!chat) return
 
       if (keyboardOpen && viewport) {
-        // Do not transform the whole chat. Move only the composer above the
-        // part of the screen occupied by the Android keyboard/toolbar.
         const keyboardInset = Math.max(
           0,
           window.innerHeight - viewport.height - viewport.offsetTop,
         )
+
+        // Resize the actual chat viewport to the visible area. The message
+        // list must end above the keyboard, not continue underneath it.
         chat.style.setProperty('top', '0px')
         chat.style.setProperty('--chat-viewport-offset', '0px')
         chat.style.setProperty('transform', 'none')
-        chat.style.setProperty('height', `${viewport.height}px`)
-        chat.style.setProperty('max-height', `${viewport.height}px`)
+        chat.style.setProperty('height', `${Math.max(0, window.innerHeight - keyboardInset)}px`)
+        chat.style.setProperty('max-height', `${Math.max(0, window.innerHeight - keyboardInset)}px`)
 
         if (composer) {
           composer.style.setProperty('bottom', `${keyboardInset}px`, 'important')
@@ -83,7 +94,10 @@ function useChatKeyboardViewportLock() {
 
         root.style.setProperty('overflow', 'hidden')
         body.style.setProperty('overflow', 'hidden')
-        window.requestAnimationFrame(() => window.scrollTo(0, 0))
+        window.requestAnimationFrame(() => {
+          window.scrollTo(0, 0)
+          scrollMessagesToBottom()
+        })
       } else {
         chat.style.removeProperty('top')
         chat.style.removeProperty('--chat-viewport-offset')
