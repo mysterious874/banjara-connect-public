@@ -239,7 +239,7 @@ export function HomePage() {
     void (async () => {
       try {
         const blockedPromise = loadBlockedUserIds()
-        const pagePromise = blockedPromise.then((blockedIds) => loadPostsPage({ excludeUserIds: blockedIds }))
+        const pagePromise = blockedPromise.then((blockedIds) => loadPostsPage({ excludeUserIds: blockedIds, limit: 20 }))
         const page = await pagePromise
         if (!active) return
         // Render feed immediately; likes are intentionally non-blocking.
@@ -340,15 +340,16 @@ export function CommunityPage() {
       }
       const { data, error: groupsError } = await supabase.from('community_groups').select('id,name,description').in('id', ids).order('created_at', { ascending: false })
       if (groupsError) throw groupsError
-      const { data: members, error: membersError } = await supabase.from('community_group_members').select('group_id').in('group_id', ids)
+      const [{ data: members, error: membersError }, { data: reads, error: readsError }] = await Promise.all([
+        supabase.from('community_group_members').select('group_id').in('group_id', ids),
+        supabase.from('community_group_message_reads').select('group_id,last_read_message_id').eq('user_id', session.user.id).in('group_id', ids),
+      ])
       if (membersError) throw membersError
+      if (readsError) throw readsError
       const counts = new Map<string, number>()
       for (const member of members ?? []) counts.set(member.group_id, (counts.get(member.group_id) ?? 0) + 1)
-      const { data: reads, error: readsError } = await supabase.from('community_group_message_reads').select('group_id,last_read_message_id').eq('user_id', session.user.id).in('group_id', ids)
-      if (readsError) throw readsError
       const readMap = new Map((reads ?? []).map((row) => [row.group_id, row.last_read_message_id]))
-      const unreadCounts = new Map<string, number>()
-      for (const id of ids) {
+      const unreadPairs = await Promise.all(ids.map(async (id) => {
         const lastReadId = readMap.get(id)
         let query = supabase.from('community_group_messages').select('id', { count: 'exact', head: true }).eq('group_id', id)
         if (lastReadId) {
@@ -356,8 +357,9 @@ export function CommunityPage() {
           if (readMessage?.created_at) query = query.gt('created_at', readMessage.created_at)
         }
         const { count } = await query
-        unreadCounts.set(id, count ?? 0)
-      }
+        return [id, count ?? 0] as const
+      }))
+      const unreadCounts = new Map(unreadPairs)
       setGroups((data ?? []).map((group) => ({ ...group, member_count: counts.get(group.id) ?? 0, unread_count: unreadCounts.get(group.id) ?? 0 })))
     } catch (caught) {
       setGroupError(userFacingError(caught, 'Could not load your communities.'))
