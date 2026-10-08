@@ -75,8 +75,14 @@ function useChatKeyboardViewportLock() {
 
       const keyboardOpen = isKeyboardOpen()
       if (keyboardOpen && viewport) {
-        const keyboardInset = getKeyboardInset()
-        const visibleHeight = Math.max(0, viewport.height)
+        const rawKeyboardInset = getKeyboardInset()
+        // Ignore transient visualViewport values during keyboard animation.
+        if (viewport.height < 250) return
+        const keyboardInset = Math.min(
+          Math.max(0, rawKeyboardInset),
+          Math.max(0, window.innerHeight - 250),
+        )
+        const visibleHeight = Math.max(250, viewport.height)
 
         chat.style.setProperty('top', '0px')
         chat.style.setProperty('left', '0px')
