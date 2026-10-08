@@ -11,6 +11,31 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Emergency recovery for stale/broken PWA caches.
+      // If the JavaScript bundle fails before React can render, clear the
+      // service worker cache once and reload so the newest deployment can boot.
+      (() => {
+        const recover = async () => {
+          if (sessionStorage.getItem('connect-cache-recovery') === '1') return
+          sessionStorage.setItem('connect-cache-recovery', '1')
+          try {
+            const registrations = await navigator.serviceWorker?.getRegistrations?.() || []
+            await Promise.all(registrations.map((registration) => registration.unregister()))
+            if (window.caches?.keys) {
+              const keys = await caches.keys()
+              await Promise.all(keys.map((key) => caches.delete(key)))
+            }
+          } finally {
+            window.location.reload()
+          }
+        }
+        window.addEventListener('error', (event) => {
+          if (event?.filename || event?.message) void recover()
+        })
+        window.addEventListener('unhandledrejection', () => void recover())
+      })()
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
