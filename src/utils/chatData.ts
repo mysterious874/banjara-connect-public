@@ -133,12 +133,9 @@ async function loadConversationsUncached(userId: string): Promise<ConversationSu
   const otherUserIds = [...new Set(otherUsers.values())]
   if (!otherUserIds.length) return []
 
-  const summaryMessages: Array<{ lastMessage: ChatMessage | null; unreadCount: number }> = []
-  for (let offset = 0; offset < visibleConversationIds.length; offset += 5) {
-    const batch = await Promise.all(visibleConversationIds.slice(offset, offset + 5)
-      .map((id) => loadConversationSummaryMessages(id, userId)))
-    summaryMessages.push(...batch)
-  }
+  const summaryMessages = await Promise.all(
+    visibleConversationIds.map((id) => loadConversationSummaryMessages(id, userId)),
+  )
   const { data: profiles, error: profilesError } = await supabase.from('profiles')
     .select('id,username,display_name,avatar_url').in('id', otherUserIds)
   if (profilesError) throw profilesError
