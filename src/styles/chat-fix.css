@@ -460,3 +460,59 @@ body:has(.community-group-screen) {
   margin-right: 8px !important;
   box-sizing: border-box !important;
 }
+
+
+/* Compact group-member search modal.
+   Keep it docked just above the Android keyboard instead of letting it sit
+   behind the keyboard or exposing the chat composer underneath. */
+@media (max-width: 799px) {
+  .modal-backdrop:has(.community-group-members-panel) {
+    z-index: 2000 !important;
+    place-items: end center !important;
+    padding: 10px 12px !important;
+    box-sizing: border-box !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .modal {
+    width: min(100%, 430px) !important;
+    max-height: min(52svh, 430px) !important;
+    overflow: auto !important;
+    padding: 12px !important;
+    border-radius: 14px !important;
+    box-sizing: border-box !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .modal__head {
+    gap: 8px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .modal__head h2 {
+    font-size: 17px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .community-group-members-panel {
+    gap: 8px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .community-group-member-row {
+    min-height: 42px !important;
+    padding: 6px 0 !important;
+    gap: 8px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .community-group-member-row .button {
+    min-height: 32px !important;
+    padding: 0 10px !important;
+    font-size: 10px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .field {
+    margin-bottom: 4px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .field__control {
+    min-height: 38px !important;
+    padding: 8px 10px !important;
+  }
+}
