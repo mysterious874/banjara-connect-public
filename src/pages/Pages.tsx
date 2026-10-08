@@ -1817,6 +1817,26 @@ export function ChatConversationPage() {
   const [chatTheme, setChatTheme] = useState('classic')
   const peerOnline = Boolean(person?.id && onlineUserIds.has(person.id))
   const peerInApp = Boolean(person?.id && activeUserIds.has(person.id))
+  const initialBottomScrollDone = useRef(false)
+
+  useEffect(() => {
+    initialBottomScrollDone.current = false
+  }, [conversationId])
+
+  useEffect(() => {
+    if (isLoading || !messages.length || initialBottomScrollDone.current) return
+    initialBottomScrollDone.current = true
+    const scrollToLatest = () => {
+      const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null
+      if (!pane) return
+      pane.scrollTop = Math.max(0, pane.scrollHeight - pane.clientHeight)
+    }
+    const frame = window.requestAnimationFrame(() => {
+      scrollToLatest()
+      window.requestAnimationFrame(scrollToLatest)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [conversationId, isLoading, messages.length])
 
   const chatThemes = [
     { id: 'forest', label: 'Gor Forest', preview: '#2D6652' },
