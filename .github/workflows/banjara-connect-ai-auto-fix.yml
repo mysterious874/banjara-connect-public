@@ -1,0 +1,138 @@
+name: Banjara Connect - AI Auto Fix
+
+on:
+  workflow_run:
+    workflows: ["Banjara Connect - Auto Health & Safe Repair"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: banjara-connect-ai-fix
+  cancel-in-progress: true
+
+jobs:
+  ai-auto-fix:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'failure' && !contains(github.event.workflow_run.head_commit.message, '[ai-auto-fix]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout failed revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 20
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Collect failure context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          gh run view "$RUN_ID" --log-failed > /tmp/failure.log || true
+          echo "=== FAILED WORKFLOW ===" > /tmp/ai-context.txt
+          cat /tmp/failure.log >> /tmp/ai-context.txt
+          echo "" >> /tmp/ai-context.txt
+          echo "=== SOURCE TREE ===" >> /tmp/ai-context.txt
+          git ls-files 'src/**' 'public/**' 'index.html' 'vite.config.*' | head -n 250 >> /tmp/ai-context.txt
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          out = Path("/tmp/ai-context.txt")
+          files = subprocess.check_output([
+              "git", "ls-files", "src/**", "public/**", "index.html", "vite.config.*"
+          ], text=True).splitlines()
+
+          total = 0
+          with out.open("a", encoding="utf-8") as f:
+              f.write("\n=== SOURCE CONTENT ===\n")
+              for name in files:
+                  p = Path(name)
+                  if not p.is_file(): continue
+                  if any(part.startswith('.') for part in p.parts): continue
+                  if p.suffix not in {".ts", ".tsx", ".js", ".jsx", ".css", ".html", ".json"}: continue
+                  data = p.read_text(encoding="utf-8", errors="replace")
+                  if total + len(data) > 180000: break
+                  f.write(f"\n--- FILE: {name} ---\n")
+                  f.write(data)
+                  total += len(data)
+          PY
+
+      - name: Ask AI for a safe patch
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+        run: |
+          test -n "$AI_GATEWAY_API_KEY" || { echo "AI_GATEWAY_API_KEY is not configured; stopping safely."; exit 1; }
+          python3 - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          context = Path("/tmp/ai-context.txt").read_text(encoding="utf-8", errors="replace")
+          system = '''You are the Banjara Connect safe auto-fix engineer.
+          Fix ONLY clear frontend/build/runtime issues proven by the supplied failure log.
+          Allowed files: src/**, public/**, index.html, vite.config.*.
+          NEVER modify auth, Supabase/RLS, database, migrations, secrets, environment files,
+          package manifests/lockfiles, deployment configuration, permissions, or security code.
+          Prefer the smallest possible patch. Do not redesign unrelated UI.
+          Return ONLY a unified git diff inside one fenced diff block. If no safe fix is clear,
+          return NO_SAFE_FIX.'''
+          payload = {
+              "model": "openai/gpt-5.4-mini",
+              "messages": [{"role": "system", "content": system}, {"role": "user", "content": context}],
+              "temperature": 0.1,
+              "max_tokens": 12000
+          }
+          req = urllib.request.Request(
+              "https://ai-gateway.vercel.sh/v1/chat/completions",
+              data=json.dumps(payload).encode(),
+              headers={"Authorization": "Bearer " + os.environ["AI_GATEWAY_API_KEY"], "Content-Type": "application/json"},
+              method="POST"
+          )
+          with urllib.request.urlopen(req, timeout=120) as r: response = json.loads(r.read().decode())
+          text = response["choices"][0]["message"]["content"]
+          Path("/tmp/ai-response.txt").write_text(text, encoding="utf-8")
+          print(text[:12000])
+          PY
+
+      - name: Apply and validate safe patch
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path("/tmp/ai-response.txt").read_text(encoding="utf-8")
+          if "NO_SAFE_FIX" in text: raise SystemExit("AI reported no safe fix.")
+          m = re.search(r"```diff\s*(.*?)```", text, re.S)
+          if not m: raise SystemExit("AI did not return a unified diff.")
+          Path("/tmp/patch.diff").write_text(m.group(1), encoding="utf-8")
+          PY
+          git apply --check /tmp/patch.diff
+          git apply /tmp/patch.diff
+          changed="$(git diff --name-only)"
+          test -n "$changed" || { echo "AI patch changed nothing."; exit 1; }
+          while IFS= read -r file; do
+            case "$file" in src/*|public/*|index.html|vite.config.*) ;; *) git reset --hard HEAD; exit 1;; esac
+            case "$file" in *supabase*|*Supabase*|*auth*|*Auth*|*rls*|*RLS*|*.env*|*secret*|*security*|*Security*|*migration*) git reset --hard HEAD; exit 1;; esac
+          done <<< "$changed"
+          rm -rf node_modules
+          npm ci
+          npm run build
+
+      - name: Commit verified repair
+        run: |
+          git config user.name "Banjara Connect AI Fixer"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src public index.html 'vite.config.*' 2>/dev/null || true
+          git diff --cached --quiet && { echo "Nothing to commit."; exit 1; }
+          git commit -m "[ai-auto-fix] safe verified frontend repair"
+          git push origin HEAD:main
