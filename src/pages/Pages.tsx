@@ -75,10 +75,13 @@ function useChatKeyboardViewportLock() {
 
       const keyboardOpen = isKeyboardOpen()
       if (keyboardOpen && viewport) {
-        // Keep the chat as one flex column while the keyboard is open.
-        // The old implementation made the composer fixed above the keyboard,
-        // which created a second positioning context and visible gaps on Android.
+        const rawKeyboardInset = getKeyboardInset()
+        // Ignore transient visualViewport values during keyboard animation.
         if (viewport.height < 250) return
+        const keyboardInset = Math.min(
+          Math.max(0, rawKeyboardInset),
+          Math.max(0, window.innerHeight - 250),
+        )
         const visibleHeight = Math.max(250, viewport.height)
 
         chat.style.setProperty('top', '0px')
@@ -89,9 +92,9 @@ function useChatKeyboardViewportLock() {
         chat.style.setProperty('max-height', `${visibleHeight}px`, 'important')
 
         if (composer) {
-          composer.style.removeProperty('bottom')
-          composer.style.removeProperty('position')
-          composer.style.removeProperty('z-index')
+          composer.style.setProperty('bottom', `${keyboardInset}px`, 'important')
+          composer.style.setProperty('position', 'fixed', 'important')
+          composer.style.setProperty('z-index', '99999', 'important')
         }
 
         root.style.setProperty('overflow', 'hidden')
