@@ -1,6 +1,6 @@
 import { ArrowLeft, BookOpen, ChevronDown, ChevronRight, Clock3, Globe2, Languages, MapPinned, Music2, Palette, ShieldCheck, Sparkles } from 'lucide-react'
 import { Button } from '../components/ui'
-import { heritageSections, heritageSources, heritageTimeline, heritageTopics } from '../data/banjaraHistory'
+import { heritageSections, heritageSources, heritageTimeline, heritageTopics, nangaraMuseum } from '../data/banjaraHistory'
 
 function SourceLinks({ ids }: { ids: string[] }) {
   if (!ids.length) return null
@@ -21,6 +21,24 @@ export function BanjaraHistoryPage() {
       <div><span className="eyebrow">COMMUNITY KNOWLEDGE · SOURCED NOTES</span><h1>Banjara History &amp; Heritage</h1><p>A starting point for learning, with regional context and references alongside the stories.</p></div>
     </header>
     <div className="heritage-notice" role="note"><BookOpen size={18} /><p><strong>Many histories, many living traditions.</strong> Names, language use, clothing, customs and celebration differ across regions and communities. Examples below are identified by their source location; none is presented as universal.</p></div>
+
+    <section className="nangara-feature" aria-labelledby="nangara-title">
+      <div className="nangara-feature__copy">
+        <span className="eyebrow">FEATURED HERITAGE PLACE · POHARADEVI</span>
+        <h2 id="nangara-title">{nangaraMuseum.name}</h2>
+        <p className="nangara-feature__location">{nangaraMuseum.location}</p>
+        <p>{nangaraMuseum.summary}</p>
+        <ul>{nangaraMuseum.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>
+        <div className="nangara-feature__actions">
+          <a className="button button--primary" href={nangaraMuseum.officialUrl} target="_blank" rel="noreferrer">Official museum site</a>
+          <a className="button button--outline" href={nangaraMuseum.galleryUrl} target="_blank" rel="noreferrer">Official photo gallery</a>
+          <a className="button button--quiet" href={nangaraMuseum.districtUrl} target="_blank" rel="noreferrer">District information</a>
+        </div>
+      </div>
+      <div className="nangara-photos" aria-label="Nangara Museum photographs">
+        {nangaraMuseum.photos.map((photo) => <figure className="nangara-photo" key={photo.src}><img src={photo.src} alt={photo.alt} loading="lazy" /><figcaption>{photo.caption}</figcaption></figure>)}
+      </div>
+    </section>
 
     <section className="heritage-overview" aria-labelledby="heritage-overview-title">
       <div className="section-heading"><h2 id="heritage-overview-title">Explore the collection</h2><span className="local-label">{heritageTopics.length} TOPICS</span></div>
