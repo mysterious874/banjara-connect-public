@@ -7,7 +7,6 @@ declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<unknown>
 }
 
-self.skipWaiting()
 clientsClaim()
 precacheAndRoute(self.__WB_MANIFEST)
 
