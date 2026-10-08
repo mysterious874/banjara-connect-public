@@ -65,8 +65,12 @@ function useChatKeyboardViewportLock() {
         window.requestAnimationFrame(() => window.scrollTo(0, 0))
       } else {
         chat.style.removeProperty('top')
+        chat.style.removeProperty('--chat-viewport-offset')
+        chat.style.removeProperty('transform')
         chat.style.removeProperty('height')
         chat.style.removeProperty('max-height')
+        root.style.removeProperty('overflow')
+        body.style.removeProperty('overflow')
       }
     }
     const resetScroll = () => window.requestAnimationFrame(() => window.scrollTo(0, 0))
