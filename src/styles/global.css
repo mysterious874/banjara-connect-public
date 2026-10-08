@@ -2215,6 +2215,27 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 }
 .notification-row__request-actions button:first-child { border-color: var(--bc-maroon); color: var(--bc-maroon); }
 .notification-row__request-actions button:disabled { opacity: .5; cursor: wait; }
+.notification-row__request-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.notification-row__request-status--approved {
+  color: #237a45;
+  background: #e8f6ed;
+  border: 1px solid #b9dfc5;
+}
+.notification-row__request-status--declined {
+  color: #a13a3a;
+  background: #fcebea;
+  border: 1px solid #edc2bf;
+}
 
 .location-suggestions--above {
   top: auto;
