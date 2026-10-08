@@ -822,8 +822,8 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   .app-shell__body { width: min(1180px, calc(100% - 48px)); }
   .community-preview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
-@media (max-width: 759px) {
-  .nangara-feature {
+@medi
+.nangara-feature {
   display: grid;
   grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
   gap: 0;
@@ -928,7 +928,8 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   line-height: 1.35;
   backdrop-filter: blur(5px);
 }
-.heritage-notice { display: flex; align-items: flex-start; gap: 10px; padding: 13px; color: var(--bc-maroon); background: #fff4e5; border: 1px solid var(--bc-line); border-radius: 15px; }
+a (max-width: 759px) {
+  .heritage-notice { display: flex; align-items: flex-start; gap: 10px; padding: 13px; color: var(--bc-maroon); background: #fff4e5; border: 1px solid var(--bc-line); border-radius: 15px; }
 .heritage-notice > svg { flex: none; margin-top: 1px; }
 .heritage-notice p { margin: 0; color: var(--bc-text); font-size: 11px; line-height: 1.65; }
 .heritage-notice strong { color: var(--bc-maroon); }
@@ -980,6 +981,25 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
 .developer-public-info dt { color: var(--bc-muted); font-size: 10px; }
 .developer-public-info dd { margin: 0; color: var(--bc-text); font-size: 10px; font-weight: 700; }
 @media (max-width: 759px) {
+  .nangara-feature { grid-template-columns: minmax(0, 1fr); }
+  .nangara-feature__copy { padding: 19px; }
+  .nangara-feature__copy h2 { font-size: 20px; }
+  .nangara-feature__copy > p:not(.nangara-feature__location) { font-size: 11px; }
+  .nangara-feature__copy ul { font-size: 10px; }
+  .nangara-feature__actions .button { flex: 1 1 auto; }
+  .nangara-photos {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: 190px 125px;
+    min-height: 0;
+    padding: 4px;
+  }
+  .nangara-photo:first-child { grid-column: 1 / -1; grid-row: 1; }
+  .nangara-photo:nth-child(2) { grid-column: 1; grid-row: 2; }
+  .nangara-photo:nth-child(3) { grid-column: 2; grid-row: 2; }
+  .nangara-photo img, .nangara-photo:first-child img { aspect-ratio: auto; }
+  .nangara-photo figcaption { right: 5px; bottom: 5px; left: 5px; padding: 5px 6px; font-size: 8px; }
+
+
   .founder-profile { grid-template-columns: minmax(0, 1fr); }
   .founder-portrait { width: min(100%, 190px); min-height: 190px; justify-self: center; }
   .founder-focus-grid { grid-template-columns: minmax(0, 1fr); }
