@@ -56,43 +56,33 @@ async function createOrFindConversation(targetUserId: string) {
   return data as string
 }
 async function loadConversationSummaryMessages(conversationId: string, userId: string) {
-  const pageSize = 500
-  let offset = 0
-  let lastMessage: ChatMessage | null = null
-  let unreadCount = 0
+  const { data: latestRows, error: latestError } = await supabase.from('messages').select(messageColumns)
+    .eq('conversation_id', conversationId)
+    .eq('is_deleted_for_everyone', false)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+  if (latestError) throw latestError
 
-  while (true) {
-    const { data, error } = await supabase.from('messages').select(messageColumns)
-      .eq('conversation_id', conversationId)
-      .eq('is_deleted_for_everyone', false)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(offset, offset + pageSize - 1)
-    if (error) throw error
-    let page = (data ?? []) as ChatMessage[]
-    if (page.length) {
-      const ids = page.map((message) => message.id)
-      const { data: hidden, error: hiddenError } = await supabase.from('message_deletions').select('message_id').eq('user_id', userId).in('message_id', ids)
-      if (hiddenError) throw hiddenError
-      const hiddenIds = new Set((hidden ?? []).map((row) => row.message_id as string))
-      page = page.filter((message) => !hiddenIds.has(message.id))
-    }
-    if (offset === 0) lastMessage = page[0] ?? null
+  // Keep the list fast: only inspect the most recent incoming messages when
+  // calculating the badge instead of walking the entire conversation history.
+  const { data: incoming, error: incomingError } = await supabase.from('messages').select('id')
+    .eq('conversation_id', conversationId)
+    .eq('is_deleted_for_everyone', false)
+    .neq('sender_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(200)
+  if (incomingError) throw incomingError
+  if (!incoming?.length) return { lastMessage: (latestRows?.[0] as ChatMessage | undefined) ?? null, unreadCount: 0 }
 
-    const incomingIds = page.filter((message) => message.sender_id !== userId).map((message) => message.id)
-    if (incomingIds.length) {
-      const { data: readRows, error: readsError } = await supabase.from('message_reads')
-        .select('message_id').eq('user_id', userId).in('message_id', incomingIds)
-      if (readsError) throw readsError
-      const readIds = new Set((readRows ?? []).map((row) => row.message_id))
-      unreadCount += incomingIds.filter((id) => !readIds.has(id)).length
-    }
-
-    if (page.length < pageSize) break
-    offset += pageSize
+  const { data: reads, error: readsError } = await supabase.from('message_reads').select('message_id')
+    .eq('user_id', userId).in('message_id', incoming.map((row) => row.id))
+  if (readsError) throw readsError
+  const readIds = new Set((reads ?? []).map((row) => row.message_id))
+  return {
+    lastMessage: (latestRows?.[0] as ChatMessage | undefined) ?? null,
+    unreadCount: incoming.filter((row) => !readIds.has(row.id)).length,
   }
-
-  return { lastMessage, unreadCount }
 }
 
 export async function loadUnreadChatCount(): Promise<number> {
