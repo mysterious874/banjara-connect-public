@@ -33,14 +33,6 @@ export function subscribeToPostgresChanges(
   let retryAttempt = 0
   let stopped = false
 
-  const notifyStatus = (status: RealtimeSubscriptionStatus) => {
-    const currentEntry = subscriptions.get(key)
-    if (!currentEntry || currentEntry.channel !== entry?.channel) return
-    currentEntry.status = status
-    if (status === 'CLOSED') return
-    for (const current of currentEntry.subscribers) current.onStatus?.(status)
-  }
-
   const connect = () => {
     if (stopped) return
     const subscribers = entry?.subscribers ?? new Set<Subscriber>([subscriber])
