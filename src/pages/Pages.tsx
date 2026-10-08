@@ -1411,6 +1411,8 @@ export function StoriesPage() {
   const [storyViewers, setStoryViewers] = useState<StoryViewer[]>([])
   const [storyViewersLoading, setStoryViewersLoading] = useState(false)
   const storyTimer = useRef<number | null>(null)
+  const storySwipeStart = useRef<{ x: number; y: number } | null>(null)
+  const storySwipeMoved = useRef(false)
 
   const grouped = Array.from(new Map(stories.map((story) => [story.user_id, story])).values())
   const activeIndex = selectedStory ? grouped.findIndex((story) => story.user_id === selectedStory.user_id) : -1
@@ -1460,6 +1462,32 @@ export function StoriesPage() {
     if (!selectedStory || !session?.user.id || selectedStory.user_id === session.user.id) return
     void recordStoryView(selectedStory.id, session.user.id).catch(() => undefined)
   }, [selectedStory?.id, selectedStory?.user_id, session?.user.id])
+
+  function handleStoryPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType === 'mouse') return
+    storySwipeStart.current = { x: event.clientX, y: event.clientY }
+    storySwipeMoved.current = false
+  }
+
+  function handleStoryPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const start = storySwipeStart.current
+    if (!start || event.pointerType === 'mouse') return
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) storySwipeMoved.current = true
+  }
+
+  function handleStoryPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const start = storySwipeStart.current
+    storySwipeStart.current = null
+    if (!start || event.pointerType === 'mouse') return
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    if (dy > 80 && Math.abs(dy) > Math.abs(dx) * 1.15) {
+      if (storyTimer.current) window.clearTimeout(storyTimer.current)
+      navigate('/home')
+    }
+  }
 
   async function openStoryViewers() {
     if (!selectedStory || selectedStory.user_id !== session?.user.id) return
@@ -1649,7 +1677,7 @@ export function StoriesPage() {
       {storyViewersOpen && selectedStory?.user_id === session?.user.id && <div className="story-viewers-modal-backdrop" onClick={() => setStoryViewersOpen(false)}><div className="story-viewers-modal" role="dialog" aria-modal="true" aria-label="Story viewers" onClick={(event) => event.stopPropagation()}><div className="story-viewers-modal__head"><div><strong>Story viewers</strong><span>{storyViewers.length} {storyViewers.length === 1 ? 'view' : 'views'}</span></div><button type="button" onClick={() => setStoryViewersOpen(false)} aria-label="Close"><X size={19} /></button></div><div className="story-viewers-modal__list">{storyViewersLoading ? <Loading label="Loading viewers" /> : storyViewers.length === 0 ? <EmptyState title="No views yet" description="People who view your story will appear here." /> : storyViewers.map((viewer) => { const name = viewer.display_name || viewer.username || 'Community member'; return <div className="story-viewer-row" key={viewer.id}><Avatar name={name} image={viewer.avatar_url ?? undefined} /><div><strong>{name}</strong>{viewer.username && <span>@{viewer.username}</span>}</div></div> })}</div></div></div>}
     {selectedStory && (grouped.length > 0 || Boolean(initialStory)) && <div className="story-fullscreen" role="dialog" aria-modal="true" aria-label="Story viewer">
       <div className="story-fullscreen__backdrop" onClick={() => navigate('/home')} />
-      <div className="story-fullscreen__card">
+      <div className="story-fullscreen__card" onPointerDown={handleStoryPointerDown} onPointerMove={handleStoryPointerMove} onPointerUp={handleStoryPointerUp} onPointerCancel={() => { storySwipeStart.current = null }}>
         <div className="story-fullscreen__progress">{grouped.map((story, index) => <span key={story.user_id} className={`story-fullscreen__progress-segment${index < activeIndex ? ' is-complete' : index === activeIndex ? ' is-active' : ''}`} />)}</div>
         {selectedStory.user_id === session?.user.id ? <button type="button" className="story-fullscreen__view-button" onClick={(event) => { event.stopPropagation(); void openStoryViewers() }} aria-label="View story viewers"><Eye size={16} /> <span>View</span></button> : null}
         <div className="story-fullscreen__head">
