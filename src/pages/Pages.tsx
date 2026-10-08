@@ -84,10 +84,18 @@ function useChatKeyboardViewportLock() {
         )
         const visibleHeight = Math.max(250, viewport.height)
 
-        chat.style.setProperty('top', '0px')
-        chat.style.setProperty('left', '0px')
+        // Keep the whole chat viewport locked to the visual viewport while
+        // Android resizes/pans the page for the keyboard. This prevents the
+        // header and message bubbles from being dragged upward when the composer
+        // receives focus.
+        chat.style.setProperty('position', 'fixed', 'important')
+        chat.style.setProperty('top', '0px', 'important')
+        chat.style.setProperty('right', '0px', 'important')
+        chat.style.setProperty('bottom', 'auto', 'important')
+        chat.style.setProperty('left', '0px', 'important')
+        chat.style.setProperty('width', '100%', 'important')
         chat.style.setProperty('--chat-viewport-offset', '0px')
-        chat.style.setProperty('transform', 'none')
+        chat.style.setProperty('transform', 'none', 'important')
         chat.style.setProperty('height', `${visibleHeight}px`, 'important')
         chat.style.setProperty('max-height', `${visibleHeight}px`, 'important')
 
@@ -111,8 +119,12 @@ function useChatKeyboardViewportLock() {
         })
       } else {
         keyboardWasOpen = false
+        chat.style.removeProperty('position')
         chat.style.removeProperty('top')
+        chat.style.removeProperty('right')
+        chat.style.removeProperty('bottom')
         chat.style.removeProperty('left')
+        chat.style.removeProperty('width')
         chat.style.removeProperty('--chat-viewport-offset')
         chat.style.removeProperty('transform')
         chat.style.removeProperty('height')
