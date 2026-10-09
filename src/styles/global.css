@@ -3886,11 +3886,11 @@ select {
   min-height: 100%;
 }
 @keyframes connect-tab-enter-next {
-  from { opacity: .72; transform: translate3d(9%, 0, 0); }
+  from { opacity: .9; transform: translate3d(var(--swipe-enter-offset, 9%), 0, 0); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 @keyframes connect-tab-enter-previous {
-  from { opacity: .72; transform: translate3d(-9%, 0, 0); }
+  from { opacity: .9; transform: translate3d(var(--swipe-enter-offset, -9%), 0, 0); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 @media (max-width: 799px) {
