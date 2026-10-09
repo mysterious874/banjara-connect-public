@@ -1384,6 +1384,29 @@ export function EditProfilePage() {
     <Button type="submit" disabled={isSaving || isProfileLoading}>{isSaving ? 'Saving…' : 'Save profile'} {!isSaving && <Check size={17} />}</Button>
   </form></section>
 }
+function storyPublishError(error: unknown): string {
+  const raw = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+    ? error.message.trim()
+    : error instanceof Error ? error.message.trim() : ''
+  const message = raw.slice(0, 220)
+  if (/row.level security|permission denied|not authorized|403/i.test(message)) {
+    return 'Story upload permission was blocked. Please try again; if it repeats, share this message with the app admin.'
+  }
+  if (/bucket.*not found|no such bucket/i.test(message)) {
+    return 'Story media storage is not configured yet. Please contact the app admin.'
+  }
+  if (/mime|content.type|file type/i.test(message)) {
+    return 'This photo or video format is not supported. Try JPG, PNG, WEBP, GIF, MP4, WebM, or MOV.'
+  }
+  if (/payload too large|file size|too large/i.test(message)) {
+    return 'This file is too large. Story media must be 50 MB or smaller.'
+  }
+  if (/network|fetch failed|failed to fetch|timeout/i.test(message)) {
+    return 'Network issue while uploading. Check your internet connection and try again.'
+  }
+  return message ? `Could not publish story: ${message}` : 'Could not publish story. Please try again.'
+}
+
 export function StoriesPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -1394,6 +1417,7 @@ export function StoriesPage() {
   const [selectedStory, setSelectedStory] = useState<StoryRecord | null>(initialStory)
   const [storyText, setStoryText] = useState('')
   const [storyFile, setStoryFile] = useState<File | null>(null)
+  const [storyPreviewUrl, setStoryPreviewUrl] = useState('')
   const storyCameraInputRef = useRef<HTMLInputElement | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isPublishing, setIsPublishing] = useState(false)
@@ -1413,6 +1437,16 @@ export function StoriesPage() {
   const storyTimer = useRef<number | null>(null)
   const storySwipeStart = useRef<{ x: number; y: number } | null>(null)
   const storySwipeMoved = useRef(false)
+
+  useEffect(() => {
+    if (!storyFile) {
+      setStoryPreviewUrl('')
+      return
+    }
+    const url = URL.createObjectURL(storyFile)
+    setStoryPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [storyFile])
 
   const grouped = Array.from(new Map(stories.map((story) => [story.user_id, story])).values())
   const activeIndex = selectedStory ? grouped.findIndex((story) => story.user_id === selectedStory.user_id) : -1
@@ -1573,7 +1607,7 @@ export function StoriesPage() {
       await refreshStories()
       setSuccess('Your story is live for 24 hours.')
     } catch (caught) {
-      setError(userFacingError(caught, 'Could not publish your story.'))
+      setError(storyPublishError(caught))
     } finally {
       setIsPublishing(false)
     }
@@ -1663,6 +1697,10 @@ export function StoriesPage() {
           <form className="story-create-box" onSubmit={publishStory}>
             <div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>Your story</strong><span>Visible for 24 hours</span></span></div>
             <textarea aria-label="Story message" value={storyText} onChange={(event) => setStoryText(event.target.value)} placeholder="Add a message to your story (optional)" maxLength={500} />
+            {storyFile && storyPreviewUrl && <div className="story-create-preview">
+              {storyFile.type.startsWith('video/') ? <video src={storyPreviewUrl} controls playsInline className="story-create-preview__asset" /> : <img src={storyPreviewUrl} alt="Story preview" className="story-create-preview__asset" />}
+              <div className="story-create-preview__details"><span><strong>Ready to share</strong><small>{storyFile.name} · {(storyFile.size / (1024 * 1024)).toFixed(1)} MB</small></span><button type="button" className="story-create-preview__remove" onClick={() => { setStoryFile(null); const input = document.getElementById('story-media') as HTMLInputElement | null; if (input) input.value = ''; if (storyCameraInputRef.current) storyCameraInputRef.current.value = '' }} aria-label="Remove selected story media"><X size={18} /></button></div>
+            </div>}
             <div className="story-create-box__media"><label className="button button--outline" htmlFor="story-media">Add photo or video</label><button type="button" className="button button--outline" onClick={() => storyCameraInputRef.current?.click()}><Camera size={15} /> Camera</button><input id="story-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleStoryFile} /><input ref={storyCameraInputRef} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={handleStoryFile} />{storyFile && <span className="micro-note">{storyFile.name} · {(storyFile.size / (1024 * 1024)).toFixed(1)} MB</span>}<span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span></div>
             <Button type="submit" disabled={isPublishing || (!storyText.trim() && !storyFile)}>{isPublishing ? 'Publishing…' : 'Post story'} <Send size={15} /></Button>
           </form>
