@@ -44,14 +44,25 @@ export function StoryCard({ story, own = false, muted = false }: { story?: Story
   const viewed = !own && hasViewedStory(story)
   const destination = own ? (story ? '/stories?manage=1' : '/stories?create=1') : story ? `/stories?story=${story.id}` : '/stories'
   return <Link to={destination} state={!own && story ? { story } : undefined} onPointerDown={() => preloadStoryMedia(story)} onClick={() => { if (!own) markStoryViewed(story) }} className={`story-card${own ? ' story-card--own' : ''}${!viewed && !own ? ' story-card--unread' : ''}${muted ? ' story-card--muted' : ''}`} aria-label={own ? (story ? 'View your stories' : 'Create a story') : `${name}'s story`}>
-    <span className="story-card__ring"><Avatar name={name} image={story?.author?.avatar_url ?? undefined} size="large" />{own && !story && <span className="story-card__add"><Plus size={19} /></span>}</span>
-    <span className="story-card__name">{own ? (story ? 'Your stories' : 'Add story') : name}</span>
+    <span className="story-card__ring" style={muted ? { filter: 'grayscale(1) brightness(.55)', opacity: .72 } : undefined}><Avatar name={name} image={story?.author?.avatar_url ?? undefined} size="large" />{own && !story && <span className="story-card__add"><Plus size={19} /></span>}</span>
+    <span className="story-card__name">{own ? (story ? 'Your stories' : 'Add story') : name}</span>{muted && <span className="story-card__muted-label" style={{ display: 'block', fontSize: 11, opacity: .7, textAlign: 'center' }}>Muted</span>}
   </Link>
 }
 
 export function StoriesRail() {
   const { session } = useAuth()
   const [stories, setStories] = useState<StoryRecord[]>([])
+  const [mutedUserIds, setMutedUserIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('banjara_connect_muted_stories_v1') || '[]') as string[] } catch { return [] }
+  })
+  useEffect(() => {
+    const refreshMuted = () => {
+      try { setMutedUserIds(JSON.parse(localStorage.getItem('banjara_connect_muted_stories_v1') || '[]') as string[]) } catch { setMutedUserIds([]) }
+    }
+    window.addEventListener('storage', refreshMuted)
+    window.addEventListener('banjara:muted-stories-changed', refreshMuted)
+    return () => { window.removeEventListener('storage', refreshMuted); window.removeEventListener('banjara:muted-stories-changed', refreshMuted) }
+  }, [])
   useEffect(() => {
     let active = true
     if (!session?.user.id) {
@@ -72,6 +83,8 @@ export function StoriesRail() {
     .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))[0])
     .filter((story): story is StoryRecord => Boolean(story))
   const ownStory = railStories.find((story) => story.user_id === session?.user.id)
-  const otherStories = railStories.filter((story) => story.user_id !== session?.user.id).slice(0, 8)
+  const otherStories = railStories.filter((story) => story.user_id !== session?.user.id)
+    .sort((a, b) => Number(mutedUserIds.includes(a.user_id)) - Number(mutedUserIds.includes(b.user_id)))
+    .slice(0, 8)
   return <section className="stories-rail" aria-labelledby="stories-heading"><div className="section-heading"><div><span className="eyebrow">A LITTLE WINDOW INTO TODAY</span><h2 id="stories-heading">Stories</h2></div><Link to="/stories" className="text-link">See all</Link></div><div className="stories-rail__items"><StoryCard story={ownStory} own />{otherStories.map((story) => <StoryCard key={story.user_id} story={story} muted={mutedUserIds.includes(story.user_id)} />)}</div></section>
 }
