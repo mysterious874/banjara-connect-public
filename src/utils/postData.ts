@@ -9,30 +9,40 @@ async function attachAuthors(posts: PostRecord[]): Promise<FeedPost[]> {
   const userIds = [...new Set(posts.map((post) => post.user_id))]
   if (!userIds.length) return []
 
-  const { data: authors, error } = await supabase.from('profiles')
-    .select('id,username,display_name,avatar_url,location')
-    .in('id', userIds)
-  if (error) throw error
+  // Resolve authors and all media URLs in parallel. Signing URLs once per post
+  // caused 20+ Storage requests for a single feed page on mobile connections.
+  const mediaPaths = [...new Set(posts.flatMap((post) => post.media_urls ?? []))]
+  const [authorResult, signedUrls] = await Promise.all([
+    supabase.from('profiles')
+      .select('id,username,display_name,avatar_url,location')
+      .in('id', userIds),
+    mediaPaths.length
+      ? createPostMediaUrls(mediaPaths).catch((error: unknown) => {
+          // Keep text and author content usable if Storage temporarily fails.
+          console.warn('Post media URLs could not be loaded; feed will remain available.', error)
+          return new Map<string, string>()
+        })
+      : Promise.resolve(new Map<string, string>()),
+  ])
+  if (authorResult.error) throw authorResult.error
 
-  const authorsById = new Map((authors as Pick<ProfileRecord, 'id' | 'username' | 'display_name' | 'avatar_url' | 'location'>[]).map((author) => [author.id, author]))
-  const withAuthors = posts.map((post) => ({ ...post, author: authorsById.get(post.user_id) ?? null })) as Array<FeedPost & { media_urls?: string[]; media_type?: string | null }>
-  return await Promise.all(withAuthors.map(async (post) => {
+  const authorsById = new Map((authorResult.data as Pick<ProfileRecord, 'id' | 'username' | 'display_name' | 'avatar_url' | 'location'>[]).map((author) => [author.id, author]))
+  return posts.map((post) => {
     const paths = post.media_urls ?? []
-    const signedUrls = await createPostMediaUrls(paths)
     const media = paths.map((path) => ({
       path,
       type: post.media_type === 'video' ? 'video' as const : 'image' as const,
       mimeType: post.media_type === 'video' ? 'video/*' : 'image/*',
       signedUrl: signedUrls.get(path) ?? '',
     }))
-    return { ...post, media }
-  }))
+    return { ...post, author: authorsById.get(post.user_id) ?? null, media }
+  }) as FeedPost[]
 }
 
 export async function loadPostsPage(
   options: { userId?: string; groupIds?: string[]; excludeUserIds?: string[]; offset?: number; limit?: number } = {},
 ): Promise<{ posts: FeedPost[]; hasMore: boolean; nextOffset: number }> {
-  const limit = options.limit ?? 50
+  const limit = options.limit ?? 20
   const offset = options.offset ?? 0
   let query = supabase.from('posts').select(postColumns)
     .order('created_at', { ascending: false }).order('id', { ascending: true })
