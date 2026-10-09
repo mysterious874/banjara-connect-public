@@ -3719,3 +3719,156 @@ select {
 .chat-screen .chat-bubble {
   font-size: 15px;
 }
+
+/* Stories polish: modern Instagram-like composer, preview and immersive viewer. */
+.story-create-box {
+  gap: 16px;
+  padding: 20px;
+  border-color: var(--bc-line);
+  border-radius: 22px;
+  background: var(--bc-paper);
+  box-shadow: 0 14px 36px rgb(84 18 28 / 7%);
+}
+.story-create-box textarea {
+  min-height: 96px;
+  padding: 14px 15px;
+  color: var(--bc-text);
+  background: var(--bc-cream);
+  border: 1px solid var(--bc-line);
+  border-radius: 15px;
+  font: inherit;
+  line-height: 1.55;
+}
+.story-create-box textarea:focus {
+  border-color: var(--bc-orange);
+  outline: 3px solid rgb(216 120 47 / 15%);
+}
+.story-create-box__media {
+  padding-top: 2px;
+}
+.story-create-preview {
+  display: grid;
+  gap: 10px;
+  overflow: hidden;
+  padding: 10px;
+  border: 1px solid var(--bc-line);
+  border-radius: 18px;
+  background: var(--bc-cream);
+}
+.story-create-preview__asset {
+  display: block;
+  width: 100%;
+  max-height: min(46vh, 360px);
+  border-radius: 12px;
+  object-fit: contain;
+  background: #211916;
+}
+.story-create-preview__details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 2px 4px;
+}
+.story-create-preview__details > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.story-create-preview__details strong {
+  color: var(--bc-text);
+  font-size: 13px;
+}
+.story-create-preview__details small {
+  overflow: hidden;
+  color: var(--bc-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.story-create-preview__remove {
+  display: grid;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--bc-line);
+  border-radius: 50%;
+  background: var(--bc-paper);
+  color: var(--bc-maroon);
+  cursor: pointer;
+}
+.story-fullscreen__card {
+  border-radius: 22px;
+  background: #100b0b;
+  box-shadow: 0 28px 90px rgb(0 0 0 / 56%);
+}
+.story-fullscreen__progress-segment {
+  position: relative;
+  overflow: hidden;
+  background: rgb(255 255 255 / 35%);
+}
+.story-fullscreen__progress-segment.is-active {
+  background: rgb(255 255 255 / 35%);
+}
+.story-fullscreen__progress-segment.is-active::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: #fff;
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: story-segment-progress var(--story-duration, 5s) linear forwards;
+}
+.story-fullscreen__head {
+  top: 22px;
+  left: 16px;
+  right: 12px;
+}
+.story-fullscreen__head .post-card__author {
+  gap: 10px;
+}
+.story-fullscreen__content {
+  background: radial-gradient(circle at 50% 20%, rgb(216 120 47 / 12%), transparent 45%), #100b0b;
+}
+.story-fullscreen__caption {
+  bottom: 76px;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 14px;
+  background: rgb(0 0 0 / 54%);
+  backdrop-filter: blur(12px);
+  line-height: 1.45;
+}
+.story-fullscreen__reply input {
+  border-radius: 999px;
+  padding-inline: 16px;
+}
+.story-fullscreen__reply .button {
+  min-width: 44px;
+  border-radius: 999px;
+}
+.story-fullscreen__delete {
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+}
+@keyframes story-segment-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-fullscreen__progress-segment.is-active::after {
+    animation: none;
+    transform: scaleX(1);
+  }
+}
+@media (max-width: 600px) {
+  .story-fullscreen__card {
+    border-radius: 0;
+  }
+  .story-create-box {
+    padding: 16px;
+    border-radius: 18px;
+  }
+}
