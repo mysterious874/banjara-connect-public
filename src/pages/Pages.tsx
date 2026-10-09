@@ -26,7 +26,7 @@ import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
-import { deleteMessageForEveryone, deleteMessageForMe, invalidateConversationListCache, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
+import { deleteMessageForEveryone, deleteMessageForMe, hydrateConversationMediaUrls, invalidateConversationListCache, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
 import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostLikesBatch, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 import { getCached, invalidateCache, setCached } from '../utils/performanceCache'
 
@@ -2045,6 +2045,13 @@ export function ChatConversationPage() {
         setMessages(history.messages)
         setHasOlderMessages(history.hasMore)
         if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: history.messages, hasOlderMessages: history.hasMore }, 60_000)
+        void hydrateConversationMediaUrls(history.messages).then((ready) => {
+          if (!active) return
+          setMessages((current) => current.map((item) => {
+            const media = ready.find((candidate) => candidate.id === item.id)
+            return media ? { ...item, media_signed_url: media.media_signed_url } : item
+          }))
+        })
         const refreshLatestMessages = async () => {
           if (messageRefreshPending) {
             messageRefreshQueued = true
@@ -2062,6 +2069,16 @@ export function ChatConversationPage() {
                 const merged = [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
                 if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: merged, hasOlderMessages: history.hasMore }, 60_000)
                 return merged
+              })
+              void hydrateConversationMediaUrls(latest.messages).then((ready) => {
+                if (!active) return
+                setMessages((current) => {
+                  const byId = new Map(current.map((item) => [item.id, item]))
+                  for (const item of ready) byId.set(item.id, { ...byId.get(item.id), media_signed_url: item.media_signed_url })
+                  const merged = [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
+                  if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: merged, hasOlderMessages: history.hasMore }, 60_000)
+                  return merged
+                })
               })
             } catch (caught) {
               if (active) setError(userFacingError(caught, 'Could not refresh messages.'))
