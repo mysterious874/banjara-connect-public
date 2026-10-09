@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type TouchEvent } from 'react'
+import { useRef, useState, type TouchEvent } from 'react'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BottomNavigation, DesktopNavigation, Header } from '../components/navigation'
 import { ErrorState, Loading, Toast } from '../components/ui'
