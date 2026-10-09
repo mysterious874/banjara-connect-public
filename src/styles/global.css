@@ -3943,3 +3943,10 @@ select {
 .chat-forward-contact strong, .chat-forward-contact small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-forward-contact small { color: var(--bc-muted); font-size: 12px; }
 @media (max-width: 560px) { .chat-media-viewer-backdrop, .chat-forward-backdrop { padding: 8px; } .chat-media-viewer { width: 100%; max-height: 94dvh; } .chat-media-viewer__content img, .chat-media-viewer__content video { max-height: calc(94dvh - 80px); } }
+
+.chat-forward-modal__footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:12px; border-top:1px solid var(--bc-line); }
+.chat-forward-modal__footer > span { color:var(--bc-muted); font-size:13px; }
+.chat-forward-modal__footer > button { display:flex; align-items:center; justify-content:center; gap:8px; min-width:108px; min-height:42px; padding:0 18px; border:0; border-radius:999px; background:var(--bc-maroon); color:#fff; font-weight:700; cursor:pointer; }
+.chat-forward-modal__footer > button:disabled { opacity:.45; cursor:not-allowed; }
+.chat-forward-check { display:grid; flex:0 0 22px!important; width:22px; height:22px; place-items:center; border:1.5px solid var(--bc-muted); border-radius:6px; color:#fff; }
+.chat-forward-check.is-selected { border-color:var(--bc-maroon); background:var(--bc-maroon); }
