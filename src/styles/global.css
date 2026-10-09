@@ -4060,3 +4060,22 @@ select {
   .profile-cover__ornament--right { right: 5%; }
   .profile-summary--centered .profile-summary__actions { width: 100%; }
 }
+
+
+/* Keep profile actions in normal flow so they sit below the centered bio */
+.profile-summary--centered .profile-summary__actions {
+  position: static !important;
+  inset: auto !important;
+  order: 10;
+  width: 100%;
+  margin: 18px auto 4px;
+  padding: 0;
+  min-height: 0;
+  transform: none !important;
+}
+.profile-summary--centered .profile-summary__actions .button {
+  position: static !important;
+  max-width: 100%;
+}
+.profile-summary--centered h1 { margin-top: 12px; }
+.profile-summary--centered .profile-handle { margin-top: 2px; }
