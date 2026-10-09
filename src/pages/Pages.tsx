@@ -2479,11 +2479,8 @@ export function ChatConversationPage() {
     if (!files.length) return
     try {
       for (const file of files) validateChatMedia(file)
-      setSelectedMediaFiles((current) => {
-        const combined = [...current, ...files]
-        setSelectedMedia(combined[0] ?? null)
-        return combined
-      })
+      setSelectedMediaFiles((current) => [...current, ...files])
+      setSelectedMedia((current) => current ?? files[0] ?? null)
       setAttachmentMenuOpen(false)
       setError('')
     } catch (caught) {
