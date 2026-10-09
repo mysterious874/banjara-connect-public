@@ -3819,7 +3819,7 @@ select {
   background: #fff;
   transform: scaleX(0);
   transform-origin: left center;
-  animation: story-segment-progress 5s linear forwards;
+  animation: story-segment-progress var(--story-duration, 5s) linear forwards;
 }
 .story-fullscreen__head {
   top: 22px;
