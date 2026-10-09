@@ -246,25 +246,39 @@ export async function hydrateConversationMediaUrls(messages: ChatMessage[]): Pro
 
 export async function loadConversationPeer(conversationId: string) {
   const userId = await requireAuthenticatedUserId()
-  const { data: ownMembership, error: ownError } = await supabase.from('conversation_members')
-    .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', userId).maybeSingle()
+
+  // Validate our membership and resolve the other member together: neither
+  // lookup depends on the result of the other, so a new chat avoids a round trip.
+  const [
+    { data: ownMembership, error: ownError },
+    { data: members, error: membersError },
+  ] = await Promise.all([
+    supabase.from('conversation_members').select('conversation_id')
+      .eq('conversation_id', conversationId).eq('user_id', userId).maybeSingle(),
+    supabase.from('conversation_members').select('user_id')
+      .eq('conversation_id', conversationId).neq('user_id', userId),
+  ])
   if (ownError) throw ownError
   if (!ownMembership) throw new Error('You are not a member of this conversation.')
-  const { data: members, error: membersError } = await supabase.from('conversation_members')
-    .select('user_id').eq('conversation_id', conversationId).neq('user_id', userId)
   if (membersError) throw membersError
   const peerId = members?.[0]?.user_id
   if (!peerId) throw new Error('Conversation member could not be found.')
-  const [{ data: outgoingBlock, error: outgoingBlockError }, { data: incomingBlock, error: incomingBlockError }] = await Promise.all([
+
+  // The profile and both directional block checks are independent once we know
+  // the peer ID. Keep every block check before exposing the profile to chat UI.
+  const [
+    { data: outgoingBlock, error: outgoingBlockError },
+    { data: incomingBlock, error: incomingBlockError },
+    { data: profile, error: profileError },
+  ] = await Promise.all([
     supabase.from('blocks').select('blocker_id').eq('blocker_id', userId).eq('blocked_id', peerId).maybeSingle(),
     supabase.from('blocks').select('blocker_id').eq('blocker_id', peerId).eq('blocked_id', userId).maybeSingle(),
+    supabase.from('profiles').select('id,username,display_name,avatar_url').eq('id', peerId).maybeSingle(),
   ])
   if (outgoingBlockError) throw outgoingBlockError
   if (incomingBlockError) throw incomingBlockError
-  if (outgoingBlock || incomingBlock) throw new Error('Messaging is unavailable for this profile.')
-  const { data: profile, error: profileError } = await supabase.from('profiles')
-    .select('id,username,display_name,avatar_url').eq('id', peerId).maybeSingle()
   if (profileError) throw profileError
+  if (outgoingBlock || incomingBlock) throw new Error('Messaging is unavailable for this profile.')
   if (!profile) throw new Error('Conversation profile is unavailable.')
   return profile
 }
