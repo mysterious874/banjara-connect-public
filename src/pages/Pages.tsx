@@ -141,7 +141,7 @@ function useChatKeyboardViewportLock() {
         // header and message bubbles from being dragged upward when the composer
         // receives focus.
         chat.style.setProperty('position', 'fixed', 'important')
-        chat.style.setProperty('top', '0px', 'important')
+        chat.style.setProperty('top', `${Math.max(0, viewport.offsetTop)}px`, 'important')
         chat.style.setProperty('right', '0px', 'important')
         chat.style.setProperty('bottom', 'auto', 'important')
         chat.style.setProperty('left', '0px', 'important')
@@ -193,7 +193,6 @@ function useChatKeyboardViewportLock() {
       }
     }
 
-    const resetDocumentScroll = () => window.requestAnimationFrame(() => window.scrollTo(0, 0))
     const onFocus = () => {
       window.setTimeout(apply, 0)
       window.setTimeout(apply, 80)
@@ -218,7 +217,6 @@ function useChatKeyboardViewportLock() {
     document.addEventListener('input', settleLatestMessage)
     document.addEventListener('focusin', onFocus)
     document.addEventListener('focusout', onBlur)
-    window.addEventListener('scroll', resetDocumentScroll, { passive: true })
     apply()
 
     return () => {
@@ -227,7 +225,6 @@ function useChatKeyboardViewportLock() {
       document.removeEventListener('focusin', onFocus)
       document.removeEventListener('focusout', onBlur)
       document.removeEventListener('input', settleLatestMessage)
-      window.removeEventListener('scroll', resetDocumentScroll)
       root.style.removeProperty('overflow')
       body.style.removeProperty('overflow')
       const chat = document.querySelector('.chat-screen') as HTMLElement | null
