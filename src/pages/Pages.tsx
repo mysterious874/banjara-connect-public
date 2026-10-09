@@ -1542,8 +1542,7 @@ export function StoriesPage() {
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
     if (dy > 80 && Math.abs(dy) > Math.abs(dx) * 1.15) {
-      if (storyTimer.current) window.clearTimeout(storyTimer.current)
-      navigate('/home')
+      closeStoryViewer()
     }
   }
 
