@@ -12,7 +12,7 @@ const CommunityPage = lazy(() => import('./pages/Pages').then(({ CommunityPage }
 const BanjaraHistoryPage = lazy(() => import('./pages/BanjaraHistoryPage').then(({ BanjaraHistoryPage }) => ({ default: BanjaraHistoryPage })))
 const CommunityGroupPage = lazy(() => import('./pages/Pages').then(({ CommunityGroupPage }) => ({ default: CommunityGroupPage })))
 const SearchPage = lazy(() => import('./pages/Pages').then(({ SearchPage }) => ({ default: SearchPage })))
-const CreatePostPage = lazy(() => import('./pages/Pages').then(({ CreatePostPage }) => ({ default: CreatePostPage })))
+const CreatePostPage = lazy(() => import('./pages/CreatePostDestinationPage'))
 const PostDetailsPage = lazy(() => import('./pages/Pages').then(({ PostDetailsPage }) => ({ default: PostDetailsPage })))
 const CommentsPage = lazy(() => import('./pages/Pages').then(({ CommentsPage }) => ({ default: CommentsPage })))
 const ProfilePage = lazy(() => import('./pages/Pages').then(({ ProfilePage }) => ({ default: ProfilePage })))
