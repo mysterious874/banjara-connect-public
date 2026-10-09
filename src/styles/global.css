@@ -3675,3 +3675,47 @@ body {
     font-size: 14px;
   }
 }
+
+/* Accessibility polish: modestly enlarge text and icons without changing layout or theme. */
+:root {
+  font-size: 16px;
+}
+body {
+  font-size: 16px;
+}
+button,
+input,
+textarea,
+select {
+  font-size: max(15px, 1em);
+}
+.icon-button,
+.topbar__actions button,
+.bottom-nav button {
+  min-width: 42px;
+  min-height: 42px;
+}
+.icon-button svg,
+.button svg,
+.topbar__actions svg,
+.bottom-nav svg,
+.desktop-nav svg {
+  width: 22px;
+  height: 22px;
+}
+.field__control,
+.search-bar input {
+  font-size: 15px;
+}
+.micro-note,
+.preview-state > span,
+.eyebrow,
+.local-label,
+.preview-notice,
+.story-card__name,
+.chat-screen__identity small {
+  font-size: 12px;
+}
+.chat-screen .chat-bubble {
+  font-size: 15px;
+}
