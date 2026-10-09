@@ -1838,13 +1838,13 @@ export function StoriesPage() {
         {selectedStory.user_id === session?.user.id ? <button type="button" className="story-fullscreen__view-button" onClick={(event) => { event.stopPropagation(); void openStoryViewers() }} aria-label="View story viewers"><Eye size={16} /> <span>View</span></button> : null}
         <div className="story-fullscreen__head">
           <div className="post-card__author"><Avatar name={selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'} image={selectedStory.author?.avatar_url ?? undefined} /><span><strong>{selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'}</strong><span>{new Date(selectedStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span></div>
-          <div className="story-fullscreen__head-actions">
-            {selectedStory.user_id !== session?.user.id && <div className="story-fullscreen__menu-wrap">
+          <div className="story-fullscreen__head-actions" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {selectedStory.user_id !== session?.user.id && <div className="story-fullscreen__menu-wrap" style={{ position: 'relative' }}>
               <button type="button" className="story-fullscreen__close" aria-label="Story options" onClick={() => setStoryMenuOpen((open) => !open)}><MoreVertical size={22} /></button>
-              {storyMenuOpen && <div className="story-fullscreen__menu" role="menu">
-                <button type="button" role="menuitem" onClick={() => { setStoryMenuOpen(false); setStoryShareOpen(true); setStoryShareError('') }}><Forward size={16} /> Share story</button>
-                <button type="button" role="menuitem" onClick={muteSelectedStory}><VolumeX size={16} /> Mute story</button>
-                <button type="button" role="menuitem" onClick={() => void downloadSelectedStory()}><Download size={16} /> Download</button>
+              {storyMenuOpen && <div className="story-fullscreen__menu" role="menu" style={{ position: 'absolute', right: 0, top: 42, zIndex: 20, minWidth: 180, padding: 6, borderRadius: 12, background: 'var(--surface, #201b18)', color: 'var(--text, #fff)', boxShadow: '0 12px 35px rgba(0,0,0,.35)', display: 'grid', gap: 3 }}>
+                <button type="button" role="menuitem" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: 0, background: 'transparent', color: 'inherit', textAlign: 'left' }} onClick={() => { setStoryMenuOpen(false); setStoryShareOpen(true); setStoryShareError('') }}><Forward size={16} /> Share story</button>
+                <button type="button" role="menuitem" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: 0, background: 'transparent', color: 'inherit', textAlign: 'left' }} onClick={muteSelectedStory}><VolumeX size={16} /> Mute story</button>
+                <button type="button" role="menuitem" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: 0, background: 'transparent', color: 'inherit', textAlign: 'left' }} onClick={() => void downloadSelectedStory()}><Download size={16} /> Download</button>
               </div>}
             </div>}
             <button type="button" className="story-fullscreen__close" onClick={closeStoryViewer} aria-label="Close story"><X size={22} /></button>
@@ -3486,6 +3486,7 @@ export function NotificationsPage() {
   }
 
   const copyForType = (type: string) => {
+    if (type === 'story_like') return 'liked your story'
     if (type === 'like' || type === 'post_like') return 'liked your post'
     if (type === 'comment' || type === 'post_comment') return 'commented on your post'
     if (type === 'follow') return 'started following you'
