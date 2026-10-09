@@ -569,3 +569,55 @@ body:has(.community-group-screen) {
     overflow: visible;
   }
 }
+
+
+/* Theme-switching hotfix: keep the selected per-conversation palette above
+   legacy chat overrides. These rules intentionally affect only themed chats. */
+.chat-screen[class*="chat-screen--theme-"] {
+  background: var(--chat-bg) !important;
+  color: var(--chat-other-text, var(--bc-text)) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head {
+  color: #fff !important;
+  background: var(--chat-head) !important;
+  border-color: var(--chat-line) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__identity,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__identity strong,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__identity small,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__action {
+  color: #fff !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-messages {
+  background: var(--chat-bg) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble--them {
+  color: var(--chat-other-text) !important;
+  background: var(--chat-other) !important;
+  border-color: var(--chat-line) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble--you {
+  color: #fff !important;
+  background: var(--chat-own) !important;
+  border-color: var(--chat-own) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble--them .chat-bubble__meta {
+  color: var(--chat-muted) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble--you .chat-bubble__meta {
+  color: rgb(255 255 255 / 76%) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-compose-area {
+  color: var(--chat-other-text) !important;
+  background: var(--chat-compose) !important;
+  border-color: var(--chat-line) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-compose-area .field__control {
+  color: var(--chat-other-text) !important;
+  background: var(--chat-input) !important;
+  border-color: var(--chat-line) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-compose-area .field__control::placeholder,
+.chat-screen[class*="chat-screen--theme-"] .chat-compose-area .micro-note {
+  color: var(--chat-muted) !important;
+}
