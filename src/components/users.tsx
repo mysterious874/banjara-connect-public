@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Check, Plus } from 'lucide-react'
 import type { ProfileRecord } from '../types/app'
 import { useAuth } from '../hooks/AuthProvider'
 import { loadFollowState, toggleFollow } from '../utils/followData'
