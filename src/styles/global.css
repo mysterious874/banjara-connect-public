@@ -164,7 +164,7 @@ img { max-width: 100%; }
 .story-card__ring { position: relative; display: grid; width: 58px; height: 58px; padding: 3px; place-items: center; border: 1.5px solid var(--red); border-radius: 50%; }
 .story-card__name { max-width: 68px; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .story-card--own .story-card__ring { border-color: #d8dfd6; }
-.story-card__add { position: absolute; right: -2px; bottom: -1px; display: grid; width: 21px; height: 21px; place-items: center; color: #fff; background: var(--green); border: 2px solid #fff; border-radius: 50%; }
+.story-card__add { position: absolute; right: -4px; bottom: -4px; display: grid; width: 31px; height: 31px; place-items: center; color: #fff; background: var(--green); border: 2px solid #fff; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 .avatar { display: inline-grid; flex: none; width: 39px; height: 39px; place-items: center; overflow: hidden; color: #fff; background: var(--green); border-radius: 50%; font-size: 11px; font-weight: 800; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
 .avatar--small { width: 34px; height: 34px; font-size: 10px; }
@@ -1471,6 +1471,17 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
   display: grid;
   gap: 12px;
 }
+.story-page-thumbs--manage { gap: 16px; }
+.story-manage-list { display: grid; gap: 10px; }
+.story-manage-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff); }
+.story-manage-row__open { display: flex; min-width: 0; align-items: center; gap: 12px; padding: 0; border: 0; color: var(--ink); background: transparent; text-align: left; cursor: pointer; }
+.story-manage-row__thumb { display: grid; flex: 0 0 58px; width: 58px; height: 72px; overflow: hidden; place-items: center; color: #fff; background: var(--green); border-radius: 8px; }
+.story-manage-row__thumb img, .story-manage-row__thumb video { width: 100%; height: 100%; object-fit: cover; }
+.story-manage-row__details { display: grid; min-width: 0; gap: 3px; }
+.story-manage-row__details strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.story-manage-row__details small { color: var(--muted, #778078); font-size: 11px; }
+.story-manage-row__delete { display: grid; width: 38px; height: 38px; place-items: center; color: var(--red); border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; }
+.story-page-thumbs--manage > .button { width: 100%; justify-content: center; min-height: 46px; }
 .app-shell--stories .topbar,
 .app-shell--stories .desktop-nav,
 .app-shell--stories .bottom-nav {
