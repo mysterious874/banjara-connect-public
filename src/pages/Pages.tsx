@@ -2060,7 +2060,7 @@ export function ChatConversationPage() {
                 const byId = new Map(current.map((item) => [item.id, item]))
                 for (const item of latest.messages) byId.set(item.id, item)
                 const merged = [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
-                if (session?.user.id && person) setCached(`chat-history:${session.user.id}:${conversationId}`, { person, messages: merged, hasOlderMessages }, 60_000)
+                if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: merged, hasOlderMessages: history.hasMore }, 60_000)
                 return merged
               })
             } catch (caught) {
