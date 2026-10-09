@@ -3916,7 +3916,7 @@ select {
 
 
 /* Chat refinements: tight 4px composer spacing, media details and forwarding. */
-.app-shell--chat .chat-screen .chat-messages { gap: 4px !important; padding-bottom: calc(50px + env(safe-area-inset-bottom) + 4px) !important; }
+.app-shell--chat .chat-screen .chat-messages { gap: 4px !important; padding-bottom: calc(46px + env(safe-area-inset-bottom) + 4px) !important; }
 .app-shell--chat .chat-screen .chat-compose-area { padding-top: 0 !important; }
 .chat-media-sending--inline { flex: none; margin: 0 0 2px auto; width: min(84%, 340px); }
 .chat-media-viewer-backdrop, .chat-forward-backdrop { position: fixed; z-index: 2200; inset: 0; display: grid; place-items: center; padding: 16px; background: rgb(12 8 8 / 78%); backdrop-filter: blur(8px); }
