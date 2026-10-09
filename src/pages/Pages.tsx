@@ -28,7 +28,7 @@ import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
 import { deleteMessageForEveryone, deleteMessageForMe, invalidateConversationListCache, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
 import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostLikesBatch, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
-import { getCached, setCached } from '../utils/performanceCache'
+import { getCached, invalidateCache, setCached } from '../utils/performanceCache'
 
 function renderChatMessageContent(content: string) {
   return content.split('\n').map((line, index, lines) => {
@@ -1788,8 +1788,10 @@ export function ReelsPage() {
 
 export function ChatListPage() {
   const { session, onlineUserIds, activeUserIds } = useAuth()
-  const [conversations, setConversations] = useState<Awaited<ReturnType<typeof loadConversations>>>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const chatListCacheKey = session?.user.id ? `chat-list:${session.user.id}` : ''
+  const cachedConversations = chatListCacheKey ? getCached<Awaited<ReturnType<typeof loadConversations>>>(chatListCacheKey) : null
+  const [conversations, setConversations] = useState<Awaited<ReturnType<typeof loadConversations>>>(cachedConversations ?? [])
+  const [isLoading, setIsLoading] = useState(cachedConversations === null)
   const [error, setError] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [mutedIds, setMutedIds] = useState<string[]>([])
@@ -1804,7 +1806,13 @@ export function ChatListPage() {
     let requestPending = false
     let refreshQueued = false
     setError('')
-    setIsLoading(conversations.length === 0)
+    const cached = session?.user.id ? getCached<Awaited<ReturnType<typeof loadConversations>>>(`chat-list:${session.user.id}`) : null
+    if (cached !== null) {
+      setConversations(cached)
+      setIsLoading(false)
+    } else {
+      setIsLoading(true)
+    }
     const refresh = async () => {
       if (requestPending) { refreshQueued = true; return }
       requestPending = true
@@ -1812,7 +1820,11 @@ export function ChatListPage() {
         refreshQueued = false
         try {
           const rows = await loadConversations()
-          if (active) { setConversations(rows); setError('') }
+          if (active) {
+            setConversations(rows)
+            if (session?.user.id) setCached(`chat-list:${session.user.id}`, rows, 60_000)
+            setError('')
+          }
         } catch (caught) {
           if (active) setError(userFacingError(caught, 'Could not load conversations.'))
         } finally {
@@ -1831,6 +1843,7 @@ export function ChatListPage() {
       table: 'messages',
     }, () => {
       invalidateConversationListCache()
+      if (session?.user.id) invalidateCache(`chat-list:${session.user.id}`)
       void refresh()
     })
     const unsubscribeReads = subscribeToPostgresChanges({
@@ -1840,6 +1853,7 @@ export function ChatListPage() {
       filter: `user_id=eq.${session?.user.id}`,
     }, () => {
       invalidateConversationListCache()
+      if (session?.user.id) invalidateCache(`chat-list:${session.user.id}`)
       void refresh()
     })
     window.addEventListener('focus', refreshWhenVisible)
@@ -1949,12 +1963,14 @@ export function ChatConversationPage() {
   useChatKeyboardViewportLock()
   const { conversationId = '' } = useParams()
   const { session, onlineUserIds, activeUserIds } = useAuth()
+  const chatHistoryCacheKey = session?.user.id && conversationId ? `chat-history:${session.user.id}:${conversationId}` : ''
+  const cachedChatHistory = chatHistoryCacheKey ? getCached<{ person: ProfileRecord; messages: ChatMessage[]; hasOlderMessages: boolean }>(chatHistoryCacheKey) : null
   const [message, setMessage] = useState('')
-  const [person, setPerson] = useState<ProfileRecord | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [person, setPerson] = useState<ProfileRecord | null>(cachedChatHistory?.person ?? null)
+  const [messages, setMessages] = useState<ChatMessage[]>(cachedChatHistory?.messages ?? [])
+  const [isLoading, setIsLoading] = useState(cachedChatHistory === null)
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
-  const [hasOlderMessages, setHasOlderMessages] = useState(false)
+  const [hasOlderMessages, setHasOlderMessages] = useState(cachedChatHistory?.hasOlderMessages ?? false)
   const [error, setError] = useState('')
   const [realtimeError, setRealtimeError] = useState('')
   const [pendingDeleteId, setPendingDeleteId] = useState('')
@@ -2005,12 +2021,13 @@ export function ChatConversationPage() {
     let unsubscribeReads: (() => void) | null = null
     let messageRefreshPending = false
     let messageRefreshQueued = false
-    setIsLoading(true)
+    const cached = session?.user.id ? getCached<{ person: ProfileRecord; messages: ChatMessage[]; hasOlderMessages: boolean }>(`chat-history:${session.user.id}:${conversationId}`) : null
+    setIsLoading(cached === null)
     setError('')
     setRealtimeError('')
-    setPerson(null)
-    setMessages([])
-    setHasOlderMessages(false)
+    setPerson(cached?.person ?? null)
+    setMessages(cached?.messages ?? [])
+    setHasOlderMessages(cached?.hasOlderMessages ?? false)
     setSelectedMedia(null)
     setChatMenuOpen(false)
     setChatThemeOpen(false)
@@ -2027,6 +2044,7 @@ export function ChatConversationPage() {
         setPerson(peer as ProfileRecord)
         setMessages(history.messages)
         setHasOlderMessages(history.hasMore)
+        if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: history.messages, hasOlderMessages: history.hasMore }, 60_000)
         const refreshLatestMessages = async () => {
           if (messageRefreshPending) {
             messageRefreshQueued = true
@@ -2041,7 +2059,9 @@ export function ChatConversationPage() {
               setMessages((current) => {
                 const byId = new Map(current.map((item) => [item.id, item]))
                 for (const item of latest.messages) byId.set(item.id, item)
-                return [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
+                const merged = [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
+                if (session?.user.id && person) setCached(`chat-history:${session.user.id}:${conversationId}`, { person, messages: merged, hasOlderMessages }, 60_000)
+                return merged
               })
             } catch (caught) {
               if (active) setError(userFacingError(caught, 'Could not refresh messages.'))
