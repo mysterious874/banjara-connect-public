@@ -1568,18 +1568,42 @@ export function StoriesPage() {
     }
   }
 
+  function isSelectedStoryMuted() {
+    if (!selectedStory) return false
+    try {
+      return (JSON.parse(localStorage.getItem('banjara_connect_muted_stories_v1') || '[]') as string[]).includes(selectedStory.user_id)
+    } catch {
+      return false
+    }
+  }
+
   function muteSelectedStory() {
     if (!selectedStory || !session?.user.id || selectedStory.user_id === session.user.id) return
     try {
       const key = 'banjara_connect_muted_stories_v1'
       const muted = JSON.parse(localStorage.getItem(key) || '[]') as string[]
       if (!muted.includes(selectedStory.user_id)) localStorage.setItem(key, JSON.stringify([...muted, selectedStory.user_id]))
+      window.dispatchEvent(new CustomEvent('banjara:muted-stories-changed'))
       setStoryMenuOpen(false)
       closeStoryViewer()
       setSuccess('Story muted')
-      window.dispatchEvent(new CustomEvent('banjara:muted-stories-changed'))
     } catch {
       setError('Could not mute this story on this device.')
+    }
+  }
+
+  function unmuteSelectedStory() {
+    if (!selectedStory || !session?.user.id || selectedStory.user_id === session.user.id) return
+    try {
+      const key = 'banjara_connect_muted_stories_v1'
+      const muted = JSON.parse(localStorage.getItem(key) || '[]') as string[]
+      localStorage.setItem(key, JSON.stringify(muted.filter((id) => id !== selectedStory.user_id)))
+      window.dispatchEvent(new CustomEvent('banjara:muted-stories-changed'))
+      setStoryMenuOpen(false)
+      closeStoryViewer()
+      setSuccess('Story unmuted')
+    } catch {
+      setError('Could not unmute this story on this device.')
     }
   }
 
@@ -1841,7 +1865,7 @@ export function StoriesPage() {
               <button type="button" className="story-fullscreen__close" aria-label="Story options" onClick={() => setStoryMenuOpen((open) => !open)}><MoreVertical size={22} /></button>
               {storyMenuOpen && <div className="story-fullscreen__menu" role="menu" style={{ position: 'absolute', right: 0, top: 42, zIndex: 20, minWidth: 180, padding: 6, borderRadius: 12, background: 'var(--surface, #201b18)', color: 'var(--text, #fff)', boxShadow: '0 12px 35px rgba(0,0,0,.35)', display: 'grid', gap: 3 }}>
                 <button type="button" role="menuitem" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: 0, background: 'transparent', color: 'inherit', textAlign: 'left' }} onClick={() => { setStoryMenuOpen(false); setStoryShareOpen(true); setStoryShareError('') }}><Forward size={16} /> Share story</button>
-                <button type="button" role="menuitem" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: 0, background: 'transparent', color: 'inherit', textAlign: 'left' }} onClick={muteSelectedStory}><VolumeX size={16} /> Mute story</button>
+                <button type="button" role="menuitem" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: 0, background: 'transparent', color: 'inherit', textAlign: 'left' }} onClick={isSelectedStoryMuted() ? unmuteSelectedStory : muteSelectedStory}>{isSelectedStoryMuted() ? <Volume2 size={16} /> : <VolumeX size={16} />} {isSelectedStoryMuted() ? 'Unmute story' : 'Mute story'}</button>
                 <button type="button" role="menuitem" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: 0, background: 'transparent', color: 'inherit', textAlign: 'left' }} onClick={() => void downloadSelectedStory()}><Download size={16} /> Download</button>
               </div>}
             </div>}
