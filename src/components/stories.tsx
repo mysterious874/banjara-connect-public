@@ -42,9 +42,10 @@ export function hasViewedStory(story?: StoryRecord) {
 export function StoryCard({ story, own = false }: { story?: StoryRecord; own?: boolean }) {
   const name = story?.author?.display_name || story?.author?.username || 'Community member'
   const viewed = !own && hasViewedStory(story)
-  return <Link to="/stories" state={story ? { story } : undefined} onPointerDown={() => preloadStoryMedia(story)} onClick={() => markStoryViewed(story)} className={`story-card${own ? ' story-card--own' : ''}${!viewed && !own ? ' story-card--unread' : ''}`} aria-label={own ? 'Add a story' : `${name}'s story`}>
-    <span className="story-card__ring"><Avatar name={name} image={story?.author?.avatar_url ?? undefined} size="large" />{own && <span className="story-card__add"><Plus size={15} /></span>}</span>
-    <span className="story-card__name">{own ? 'Your story' : name}</span>
+  const destination = own ? (story ? '/stories?manage=1' : '/stories?create=1') : story ? `/stories?story=${story.id}` : '/stories'
+  return <Link to={destination} state={!own && story ? { story } : undefined} onPointerDown={() => preloadStoryMedia(story)} onClick={() => { if (!own) markStoryViewed(story) }} className={`story-card${own ? ' story-card--own' : ''}${!viewed && !own ? ' story-card--unread' : ''}`} aria-label={own ? (story ? 'View your stories' : 'Create a story') : `${name}'s story`}>
+    <span className="story-card__ring"><Avatar name={name} image={story?.author?.avatar_url ?? undefined} size="large" />{own && !story && <span className="story-card__add"><Plus size={19} /></span>}</span>
+    <span className="story-card__name">{own ? (story ? 'Your stories' : 'Add story') : name}</span>
   </Link>
 }
 
