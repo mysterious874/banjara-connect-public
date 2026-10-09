@@ -2274,15 +2274,17 @@ export function CommunityGroupPage() {
   useChatKeyboardViewportLock()
   const { groupId = '' } = useParams()
   const { session } = useAuth()
-  const [group, setGroup] = useState<{ id: string; name: string; description: string; created_by: string } | null>(null)
-  const [messages, setMessages] = useState<CommunityGroupMessage[]>([])
-  const [profiles, setProfiles] = useState<Record<string, ProfileRecord>>({})
+  const groupChatCacheKey = session?.user.id && groupId ? `group-chat:${session.user.id}:${groupId}` : ''
+  const cachedGroupChat = groupChatCacheKey ? getCached<{ group: { id: string; name: string; description: string; created_by: string }; messages: CommunityGroupMessage[]; profiles: Record<string, ProfileRecord>; members: Array<{ user_id: string; role: string; username: string; display_name: string | null; avatar_url: string | null }>; hasOlderGroupMessages: boolean }>(groupChatCacheKey) : null
+  const [group, setGroup] = useState<{ id: string; name: string; description: string; created_by: string } | null>(cachedGroupChat?.group ?? null)
+  const [messages, setMessages] = useState<CommunityGroupMessage[]>(cachedGroupChat?.messages ?? [])
+  const [profiles, setProfiles] = useState<Record<string, ProfileRecord>>(cachedGroupChat?.profiles ?? {})
   const [message, setMessage] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(cachedGroupChat === null)
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
   const [realtimeError, setRealtimeError] = useState('')
-  const [members, setMembers] = useState<Array<{ user_id: string; role: string; username: string; display_name: string | null; avatar_url: string | null }>>([])
+  const [members, setMembers] = useState<Array<{ user_id: string; role: string; username: string; display_name: string | null; avatar_url: string | null }>>(cachedGroupChat?.members ?? [])
   const [membersOpen, setMembersOpen] = useState(false)
   const [groupMenuOpen, setGroupMenuOpen] = useState(false)
   const [memberQuery, setMemberQuery] = useState('')
@@ -2303,7 +2305,7 @@ export function CommunityGroupPage() {
   const [isSendingGroupMedia, setIsSendingGroupMedia] = useState(false)
   const groupMediaInputRef = useRef<HTMLInputElement | null>(null)
   const groupCameraInputRef = useRef<HTMLInputElement | null>(null)
-  const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(false)
+  const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(cachedGroupChat?.hasOlderGroupMessages ?? false)
   const [isLoadingOlderGroupMessages, setIsLoadingOlderGroupMessages] = useState(false)
   const isGroupCreator = Boolean(session?.user && group && group.created_by === session.user.id)
   const isGroupAdmin = Boolean(session?.user && group && (isGroupCreator || members.some((member) => member.user_id === session.user.id && member.role === 'admin')))
@@ -2372,9 +2374,12 @@ export function CommunityGroupPage() {
   useEffect(() => {
     let active = true
     let unsubscribe: (() => void) | null = null
-    setIsLoading(true)
+    const cached = session?.user.id ? getCached<{ group: { id: string; name: string; description: string; created_by: string }; messages: CommunityGroupMessage[]; profiles: Record<string, ProfileRecord>; members: Array<{ user_id: string; role: string; username: string; display_name: string | null; avatar_url: string | null }>; hasOlderGroupMessages: boolean }>(`group-chat:${session.user.id}:${groupId}`) : null
+    setIsLoading(cached === null)
     setError('')
     setRealtimeError('')
+    if (cached) { setGroup(cached.group); setMessages(cached.messages); setProfiles(cached.profiles); setMembers(cached.members); setHasOlderGroupMessages(cached.hasOlderGroupMessages) }
+    else { setGroup(null); setMessages([]); setProfiles({}); setMembers([]); setHasOlderGroupMessages(false) }
     let groupMessageRefreshPending = false
     let groupMessageRefreshQueued = false
     let groupMemberRefreshPending = false
