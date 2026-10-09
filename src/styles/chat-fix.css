@@ -640,3 +640,132 @@ body:has(.community-group-screen) {
   color: #f0bd77 !important;
   stroke: #f0bd77 !important;
 }
+
+
+/* Definitive per-chat theme palette override.
+   The legacy Rathod Heritage rule uses !important variables on .app-shell--chat
+   and was winning over the selected theme. Scope each palette to the actual
+   themed chat root with higher specificity, then paint every visible region. */
+.app-shell--chat .chat-screen.chat-screen--theme-forest,
+.chat-screen.chat-screen--theme-forest {
+  --chat-bg: #e7f0eb !important;
+  --chat-head: #2d6652 !important;
+  --chat-other: #f8fcfa !important;
+  --chat-other-text: #20382f !important;
+  --chat-own: #397b61 !important;
+  --chat-compose: #f8fcfa !important;
+  --chat-line: #c7ddd2 !important;
+  --chat-input: #f7fbf9 !important;
+  --chat-muted: #5c766b !important;
+}
+.app-shell--chat .chat-screen.chat-screen--theme-classic,
+.chat-screen.chat-screen--theme-classic,
+.community-group-screen.chat-screen--theme-rathod {
+  --chat-bg: #f3e9e2 !important;
+  --chat-head: #7b1e2b !important;
+  --chat-other: #fffaf6 !important;
+  --chat-other-text: #34231f !important;
+  --chat-own: #9d3b42 !important;
+  --chat-compose: #fffaf6 !important;
+  --chat-line: #e3cfc5 !important;
+  --chat-input: #fffdfb !important;
+  --chat-muted: #765f58 !important;
+}
+.app-shell--chat .chat-screen.chat-screen--theme-sand,
+.chat-screen.chat-screen--theme-sand {
+  --chat-bg: #f4e6d2 !important;
+  --chat-head: #8b5632 !important;
+  --chat-other: #fff8ed !important;
+  --chat-other-text: #3d2a20 !important;
+  --chat-own: #b86b3e !important;
+  --chat-compose: #fff8ed !important;
+  --chat-line: #dfc8aa !important;
+  --chat-input: #fffdf8 !important;
+  --chat-muted: #765e4e !important;
+}
+.app-shell--chat .chat-screen.chat-screen--theme-rose,
+.chat-screen.chat-screen--theme-rose {
+  --chat-bg: #f6e8ed !important;
+  --chat-head: #8e3d59 !important;
+  --chat-other: #fff8fa !important;
+  --chat-other-text: #3c2830 !important;
+  --chat-own: #b65372 !important;
+  --chat-compose: #fff8fa !important;
+  --chat-line: #e3c7d0 !important;
+  --chat-input: #fffafb !important;
+  --chat-muted: #795d68 !important;
+}
+.app-shell--chat .chat-screen.chat-screen--theme-midnight,
+.chat-screen.chat-screen--theme-midnight {
+  --chat-bg: #101827 !important;
+  --chat-head: #182235 !important;
+  --chat-other: #202c40 !important;
+  --chat-other-text: #eef3fa !important;
+  --chat-own: #355d9a !important;
+  --chat-compose: #172133 !important;
+  --chat-line: #2d3b50 !important;
+  --chat-input: #101827 !important;
+  --chat-muted: #aebbd0 !important;
+}
+
+/* Apply the active palette to the whole chat, not just the message bubbles. */
+.chat-screen[class*="chat-screen--theme-"],
+.community-group-screen.chat-screen--theme-rathod {
+  background: var(--chat-bg) !important;
+  color: var(--chat-other-text) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head,
+.community-group-screen.chat-screen--theme-rathod .chat-screen__head {
+  background: var(--chat-head) !important;
+  color: #fff5e8 !important;
+  border-bottom-color: var(--chat-line) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__identity,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__identity strong,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__identity small,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__action,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head > .button,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head svg,
+.community-group-screen.chat-screen--theme-rathod .chat-screen__head .chat-screen__identity,
+.community-group-screen.chat-screen--theme-rathod .chat-screen__head .chat-screen__identity strong,
+.community-group-screen.chat-screen--theme-rathod .chat-screen__head .chat-screen__identity small,
+.community-group-screen.chat-screen--theme-rathod .chat-screen__head .chat-screen__action,
+.community-group-screen.chat-screen--theme-rathod .chat-screen__head > .button,
+.community-group-screen.chat-screen--theme-rathod .chat-screen__head svg {
+  color: #fff0d8 !important;
+  stroke: currentColor !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-messages,
+.community-group-screen.chat-screen--theme-rathod .chat-messages {
+  background: var(--chat-bg) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble--them,
+.community-group-screen.chat-screen--theme-rathod .chat-bubble--them {
+  color: var(--chat-other-text) !important;
+  background: var(--chat-other) !important;
+  border-color: var(--chat-line) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-bubble--you,
+.community-group-screen.chat-screen--theme-rathod .chat-bubble--you {
+  color: #fff !important;
+  background: var(--chat-own) !important;
+  border-color: var(--chat-own) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-compose-area,
+.community-group-screen.chat-screen--theme-rathod .chat-compose-area {
+  color: var(--chat-other-text) !important;
+  background: var(--chat-compose) !important;
+  border-color: var(--chat-line) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-compose-area .field__control,
+.community-group-screen.chat-screen--theme-rathod .chat-compose-area .field__control {
+  color: var(--chat-other-text) !important;
+  background: var(--chat-input) !important;
+  border-color: var(--chat-line) !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-compose-area .field__control::placeholder,
+.chat-screen[class*="chat-screen--theme-"] .chat-compose-area .micro-note,
+.community-group-screen.chat-screen--theme-rathod .chat-compose-area .field__control::placeholder,
+.community-group-screen.chat-screen--theme-rathod .chat-compose-area .micro-note {
+  color: var(--chat-muted) !important;
+}
