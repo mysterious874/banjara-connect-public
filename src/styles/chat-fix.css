@@ -547,3 +547,25 @@ body:has(.community-group-screen) {
     -webkit-overflow-scrolling: touch !important;
   }
 }
+
+
+/* Connect page vertical scrolling must remain native; the app-level tab gesture
+   intentionally does not capture touches anywhere inside this page. */
+@media (max-width: 799px) {
+  .connect-page,
+  .connect-page .page-heading,
+  .connect-page .connect-search,
+  .connect-page .connect-people-carousel {
+    touch-action: pan-y pinch-zoom;
+  }
+  .connect-page {
+    min-width: 0;
+    overflow: visible;
+    overscroll-behavior-y: auto;
+  }
+  .app-shell:not(.app-shell--chat):not(.app-shell--community-group):not(.app-shell--stories) .app-shell__body,
+  .app-shell:not(.app-shell--chat):not(.app-shell--community-group):not(.app-shell--stories) .route-content,
+  .app-shell:not(.app-shell--chat):not(.app-shell--community-group):not(.app-shell--stories) .route-content__page {
+    overflow: visible;
+  }
+}
