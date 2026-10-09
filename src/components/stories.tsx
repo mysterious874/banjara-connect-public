@@ -39,11 +39,11 @@ export function hasViewedStory(story?: StoryRecord) {
   return loadViewedStories()[story.user_id] === story.id
 }
 
-export function StoryCard({ story, own = false }: { story?: StoryRecord; own?: boolean }) {
+export function StoryCard({ story, own = false, muted = false }: { story?: StoryRecord; own?: boolean; muted?: boolean }) {
   const name = story?.author?.display_name || story?.author?.username || 'Community member'
   const viewed = !own && hasViewedStory(story)
   const destination = own ? (story ? '/stories?manage=1' : '/stories?create=1') : story ? `/stories?story=${story.id}` : '/stories'
-  return <Link to={destination} state={!own && story ? { story } : undefined} onPointerDown={() => preloadStoryMedia(story)} onClick={() => { if (!own) markStoryViewed(story) }} className={`story-card${own ? ' story-card--own' : ''}${!viewed && !own ? ' story-card--unread' : ''}`} aria-label={own ? (story ? 'View your stories' : 'Create a story') : `${name}'s story`}>
+  return <Link to={destination} state={!own && story ? { story } : undefined} onPointerDown={() => preloadStoryMedia(story)} onClick={() => { if (!own) markStoryViewed(story) }} className={`story-card${own ? ' story-card--own' : ''}${!viewed && !own ? ' story-card--unread' : ''}${muted ? ' story-card--muted' : ''}`} aria-label={own ? (story ? 'View your stories' : 'Create a story') : `${name}'s story`}>
     <span className="story-card__ring"><Avatar name={name} image={story?.author?.avatar_url ?? undefined} size="large" />{own && !story && <span className="story-card__add"><Plus size={19} /></span>}</span>
     <span className="story-card__name">{own ? (story ? 'Your stories' : 'Add story') : name}</span>
   </Link>
@@ -73,5 +73,5 @@ export function StoriesRail() {
     .filter((story): story is StoryRecord => Boolean(story))
   const ownStory = railStories.find((story) => story.user_id === session?.user.id)
   const otherStories = railStories.filter((story) => story.user_id !== session?.user.id).slice(0, 8)
-  return <section className="stories-rail" aria-labelledby="stories-heading"><div className="section-heading"><div><span className="eyebrow">A LITTLE WINDOW INTO TODAY</span><h2 id="stories-heading">Stories</h2></div><Link to="/stories" className="text-link">See all</Link></div><div className="stories-rail__items"><StoryCard story={ownStory} own />{otherStories.map((story) => <StoryCard key={story.user_id} story={story} />)}</div></section>
+  return <section className="stories-rail" aria-labelledby="stories-heading"><div className="section-heading"><div><span className="eyebrow">A LITTLE WINDOW INTO TODAY</span><h2 id="stories-heading">Stories</h2></div><Link to="/stories" className="text-link">See all</Link></div><div className="stories-rail__items"><StoryCard story={ownStory} own />{otherStories.map((story) => <StoryCard key={story.user_id} story={story} muted={mutedUserIds.includes(story.user_id)} />)}</div></section>
 }
