@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Phone, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Ban, LogOut } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Phone, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Ban, LogOut, Download, Maximize2, Minimize2, Forward } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
@@ -1985,6 +1985,16 @@ export function ChatConversationPage() {
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([])
   const [selectedMedia, setSelectedMedia] = useState<File | null>(null)
   const [isSendingMedia, setIsSendingMedia] = useState(false)
+  const [mediaViewer, setMediaViewer] = useState<ChatMessage | null>(null)
+  const [mediaViewerSize, setMediaViewerSize] = useState('Checking size…')
+  const [mediaViewerFullscreen, setMediaViewerFullscreen] = useState(false)
+  const [forwardOpen, setForwardOpen] = useState(false)
+  const [forwardQuery, setForwardQuery] = useState('')
+  const [forwardConversations, setForwardConversations] = useState<Awaited<ReturnType<typeof loadConversations>>>([])
+  const [forwardLoading, setForwardLoading] = useState(false)
+  const [forwardingTo, setForwardingTo] = useState('')
+  const [forwardError, setForwardError] = useState('')
+  const stickToLatest = useRef(true)
   const mediaInputRef = useRef<HTMLInputElement | null>(null)
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
   const longPressTimer = useRef<number | null>(null)
@@ -2001,6 +2011,21 @@ export function ChatConversationPage() {
   }, [conversationId])
 
   useEffect(() => {
+    if (!mediaViewer?.media_signed_url || !mediaViewer.media_type) { setMediaViewerSize('Size unavailable'); return }
+    let active = true
+    setMediaViewerSize('Checking size…')
+    void fetch(mediaViewer.media_signed_url, { method: 'HEAD' }).then((response) => {
+      const raw = response.headers.get('content-length')
+      if (!active) return
+      if (response.ok && raw && Number.isFinite(Number(raw))) {
+        const bytes = Number(raw)
+        setMediaViewerSize(bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`)
+      } else setMediaViewerSize('Size unavailable')
+    }).catch(() => { if (active) setMediaViewerSize('Size unavailable') })
+    return () => { active = false }
+  }, [mediaViewer?.id, mediaViewer?.media_signed_url])
+
+  useEffect(() => {
     if (isLoading || !messages.length || initialBottomScrollDone.current) return
     initialBottomScrollDone.current = true
     const scrollToLatest = () => {
@@ -2014,6 +2039,14 @@ export function ChatConversationPage() {
     })
     return () => window.cancelAnimationFrame(frame)
   }, [conversationId, isLoading, messages.length])
+
+  useEffect(() => {
+    if (isLoading || !initialBottomScrollDone.current || !stickToLatest.current) return
+    const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null
+    if (!pane) return
+    const frame = window.requestAnimationFrame(() => { pane.scrollTop = pane.scrollHeight })
+    return () => window.cancelAnimationFrame(frame)
+  }, [isLoading, messages.length])
 
   const chatThemes = [
     { id: 'forest', label: 'Gor Forest', preview: '#2D6652' },
@@ -2125,6 +2158,7 @@ export function ChatConversationPage() {
   async function loadOlderMessages() {
     const oldest = messages[0]
     if (!oldest || isLoadingOlder || !hasOlderMessages) return
+    stickToLatest.current = false
     setIsLoadingOlder(true)
     setError('')
     try {
@@ -2174,6 +2208,41 @@ export function ChatConversationPage() {
   function cancelMessageSelection() {
     clearLongPressTimer()
     setSelectedMessageIds([])
+  }
+
+  async function openForwardPicker() {
+    setForwardOpen(true)
+    setForwardError('')
+    setForwardLoading(true)
+    try { setForwardConversations(await loadConversations()) }
+    catch (caught) { setForwardError(userFacingError(caught, 'Could not load your conversations.')) }
+    finally { setForwardLoading(false) }
+  }
+
+  async function forwardSelectedMessagesTo(destinationId: string) {
+    if (!selectedMessageIds.length || forwardingTo) return
+    setForwardingTo(destinationId)
+    setForwardError('')
+    try {
+      const selected = messages.filter((item) => selectedMessageIds.includes(item.id) && !item.is_deleted_for_everyone)
+      for (const item of selected) {
+        let file: File | undefined
+        if (item.media_type && !item.media_signed_url) throw new Error('This media is still loading. Try forwarding again in a moment.')
+        if (item.media_type && item.media_signed_url) {
+          const response = await fetch(item.media_signed_url)
+          if (!response.ok) throw new Error('Could not download a selected media item to forward.')
+          const blob = await response.blob()
+          const extension = item.media_type === 'image' ? 'jpg' : item.media_type === 'video' ? 'mp4' : 'bin'
+          file = new File([blob], `forwarded-${item.media_type}-${Date.now()}.${extension}`, { type: blob.type || (item.media_type === 'image' ? 'image/jpeg' : item.media_type === 'video' ? 'video/mp4' : 'application/octet-stream') })
+        }
+        if (item.content.trim() || file) await sendConversationMessage(destinationId, item.content, file)
+      }
+      setForwardOpen(false)
+      setForwardQuery('')
+      setSelectedMessageIds([])
+    } catch (caught) {
+      setForwardError(userFacingError(caught, 'Could not forward the selected messages.'))
+    } finally { setForwardingTo('') }
   }
 
   async function deleteSelectedMessages(mode: 'me' | 'everyone') {
@@ -2247,6 +2316,7 @@ export function ChatConversationPage() {
       try {
         const created = await sendConversationMessage(conversationId, textToSend, mediaToSend)
         setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
+        window.requestAnimationFrame(() => { const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
         if (textToSend === message.trim()) setMessage('')
       } catch (caught) {
         setError(userFacingError(caught, 'Could not send the photo or video.'))
@@ -2256,9 +2326,11 @@ export function ChatConversationPage() {
       return
     }
 
+    stickToLatest.current = true
     try {
       const created = await sendConversationMessage(conversationId, textToSend)
       setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
+      window.requestAnimationFrame(() => { const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
       setMessage('')
     } catch (caught) {
       setError(userFacingError(caught, 'Could not send this message.'))
@@ -2276,13 +2348,16 @@ export function ChatConversationPage() {
     try { window.localStorage.setItem(`banjara-chat-theme-${conversationId}`, themeId) } catch { /* local storage may be unavailable */ }
   }
   return <section className={`chat-screen chat-screen--theme-${chatTheme}`}><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Link to={`/profile/${encodeURIComponent(person.username)}`} className="chat-screen__profile"><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>{peerOnline ? (peerInApp ? "online" : "online · not in app") : "offline"}</small></span></Link><div className="chat-screen__actions"><button type="button" className="chat-screen__action" aria-label="Voice call" title="Voice call"><Phone size={18} /></button><button type="button" className="chat-screen__action" aria-label="Video call" title="Video call"><Video size={19} /></button><button type="button" className="chat-screen__action" aria-label="Chat options" title="Chat options" aria-expanded={chatMenuOpen} onClick={() => { setChatMenuOpen((current) => !current); setChatThemeOpen(false) }}><MoreVertical size={20} /></button>{chatMenuOpen && <div className="chat-options-menu"><button type="button" className="chat-options-menu__item" onClick={() => { setChatThemeOpen(true); setChatMenuOpen(false) }}><Palette size={17} /><span>Chat Background</span><ChevronRight size={15} /></button></div>}</div></header>{chatThemeOpen && <Modal open={chatThemeOpen} title="Chat background" onClose={() => setChatThemeOpen(false)}><div className="chat-theme-picker">{chatThemes.map((theme) => <button type="button" key={theme.id} className={`chat-theme-option${chatTheme === theme.id ? ' chat-theme-option--active' : ''}`} onClick={() => selectChatTheme(theme.id)}><span className="chat-theme-option__swatch" style={{ background: theme.preview }} /><span><strong>{theme.label}</strong><small>{theme.id === 'classic' ? 'Banjara Connect default' : 'Apply only to this chat'}</small></span>{chatTheme === theme.id && <Check size={17} />}</button>)}</div></Modal>}
-    <div className="chat-messages">{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{selectedMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelMessageSelection} aria-label="Close message selection">×</button><strong>{selectedMessageIds.length} selected</strong><button type="button" onClick={() => void copySelectedMessages()}>Copy</button><button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('me')}>Delete for me</button>{messages.some((item) => selectedMessageIds.includes(item.id) && item.sender_id === session?.user.id && !item.is_deleted_for_everyone && (item.media_type === 'image' || item.media_type === 'video' || item.content)) && <button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('everyone')}>Delete for everyone</button>}</div>}{messages.length ? messages.map((item, index) => { const mine = item.sender_id === session?.user.id; const selected = selectedMessageIds.includes(item.id); const mediaUrl = item.media_signed_url; return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}${index === 0 ? ' chat-message-row--first' : ''}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startMessageLongPress(item.id)} onPointerUp={clearLongPressTimer} onPointerCancel={clearLongPressTimer} onPointerLeave={clearLongPressTimer} onContextMenu={(event) => handleMessageContextMenu(event, item.id)} onClick={() => {
+    <div className="chat-messages" onScroll={(event) => { const pane = event.currentTarget; stickToLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120 }}>{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{selectedMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelMessageSelection} aria-label="Close message selection">×</button><strong>{selectedMessageIds.length} selected</strong><button type="button" onClick={() => void copySelectedMessages()}>Copy</button><button type="button" onClick={() => void openForwardPicker()}><Forward size={14} /> Forward</button><button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('me')}>Delete for me</button>{messages.some((item) => selectedMessageIds.includes(item.id) && item.sender_id === session?.user.id && !item.is_deleted_for_everyone && (item.media_type === 'image' || item.media_type === 'video' || item.content)) && <button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('everyone')}>Delete for everyone</button>}</div>}{isSendingMedia && <div className="chat-media-sending chat-media-sending--inline" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending media…</strong><small>Uploading into this conversation</small><span className="chat-media-sending__track"><span /></span></span></div>}{messages.length ? messages.map((item, index) => { const mine = item.sender_id === session?.user.id; const selected = selectedMessageIds.includes(item.id); const mediaUrl = item.media_signed_url; return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}${index === 0 ? ' chat-message-row--first' : ''}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startMessageLongPress(item.id)} onPointerUp={clearLongPressTimer} onPointerCancel={clearLongPressTimer} onPointerLeave={clearLongPressTimer} onContextMenu={(event) => handleMessageContextMenu(event, item.id)} onClick={() => {
   if (suppressNextMessageClick.current) {
     suppressNextMessageClick.current = false
     return
   }
   if (selectedMessageIds.length > 0) toggleMessageSelection(item.id)
-}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" />}{mediaUrl && item.media_type === 'document' && <a className="chat-document" href={mediaUrl} target="_blank" rel="noreferrer"><Paperclip size={17} /><span>Open document</span></a>}{item.content && <p className="chat-message-text">{renderChatMessageContent(item.content)}</p>}</>}<span className="chat-bubble__meta"><time>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{mine && !item.is_deleted_for_everyone && <span className={`chat-read-ticks${peerInApp ? ' chat-read-ticks--glow' : peerOnline ? ' chat-read-ticks--delivered' : ''}`} aria-label={peerInApp ? 'Chat open' : peerOnline ? 'Delivered' : 'Sent'}>{peerOnline ? '✓✓' : '✓'}</span>}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{isSendingMedia && <div className="chat-media-sending" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending photo/video…</strong><small>You can continue chatting while it sends</small><span className="chat-media-sending__track"><span /></span></span></div>}{selectedMedia && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><input ref={cameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleMediaChange} /><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo, video, or document" onClick={() => mediaInputRef.current?.click()} disabled={isSendingMedia}><Paperclip size={18} /></Button><Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => cameraInputRef.current?.click()} disabled={isSendingMedia}><Camera size={18} /></Button><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form></div></section>
+}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" onClick={(event) => { event.stopPropagation(); setMediaViewer(item); setMediaViewerFullscreen(false) }} />}{mediaUrl && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" onClick={(event) => { event.stopPropagation(); setMediaViewer(item); setMediaViewerFullscreen(false) }} />}{mediaUrl && item.media_type === 'document' && <button type="button" className="chat-document" onClick={(event) => { event.stopPropagation(); setMediaViewer(item); setMediaViewerFullscreen(false) }}><Paperclip size={17} /><span>Open document</span></button>}{item.content && <p className="chat-message-text">{renderChatMessageContent(item.content)}</p>}</>}<span className="chat-bubble__meta"><time>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{mine && !item.is_deleted_for_everyone && <span className={`chat-read-ticks${peerInApp ? ' chat-read-ticks--glow' : peerOnline ? ' chat-read-ticks--delivered' : ''}`} aria-label={peerInApp ? 'Chat open' : peerOnline ? 'Delivered' : 'Sent'}>{peerOnline ? '✓✓' : '✓'}</span>}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{selectedMedia && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMedia.name}</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} /><input ref={cameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleMediaChange} /><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} /><Button type="button" variant="quiet" iconOnly aria-label="Attach photo, video, or document" onClick={() => mediaInputRef.current?.click()} disabled={isSendingMedia}><Paperclip size={18} /></Button><Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => cameraInputRef.current?.click()} disabled={isSendingMedia}><Camera size={18} /></Button><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form></div>
+    {mediaViewer?.media_signed_url && <div className={`chat-media-viewer-backdrop${mediaViewerFullscreen ? ' chat-media-viewer-backdrop--fullscreen' : ''}`} role="dialog" aria-modal="true" aria-label="Shared media" onClick={() => { setMediaViewer(null); setMediaViewerFullscreen(false) }}><div className="chat-media-viewer" onClick={(event) => event.stopPropagation()}><div className="chat-media-viewer__head"><span><strong>{mediaViewer.media_type === 'video' ? 'Video' : mediaViewer.media_type === 'image' ? 'Photo' : 'File'}</strong><small>{mediaViewerSize}</small></span><div><a href={mediaViewer.media_signed_url} download target="_blank" rel="noreferrer" aria-label="Download media" title="Download media"><Download size={18} /></a><button type="button" onClick={() => setMediaViewerFullscreen((value) => !value)} aria-label={mediaViewerFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{mediaViewerFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button><button type="button" onClick={() => { setMediaViewer(null); setMediaViewerFullscreen(false) }} aria-label="Close media"><X size={20} /></button></div></div><div className="chat-media-viewer__content">{mediaViewer.media_type === 'video' ? <video src={mediaViewer.media_signed_url} controls autoPlay playsInline /> : mediaViewer.media_type === 'image' ? <img src={mediaViewer.media_signed_url} alt="Shared media full view" /> : <a href={mediaViewer.media_signed_url} download target="_blank" rel="noreferrer"><Download size={24} /> Download file</a>}</div></div></div>}
+    {forwardOpen && <div className="chat-forward-backdrop" role="dialog" aria-modal="true" aria-label="Forward messages" onClick={() => !forwardingTo && setForwardOpen(false)}><div className="chat-forward-modal" onClick={(event) => event.stopPropagation()}><div className="chat-forward-modal__head"><strong>Forward to</strong><button type="button" onClick={() => !forwardingTo && setForwardOpen(false)} aria-label="Close forward picker"><X size={19} /></button></div><Input aria-label="Search conversations" placeholder="Search people or username" value={forwardQuery} onChange={(event) => setForwardQuery(event.target.value)} /><div className="chat-forward-modal__list">{forwardLoading ? <Loading label="Loading conversations" /> : forwardConversations.filter((row) => row.id !== conversationId && `${row.member.display_name || ''} ${row.member.username || ''}`.toLowerCase().includes(forwardQuery.trim().toLowerCase())).map((row) => <button type="button" className="chat-forward-contact" key={row.id} onClick={() => void forwardSelectedMessagesTo(row.id)} disabled={Boolean(forwardingTo)}><Avatar name={row.member.display_name || row.member.username} image={row.member.avatar_url ?? undefined} /><span><strong>{row.member.display_name || row.member.username}</strong><small>@{row.member.username}</small></span>{forwardingTo === row.id ? <Loading label="Sending" /> : <Forward size={17} />}</button>)}{!forwardLoading && !forwardConversations.filter((row) => row.id !== conversationId && `${row.member.display_name || ''} ${row.member.username || ''}`.toLowerCase().includes(forwardQuery.trim().toLowerCase())).length && <p className="micro-note">No matching existing conversations. Start a chat first to forward here.</p>}</div>{forwardError && <p className="field__error" role="alert">{forwardError}</p>}</div></div>}
+</section>
 }
 
 
