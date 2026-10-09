@@ -273,7 +273,7 @@ body:has(.community-group-screen) {
   padding-left: 0 !important;
   padding-right: 0 !important;
 }
-.app-shell--chat .chat-screen .chat-message-row--you {
+.app-shell--chat .chat-screen .chat-message-row--you { margin-right: 0 ;
   justify-content: flex-end !important;
 }
 .app-shell--chat .chat-screen .chat-bubble--you {
@@ -284,6 +284,6 @@ body:has(.community-group-screen) {
     justify-content: flex-start !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
-    padding-bottom: 84px !important;
+     padding-bottom: 84px !important;
   }
 }
