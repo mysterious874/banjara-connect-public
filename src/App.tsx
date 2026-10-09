@@ -105,6 +105,31 @@ export default function App() {
     return window.sessionStorage.getItem('connect-startup-intro-seen') !== '1'
   })
 
+  // Warm the main app route bundle during the intro so the first navigation
+  // does not have to wait for the large shared Pages module to download.
+  useEffect(() => {
+    let timeoutId: number | undefined
+    let idleId: number | undefined
+    let cancelled = false
+    const win = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    const preload = () => {
+      if (!cancelled) void import('./pages/Pages').catch(() => {})
+    }
+    if (win.requestIdleCallback) {
+      idleId = win.requestIdleCallback(preload, { timeout: 1200 })
+    } else {
+      timeoutId = window.setTimeout(preload, 800)
+    }
+    return () => {
+      cancelled = true
+      if (idleId !== undefined) win.cancelIdleCallback?.(idleId)
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId)
+    }
+  }, [])
+
   useEffect(() => {
     if (!showStartupIntro) return
     const timer = window.setTimeout(() => {
