@@ -24,6 +24,10 @@ export function AppLayout() {
     return -1
   }
   const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
+    if (tabForPath(pathname) < 0 || pathname.startsWith('/chat/') || pathname.startsWith('/community/groups/') || pathname === '/stories') {
+      touchStart.current = null
+      return
+    }
     if (window.innerWidth >= 800 || event.touches.length !== 1) {
       touchStart.current = null
       return
@@ -102,5 +106,5 @@ export function AppLayout() {
   if (isLoading) return <Loading label="Checking your session" />
   if (initializationError) return <ErrorState title="Could not check your session" description={userFacingError(initializationError, 'Could not check your session. Please try again.')} />
   if (!session) return <Navigate to="/login" replace state={{ from: location }} />
-  return <div className={`app-shell${assistantOpen ? ' app-shell--assistant' : ''}${chatOpen ? ' app-shell--chat' : ''}${communityGroupOpen ? ' app-shell--community-group' : ''}${storiesOpen ? ' app-shell--stories' : ''}`}>{!chatOpen && !communityGroupOpen && <><Header /><DesktopNavigation /></>}<div className="app-shell__body"><main className="route-content" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { const page = touchStart.current?.page; if (page) { page.style.transition = 'transform 180ms ease-out'; page.style.transform = '' }; touchStart.current = null }}><div key={pathname} style={swipeAnimation ? ({ '--swipe-enter-offset': swipeAnimation.offset } as React.CSSProperties) : undefined} className={`route-content__page${swipeAnimation ? ` route-content__page--${swipeAnimation.direction}` : ''}`}><Outlet context={{ notify } satisfies ToastApi} /></div></main></div>{!chatOpen && !communityGroupOpen && <BottomNavigation />}<Toast message={message} onClose={() => setMessage('')} /></div>
+  return <div className={`app-shell${assistantOpen ? ' app-shell--assistant' : ''}${chatOpen ? ' app-shell--chat' : ''}${communityGroupOpen ? ' app-shell--community-group' : ''}${storiesOpen ? ' app-shell--stories' : ''}`}>{!chatOpen && !communityGroupOpen && <><Header /><DesktopNavigation /></>}<div className="app-shell__body"><main className="route-content" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={() => { const page = touchStart.current?.page; if (page) { page.style.transition = 'transform 180ms ease-out'; page.style.transform = ''; page.style.opacity = ''; window.setTimeout(() => { if (page) page.style.transition = '' }, 200) }; touchStart.current = null }}><div key={pathname} style={swipeAnimation ? ({ '--swipe-enter-offset': swipeAnimation.offset } as React.CSSProperties) : undefined} className={`route-content__page${swipeAnimation ? ` route-content__page--${swipeAnimation.direction}` : ''}`}><Outlet context={{ notify } satisfies ToastApi} /></div></main></div>{!chatOpen && !communityGroupOpen && <BottomNavigation />}<Toast message={message} onClose={() => setMessage('')} /></div>
 }
