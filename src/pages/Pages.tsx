@@ -2407,21 +2407,37 @@ export function CommunityGroupPage() {
           if (hiddenError) throw hiddenError
           const hiddenIds = new Set((hiddenRows ?? []).map((row) => row.message_id as string))
           const incoming = ((latest ?? []) as CommunityGroupMessage[]).filter((row) => !hiddenIds.has(row.id)).reverse()
-          for (const item of incoming) {
-            if (item.media_url) {
-              try { item.media_signed_url = await createGroupMediaUrl(item.media_url) } catch { item.media_signed_url = null }
-            }
-          }
           setMessages((current) => {
             const byId = new Map(current.map((item) => [item.id, item]))
             for (const item of incoming) byId.set(item.id, { ...byId.get(item.id), ...item })
-            return [...byId.values()].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            const merged = [...byId.values()].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            if (session?.user.id && group) setCached(`group-chat:${session.user.id}:${groupId}`, { group, messages: merged, profiles, members, hasOlderGroupMessages }, 60_000)
+            return merged
           })
           const ids = [...new Set(incoming.map((row) => row.sender_id))]
-          if (ids.length) {
-            const { data: latestProfiles, error: profileError } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
-            if (profileError) throw profileError
-            if (active) setProfiles((current) => ({ ...current, ...Object.fromEntries((latestProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])) }))
+          const profilePromise = ids.length
+            ? supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
+            : Promise.resolve({ data: [], error: null })
+          void Promise.all(incoming.filter((item) => item.media_url).map(async (item) => {
+            try { item.media_signed_url = await createGroupMediaUrl(item.media_url!) } catch { item.media_signed_url = null }
+          })).then(() => {
+            if (!active) return
+            setMessages((current) => {
+              const byId = new Map(current.map((item) => [item.id, item]))
+              for (const item of incoming) byId.set(item.id, { ...byId.get(item.id), ...item })
+              const merged = [...byId.values()].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+              if (session?.user.id && group) setCached(`group-chat:${session.user.id}:${groupId}`, { group, messages: merged, profiles, members, hasOlderGroupMessages }, 60_000)
+              return merged
+            })
+          })
+          const { data: latestProfiles, error: profileError } = await profilePromise
+          if (profileError) throw profileError
+          if (active && latestProfiles?.length) {
+            setProfiles((current) => {
+              const merged = { ...current, ...Object.fromEntries(latestProfiles.map((profile) => [profile.id, profile as ProfileRecord])) }
+              if (session?.user.id && group) setCached(`group-chat:${session.user.id}:${groupId}`, { group, messages, profiles: merged, members, hasOlderGroupMessages }, 60_000)
+              return merged
+            })
           }
         } catch (caught) {
           if (active) setRealtimeError(userFacingError(caught, 'Live group messages could not be refreshed.'))
