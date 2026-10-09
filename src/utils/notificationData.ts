@@ -16,6 +16,7 @@ export type NotificationRecord = {
   is_read: boolean
   created_at: string
   actor: Pick<ProfileRecord, 'username' | 'display_name' | 'avatar_url'> | null
+  group_join_request_status: 'pending' | 'approved' | 'declined' | null
 }
 
 export async function loadUnreadNotificationCount(): Promise<number> {
@@ -39,8 +40,14 @@ export async function loadNotifications(): Promise<NotificationRecord[]> {
     .limit(100)
   if (error) throw error
   const notifications = data ?? []
+  const requestIds = [...new Set(notifications.map((notification) => notification.group_join_request_id).filter((id): id is string => Boolean(id)))]
+  const requestStatuses = requestIds.length
+    ? await supabase.from('community_group_join_requests').select('id,status').in('id', requestIds)
+    : { data: [], error: null }
+  if (requestStatuses.error) throw requestStatuses.error
+  const statusByRequestId = new Map((requestStatuses.data ?? []).map((request) => [request.id, request.status as 'pending' | 'approved' | 'declined']))
   const actorIds = [...new Set(notifications.map((notification) => notification.actor_id).filter((id): id is string => Boolean(id)))]
-  if (!actorIds.length) return notifications.map((notification) => ({ ...notification, actor: null })) as NotificationRecord[]
+  if (!actorIds.length) return notifications.map((notification) => ({ ...notification, actor: null, group_join_request_status: notification.group_join_request_id ? statusByRequestId.get(notification.group_join_request_id) ?? null : null })) as NotificationRecord[]
   const { data: actors, error: actorError } = await supabase.from('profiles')
     .select('id,username,display_name,avatar_url')
     .in('id', actorIds)
@@ -49,6 +56,7 @@ export async function loadNotifications(): Promise<NotificationRecord[]> {
   return notifications.map((notification) => ({
     ...notification,
     actor: notification.actor_id ? actorsById.get(notification.actor_id) ?? null : null,
+    group_join_request_status: notification.group_join_request_id ? statusByRequestId.get(notification.group_join_request_id) ?? null : null,
   })) as NotificationRecord[]
 }
 

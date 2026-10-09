@@ -86,7 +86,8 @@ function useDialogAccessibility(open: boolean, onClose: () => void) {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const focusableSelector = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
     const getFocusable = () => Array.from(dialogElement.querySelectorAll<HTMLElement>(focusableSelector))
-    ;(getFocusable()[0] ?? dialogElement).focus()
+    const initialFocus = getFocusable()[0] ?? dialogElement
+    initialFocus.focus({ preventScroll: true })
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {

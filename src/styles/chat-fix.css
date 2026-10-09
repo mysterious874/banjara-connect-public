@@ -259,7 +259,7 @@ body:has(.community-group-screen) {
 
 /* Final chat scroll + right-edge correction */
 .app-shell--chat .chat-screen .chat-messages {
-  justify-content: flex-start !important;
+  justify-content: flex-end !important;
   padding-left: 0 !important;
   padding-right: 0 !important;
   padding-bottom: 84px !important;
@@ -281,9 +281,269 @@ body:has(.community-group-screen) {
 }
 @media (max-width: 799px) {
   .app-shell--chat .chat-screen .chat-messages {
-    justify-content: flex-start !important;
+    justify-content: flex-end !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
      padding-bottom: 84px !important;
+  }
+}
+
+
+
+/* Final edge-to-edge sent-message alignment.
+   Keep the message row and its scroll container flush with the chat viewport. */
+.app-shell--chat .chat-screen,
+.app-shell--chat .chat-screen .chat-messages {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row,
+.app-shell--chat .chat-screen .chat-message-row--you {
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row--you {
+  justify-content: flex-end !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row--you .chat-bubble,
+.app-shell--chat .chat-screen .chat-message-row--you .chat-bubble--you {
+  margin-left: 0 !important;
+  margin-right: 8px !important;
+  box-sizing: border-box !important;
+}
+
+/* Make the message region a clearly scrollable touch surface. */
+.app-shell--chat .chat-screen .chat-messages,
+.community-group-screen .chat-messages {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-y: contain !important;
+  overscroll-behavior-x: none !important;
+  scroll-behavior: auto !important;
+  overflow-anchor: auto !important;
+  scrollbar-width: thin !important;
+  box-sizing: border-box !important;
+}
+
+/* Do not let message press/selection handling interfere with vertical swipes. */
+.app-shell--chat .chat-screen .chat-message-row,
+.app-shell--chat .chat-screen .chat-bubble,
+.community-group-screen .chat-message-row,
+.community-group-screen .chat-bubble {
+  touch-action: pan-y !important;
+}
+
+/* Final scroll-container sizing fix: give the message pane a real flex viewport. */
+.app-shell--chat .chat-screen {
+  min-height: 0 !important;
+}
+
+.app-shell--chat .chat-screen .chat-messages,
+.community-group-screen .chat-messages {
+  position: relative !important;
+  z-index: 1 !important;
+  display: flex !important;
+  flex: 1 1 0% !important;
+  flex-basis: 0 !important;
+  width: 100% !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  align-self: stretch !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  pointer-events: auto !important;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row,
+.app-shell--chat .chat-screen .chat-bubble,
+.community-group-screen .chat-message-row,
+.community-group-screen .chat-bubble {
+  flex-shrink: 0 !important;
+  touch-action: pan-y !important;
+}
+
+
+/* Final scroll fix: do not use justify-content:flex-end on an overflowing flex scroller.
+   The first message absorbs free space when the conversation is short; once content
+   overflows, the auto margin collapses and the pane gets a normal scroll range. */
+.app-shell--chat .chat-screen .chat-messages,
+.community-group-screen .chat-messages {
+  justify-content: flex-start !important;
+  align-items: stretch !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row--first,
+.community-group-screen .chat-message-row--first {
+  margin-top: auto !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row,
+.community-group-screen .chat-message-row {
+  touch-action: pan-y !important;
+  flex-shrink: 0 !important;
+}
+
+
+/* Full-width message selection highlight.
+   Selection belongs to the row, not the message bubble. */
+.app-shell--chat .chat-screen .chat-message-row--selected,
+.community-group-screen .chat-message-row--selected {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 48px !important;
+  box-sizing: border-box !important;
+  padding: 6px 10px !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-radius: 0 !important;
+  background: rgba(184, 124, 32, 0.20) !important;
+  box-shadow: inset 0 0 0 1px rgba(184, 124, 32, 0.28) !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row--selected .chat-bubble,
+.community-group-screen .chat-message-row--selected .chat-bubble {
+  background: inherit !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.app-shell--chat .chat-screen .chat-message-row--selected .chat-bubble--you,
+.app-shell--chat .chat-screen .chat-message-row--selected .chat-bubble--them,
+.community-group-screen .chat-message-row--selected .chat-bubble--you,
+.community-group-screen .chat-message-row--selected .chat-bubble--them {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+@media (max-width: 799px) {
+  .app-shell--chat .chat-screen .chat-message-row--selected,
+  .community-group-screen .chat-message-row--selected {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+}
+
+
+/* Group chat: keep sent bubbles at the same small right inset as direct chats. */
+.community-group-screen .chat-message-row--you {
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  justify-content: flex-end !important;
+  box-sizing: border-box !important;
+}
+
+.community-group-screen .chat-message-row--you .chat-bubble,
+.community-group-screen .chat-message-row--you .chat-bubble--you {
+  margin-left: 0 !important;
+  margin-right: 8px !important;
+  box-sizing: border-box !important;
+}
+
+
+/* Compact group-member search modal.
+   Keep it docked just above the Android keyboard instead of letting it sit
+   behind the keyboard or exposing the chat composer underneath. */
+@media (max-width: 799px) {
+  .modal-backdrop:has(.community-group-members-panel) {
+    z-index: 2000 !important;
+    place-items: end center !important;
+    padding: 10px 12px !important;
+    box-sizing: border-box !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .modal {
+    width: min(100%, 430px) !important;
+    max-height: min(52svh, 430px) !important;
+    overflow: auto !important;
+    padding: 12px !important;
+    border-radius: 14px !important;
+    box-sizing: border-box !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .modal__head {
+    gap: 8px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .modal__head h2 {
+    font-size: 17px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .community-group-members-panel {
+    gap: 8px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .community-group-member-row {
+    min-height: 42px !important;
+    padding: 6px 0 !important;
+    gap: 8px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .community-group-member-row .button {
+    min-height: 32px !important;
+    padding: 0 10px !important;
+    font-size: 10px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .field {
+    margin-bottom: 4px !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .field__control {
+    min-height: 38px !important;
+    padding: 8px 10px !important;
+  }
+}
+
+
+/* Add-members panel: keep the search field/header fixed; only user results scroll. */
+@media (max-width: 799px) {
+  .modal-backdrop:has(.community-group-members-panel) .modal {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .modal__head,
+  .modal-backdrop:has(.community-group-members-panel) .community-group-members-title,
+  .modal-backdrop:has(.community-group-members-panel) .community-group-members-panel > .field {
+    flex: 0 0 auto !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .community-group-members-panel {
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .modal-backdrop:has(.community-group-members-panel) .community-group-member-results {
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    flex: 1 1 auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 }

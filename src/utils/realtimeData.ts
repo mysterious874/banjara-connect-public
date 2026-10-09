@@ -29,9 +29,13 @@ export function subscribeToPostgresChanges(
   const key = [subscription.topic, subscription.event, subscription.table, subscription.filter ?? ''].join(':')
   const subscriber = { onChange, onStatus }
   let entry = subscriptions.get(key)
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+  let retryAttempt = 0
+  let stopped = false
 
-  if (!entry) {
-    const subscribers = new Set<Subscriber>([subscriber])
+  const connect = () => {
+    if (stopped) return
+    const subscribers = entry?.subscribers ?? new Set<Subscriber>([subscriber])
     const channel = supabase.channel(subscription.topic)
       .on('postgres_changes', {
         event: subscription.event,
@@ -43,14 +47,38 @@ export function subscribeToPostgresChanges(
       })
       .subscribe((status) => {
         const currentEntry = subscriptions.get(key)
-        if (!currentEntry || currentEntry.channel !== channel) return
+        if (!currentEntry || currentEntry.channel !== channel || stopped) return
         currentEntry.status = status
-        // CLOSED is normally emitted during cleanup; do not surface it as a live outage.
-        if (status === 'CLOSED') return
-        for (const current of currentEntry.subscribers) current.onStatus?.(status)
+        if (status === 'SUBSCRIBED') {
+          retryAttempt = 0
+        } else if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+          if (retryTimer === null && !stopped) {
+            const delay = Math.min(1000 * 2 ** retryAttempt, 15000)
+            retryAttempt += 1
+            retryTimer = setTimeout(() => {
+              retryTimer = null
+              if (stopped) return
+              if (subscriptions.get(key)?.channel === channel) {
+                subscriptions.delete(key)
+                void supabase.removeChannel(channel).catch(() => undefined)
+              }
+              connect()
+            }, delay)
+          }
+        }
+        if (status !== 'CLOSED') {
+          for (const current of currentEntry.subscribers) current.onStatus?.(status)
+        }
       })
     entry = { channel, subscribers }
     subscriptions.set(key, entry)
+  }
+
+  if (!entry) {
+    entry = { channel: supabase.channel(subscription.topic), subscribers: new Set<Subscriber>([subscriber]) }
+    subscriptions.set(key, entry)
+    void supabase.removeChannel(entry.channel).catch(() => undefined)
+    connect()
   } else {
     entry.subscribers.add(subscriber)
     if (entry.status) subscriber.onStatus?.(entry.status)
@@ -60,17 +88,18 @@ export function subscribeToPostgresChanges(
   return () => {
     if (!active) return
     active = false
+    stopped = true
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer)
+      retryTimer = null
+    }
     entry?.subscribers.delete(subscriber)
     if (!entry || entry.subscribers.size) return
 
     queueMicrotask(() => {
       if (entry?.subscribers.size || subscriptions.get(key) !== entry) return
       subscriptions.delete(key)
-      void supabase.removeChannel(entry.channel).then((status) => {
-        if (status !== 'ok') {
-          console.error(`Could not remove realtime channel ${subscription.topic}: ${status}.`)
-        }
-      }).catch((error: unknown) => {
+      void supabase.removeChannel(entry.channel).catch((error: unknown) => {
         console.error(`Could not remove realtime channel ${subscription.topic}.`, error)
       })
     })

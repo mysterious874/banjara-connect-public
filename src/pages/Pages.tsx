@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Phone, Camera, Plus, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Ban, LogOut } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Phone, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Ban, LogOut } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
@@ -20,7 +20,7 @@ import { deleteProfileAvatar, profileAvatarPathFromUrl, uploadProfileAvatar, val
 import { fetchCurrentLocation, searchLocationSuggestions, type LocationSuggestion } from '../utils/locationData'
 import { validateChatMedia } from '../utils/chatMediaData'
 import { createGroupMediaUrl, deleteGroupMedia, uploadGroupMedia, validateGroupMedia } from '../utils/groupMediaData'
-import { createStory, deleteStory, loadActiveStories, validateStoryMedia, type StoryRecord } from '../utils/storyData'
+import { createStory, deleteStory, loadActiveStories, loadStoryViewers, recordStoryView, validateStoryMedia, type StoryRecord, type StoryViewer } from '../utils/storyData'
 import { userFacingError } from '../utils/userFacingError'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
@@ -73,8 +73,60 @@ function useChatKeyboardViewportLock() {
       const composer = document.querySelector('.chat-compose-area') as HTMLElement | null
       if (!chat) return
 
+      const activeElement = document.activeElement
+      const composerElement = document.querySelector('.chat-compose-area') as HTMLElement | null
+      const activeIsChatComposer = Boolean(composerElement && activeElement instanceof HTMLElement && composerElement.contains(activeElement))
+      const activeIsGroupMemberSearch = Boolean(activeElement instanceof HTMLElement && activeElement.closest('.community-group-members-panel'))
       const keyboardOpen = isKeyboardOpen()
-      if (keyboardOpen && viewport) {
+
+      // The chat composer must only react to the chat message input. Group-member
+      // search is a separate modal input and must never pull the composer above
+      // its keyboard or move the chat viewport.
+      if (keyboardOpen && activeIsGroupMemberSearch && viewport) {
+        const keyboardInset = Math.min(
+          Math.max(0, getKeyboardInset()),
+          Math.max(0, window.innerHeight - 250),
+        )
+        const visibleHeight = Math.max(250, viewport.height)
+        document.querySelectorAll('.modal-backdrop:has(.community-group-members-panel)').forEach((element) => {
+          const backdrop = element as HTMLElement
+          backdrop.style.setProperty('height', String(visibleHeight) + 'px', 'important')
+          backdrop.style.setProperty('bottom', String(keyboardInset) + 'px', 'important')
+          backdrop.style.setProperty('top', '0px', 'important')
+          backdrop.style.setProperty('padding', '10px 12px', 'important')
+          backdrop.style.setProperty('align-items', 'flex-end', 'important')
+        })
+        chat.style.removeProperty('position')
+        chat.style.removeProperty('top')
+        chat.style.removeProperty('right')
+        chat.style.removeProperty('bottom')
+        chat.style.removeProperty('left')
+        chat.style.removeProperty('width')
+        chat.style.removeProperty('--chat-viewport-offset')
+        chat.style.removeProperty('transform')
+        chat.style.removeProperty('height')
+        chat.style.removeProperty('max-height')
+        if (composer) {
+          composer.style.removeProperty('bottom')
+          composer.style.removeProperty('position')
+          composer.style.removeProperty('z-index')
+        }
+        keyboardWasOpen = false
+        root.style.setProperty('overflow', 'hidden')
+        body.style.setProperty('overflow', 'hidden')
+        return
+      }
+
+      document.querySelectorAll('.modal-backdrop:has(.community-group-members-panel)').forEach((element) => {
+        const backdrop = element as HTMLElement
+        backdrop.style.removeProperty('height')
+        backdrop.style.removeProperty('bottom')
+        backdrop.style.removeProperty('top')
+        backdrop.style.removeProperty('padding')
+        backdrop.style.removeProperty('align-items')
+      })
+
+      if (keyboardOpen && activeIsChatComposer && viewport) {
         const rawKeyboardInset = getKeyboardInset()
         // Ignore transient visualViewport values during keyboard animation.
         if (viewport.height < 250) return
@@ -84,10 +136,18 @@ function useChatKeyboardViewportLock() {
         )
         const visibleHeight = Math.max(250, viewport.height)
 
-        chat.style.setProperty('top', '0px')
-        chat.style.setProperty('left', '0px')
+        // Keep the whole chat viewport locked to the visual viewport while
+        // Android resizes/pans the page for the keyboard. This prevents the
+        // header and message bubbles from being dragged upward when the composer
+        // receives focus.
+        chat.style.setProperty('position', 'fixed', 'important')
+        chat.style.setProperty('top', '0px', 'important')
+        chat.style.setProperty('right', '0px', 'important')
+        chat.style.setProperty('bottom', 'auto', 'important')
+        chat.style.setProperty('left', '0px', 'important')
+        chat.style.setProperty('width', '100%', 'important')
         chat.style.setProperty('--chat-viewport-offset', '0px')
-        chat.style.setProperty('transform', 'none')
+        chat.style.setProperty('transform', 'none', 'important')
         chat.style.setProperty('height', `${visibleHeight}px`, 'important')
         chat.style.setProperty('max-height', `${visibleHeight}px`, 'important')
 
@@ -111,8 +171,12 @@ function useChatKeyboardViewportLock() {
         })
       } else {
         keyboardWasOpen = false
+        chat.style.removeProperty('position')
         chat.style.removeProperty('top')
+        chat.style.removeProperty('right')
+        chat.style.removeProperty('bottom')
         chat.style.removeProperty('left')
+        chat.style.removeProperty('width')
         chat.style.removeProperty('--chat-viewport-offset')
         chat.style.removeProperty('transform')
         chat.style.removeProperty('height')
@@ -784,7 +848,7 @@ export function CreatePostPage() {
     <PageHeading eyebrow="MAKE SOMETHING TOGETHER" title="Create a post" description={groups.length ? 'Choose one of your joined communities for this post.' : 'You can create a post anytime. Join a community when you want your posts to appear in its feed.'} />
     <form className="create-post-box" onSubmit={submit}>
       <div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><span>{groups.length ? 'Posting to a joined community' : 'No community joined yet'}</span></span></div>
-      {groupsLoading ? <Loading label="Loading your communities" /> : groups.length > 0 ? <label className="field"><span className="field__label">Post to community</span><select className="field__control" value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)} required><option value="">Choose a community</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label> : <p className="micro-note">No group joined. This post will not appear in the Community group feed until you join a group.</p>}
+      {groupsLoading ? <Loading label="Loading your communities" /> : groups.length > 0 ? <label className="field"><select className="field__control" aria-label="Post to community" value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)} required><option value="">Choose a community</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label> : <p className="micro-note">No group joined. This post will not appear in the Community group feed until you join a group.</p>}
       <label className="visually-hidden" htmlFor="post-text">Write your post</label>
       <textarea id="post-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="What would you like to share?" maxLength={500} />
       <div className="create-post-media-picker">
@@ -1343,7 +1407,12 @@ export function StoriesPage() {
   const [storyShareLoading, setStoryShareLoading] = useState(false)
   const [storyShareSending, setStoryShareSending] = useState(false)
   const [storyShareError, setStoryShareError] = useState('')
+  const [storyViewersOpen, setStoryViewersOpen] = useState(false)
+  const [storyViewers, setStoryViewers] = useState<StoryViewer[]>([])
+  const [storyViewersLoading, setStoryViewersLoading] = useState(false)
   const storyTimer = useRef<number | null>(null)
+  const storySwipeStart = useRef<{ x: number; y: number } | null>(null)
+  const storySwipeMoved = useRef(false)
 
   const grouped = Array.from(new Map(stories.map((story) => [story.user_id, story])).values())
   const activeIndex = selectedStory ? grouped.findIndex((story) => story.user_id === selectedStory.user_id) : -1
@@ -1388,6 +1457,50 @@ export function StoriesPage() {
       if (storyTimer.current) window.clearTimeout(storyTimer.current)
     }
   }, [selectedStory?.id, activeIndex, grouped.length, navigate])
+
+  useEffect(() => {
+    if (!selectedStory || !session?.user.id || selectedStory.user_id === session.user.id) return
+    void recordStoryView(selectedStory.id, session.user.id).catch(() => undefined)
+  }, [selectedStory?.id, selectedStory?.user_id, session?.user.id])
+
+  function handleStoryPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType === 'mouse') return
+    storySwipeStart.current = { x: event.clientX, y: event.clientY }
+    storySwipeMoved.current = false
+  }
+
+  function handleStoryPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const start = storySwipeStart.current
+    if (!start || event.pointerType === 'mouse') return
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) storySwipeMoved.current = true
+  }
+
+  function handleStoryPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const start = storySwipeStart.current
+    storySwipeStart.current = null
+    if (!start || event.pointerType === 'mouse') return
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    if (dy > 80 && Math.abs(dy) > Math.abs(dx) * 1.15) {
+      if (storyTimer.current) window.clearTimeout(storyTimer.current)
+      navigate('/home')
+    }
+  }
+
+  async function openStoryViewers() {
+    if (!selectedStory || selectedStory.user_id !== session?.user.id) return
+    setStoryViewersOpen(true)
+    setStoryViewersLoading(true)
+    try {
+      setStoryViewers(await loadStoryViewers(selectedStory.id, session.user.id))
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not load story viewers.'))
+    } finally {
+      setStoryViewersLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!selectedStory) return
@@ -1561,10 +1674,12 @@ export function StoriesPage() {
           })}</div></div>}
       
     </>}
+      {storyViewersOpen && selectedStory?.user_id === session?.user.id && <div className="story-viewers-modal-backdrop" onClick={() => setStoryViewersOpen(false)}><div className="story-viewers-modal" role="dialog" aria-modal="true" aria-label="Story viewers" onClick={(event) => event.stopPropagation()}><div className="story-viewers-modal__head"><div><strong>Story viewers</strong><span>{storyViewers.length} {storyViewers.length === 1 ? 'view' : 'views'}</span></div><button type="button" onClick={() => setStoryViewersOpen(false)} aria-label="Close"><X size={19} /></button></div><div className="story-viewers-modal__list">{storyViewersLoading ? <Loading label="Loading viewers" /> : storyViewers.length === 0 ? <EmptyState title="No views yet" description="People who view your story will appear here." /> : storyViewers.map((viewer) => { const name = viewer.display_name || viewer.username || 'Community member'; return <div className="story-viewer-row" key={viewer.id}><Avatar name={name} image={viewer.avatar_url ?? undefined} /><div><strong>{name}</strong>{viewer.username && <span>@{viewer.username}</span>}</div></div> })}</div></div></div>}
     {selectedStory && (grouped.length > 0 || Boolean(initialStory)) && <div className="story-fullscreen" role="dialog" aria-modal="true" aria-label="Story viewer">
       <div className="story-fullscreen__backdrop" onClick={() => navigate('/home')} />
-      <div className="story-fullscreen__card">
+      <div className="story-fullscreen__card" onPointerDown={handleStoryPointerDown} onPointerMove={handleStoryPointerMove} onPointerUp={handleStoryPointerUp} onPointerCancel={() => { storySwipeStart.current = null }}>
         <div className="story-fullscreen__progress">{grouped.map((story, index) => <span key={story.user_id} className={`story-fullscreen__progress-segment${index < activeIndex ? ' is-complete' : index === activeIndex ? ' is-active' : ''}`} />)}</div>
+        {selectedStory.user_id === session?.user.id ? <button type="button" className="story-fullscreen__view-button" onClick={(event) => { event.stopPropagation(); void openStoryViewers() }} aria-label="View story viewers"><Eye size={16} /> <span>View</span></button> : null}
         <div className="story-fullscreen__head">
           <div className="post-card__author"><Avatar name={selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'} image={selectedStory.author?.avatar_url ?? undefined} /><span><strong>{selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'}</strong><span>{new Date(selectedStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span></div>
           <button type="button" className="story-fullscreen__close" onClick={() => navigate('/home')} aria-label="Close story"><X size={22} /></button>
@@ -1805,6 +1920,26 @@ export function ChatConversationPage() {
   const [chatTheme, setChatTheme] = useState('classic')
   const peerOnline = Boolean(person?.id && onlineUserIds.has(person.id))
   const peerInApp = Boolean(person?.id && activeUserIds.has(person.id))
+  const initialBottomScrollDone = useRef(false)
+
+  useEffect(() => {
+    initialBottomScrollDone.current = false
+  }, [conversationId])
+
+  useEffect(() => {
+    if (isLoading || !messages.length || initialBottomScrollDone.current) return
+    initialBottomScrollDone.current = true
+    const scrollToLatest = () => {
+      const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null
+      if (!pane) return
+      pane.scrollTop = Math.max(0, pane.scrollHeight - pane.clientHeight)
+    }
+    const frame = window.requestAnimationFrame(() => {
+      scrollToLatest()
+      window.requestAnimationFrame(scrollToLatest)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [conversationId, isLoading, messages.length])
 
   const chatThemes = [
     { id: 'forest', label: 'Gor Forest', preview: '#2D6652' },
@@ -2043,7 +2178,7 @@ export function ChatConversationPage() {
     try { window.localStorage.setItem(`banjara-chat-theme-${conversationId}`, themeId) } catch { /* local storage may be unavailable */ }
   }
   return <section className={`chat-screen chat-screen--theme-${chatTheme}`}><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Link to={`/profile/${encodeURIComponent(person.username)}`} className="chat-screen__profile"><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>{peerOnline ? (peerInApp ? "online" : "online · not in app") : "offline"}</small></span></Link><div className="chat-screen__actions"><button type="button" className="chat-screen__action" aria-label="Voice call" title="Voice call"><Phone size={18} /></button><button type="button" className="chat-screen__action" aria-label="Video call" title="Video call"><Video size={19} /></button><button type="button" className="chat-screen__action" aria-label="Chat options" title="Chat options" aria-expanded={chatMenuOpen} onClick={() => { setChatMenuOpen((current) => !current); setChatThemeOpen(false) }}><MoreVertical size={20} /></button>{chatMenuOpen && <div className="chat-options-menu"><button type="button" className="chat-options-menu__item" onClick={() => { setChatThemeOpen(true); setChatMenuOpen(false) }}><Palette size={17} /><span>Chat Background</span><ChevronRight size={15} /></button></div>}</div></header>{chatThemeOpen && <Modal open={chatThemeOpen} title="Chat background" onClose={() => setChatThemeOpen(false)}><div className="chat-theme-picker">{chatThemes.map((theme) => <button type="button" key={theme.id} className={`chat-theme-option${chatTheme === theme.id ? ' chat-theme-option--active' : ''}`} onClick={() => selectChatTheme(theme.id)}><span className="chat-theme-option__swatch" style={{ background: theme.preview }} /><span><strong>{theme.label}</strong><small>{theme.id === 'classic' ? 'Banjara Connect default' : 'Apply only to this chat'}</small></span>{chatTheme === theme.id && <Check size={17} />}</button>)}</div></Modal>}
-    <div className="chat-messages">{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{selectedMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelMessageSelection} aria-label="Close message selection">×</button><strong>{selectedMessageIds.length} selected</strong><button type="button" onClick={() => void copySelectedMessages()}>Copy</button><button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('me')}>Delete for me</button>{messages.some((item) => selectedMessageIds.includes(item.id) && item.sender_id === session?.user.id && !item.is_deleted_for_everyone && (item.media_type === 'image' || item.media_type === 'video' || item.content)) && <button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('everyone')}>Delete for everyone</button>}</div>}{messages.length ? messages.map((item) => { const mine = item.sender_id === session?.user.id; const selected = selectedMessageIds.includes(item.id); const mediaUrl = item.media_signed_url; return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startMessageLongPress(item.id)} onPointerUp={clearLongPressTimer} onPointerCancel={clearLongPressTimer} onPointerLeave={clearLongPressTimer} onContextMenu={(event) => handleMessageContextMenu(event, item.id)} onClick={() => {
+    <div className="chat-messages">{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{selectedMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelMessageSelection} aria-label="Close message selection">×</button><strong>{selectedMessageIds.length} selected</strong><button type="button" onClick={() => void copySelectedMessages()}>Copy</button><button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('me')}>Delete for me</button>{messages.some((item) => selectedMessageIds.includes(item.id) && item.sender_id === session?.user.id && !item.is_deleted_for_everyone && (item.media_type === 'image' || item.media_type === 'video' || item.content)) && <button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('everyone')}>Delete for everyone</button>}</div>}{messages.length ? messages.map((item, index) => { const mine = item.sender_id === session?.user.id; const selected = selectedMessageIds.includes(item.id); const mediaUrl = item.media_signed_url; return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}${index === 0 ? ' chat-message-row--first' : ''}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startMessageLongPress(item.id)} onPointerUp={clearLongPressTimer} onPointerCancel={clearLongPressTimer} onPointerLeave={clearLongPressTimer} onContextMenu={(event) => handleMessageContextMenu(event, item.id)} onClick={() => {
   if (suppressNextMessageClick.current) {
     suppressNextMessageClick.current = false
     return
@@ -2115,6 +2250,26 @@ export function CommunityGroupPage() {
   const [reportDetails, setReportDetails] = useState('')
   const [reportSaving, setReportSaving] = useState(false)
   const [reportError, setReportError] = useState('')
+  const initialGroupBottomScrollDone = useRef(false)
+
+  useEffect(() => {
+    initialGroupBottomScrollDone.current = false
+  }, [groupId])
+
+  useEffect(() => {
+    if (isLoading || !messages.length || initialGroupBottomScrollDone.current) return
+    initialGroupBottomScrollDone.current = true
+    const scrollToLatest = () => {
+      const pane = document.querySelector('.community-group-screen .chat-messages') as HTMLElement | null
+      if (!pane) return
+      pane.scrollTop = Math.max(0, pane.scrollHeight - pane.clientHeight)
+    }
+    const frame = window.requestAnimationFrame(() => {
+      scrollToLatest()
+      window.requestAnimationFrame(scrollToLatest)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [groupId, isLoading, messages.length])
 
   useEffect(() => {
     if (!groupMenuOpen) return
@@ -2793,12 +2948,12 @@ export function CommunityGroupPage() {
     <div className="chat-messages">
       {hasOlderGroupMessages && <div className="chat-history-loader"><Button variant="outline" onClick={() => void loadOlderGroupMessages()} disabled={isLoadingOlderGroupMessages}>{isLoadingOlderGroupMessages ? 'Loading older messages…' : 'Load older messages'}</Button></div>}
       {selectedGroupMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelGroupMessageSelection} aria-label="Close message selection">×</button><strong>{selectedGroupMessageIds.length} selected</strong><button type="button" disabled={pendingGroupDelete === 'bulk'} onClick={() => void deleteSelectedGroupMessages('me')}>Delete for me</button><button type="button" disabled={pendingGroupDelete === 'bulk'} onClick={() => void deleteSelectedGroupMessages('everyone')}>Delete for everyone</button></div>}
-      {messages.length ? messages.map((item) => {
+      {messages.length ? messages.map((item, index) => {
         const mine = item.sender_id === session?.user.id
         const selected = selectedGroupMessageIds.includes(item.id)
         const sender = profiles[item.sender_id]
         const senderName = sender?.display_name || sender?.username || 'Community member'
-        return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}`} key={item.id}>
+        return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}${index === 0 ? ' chat-message-row--first' : ''}`} key={item.id}>
           <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startGroupMessageLongPress(item.id)} onPointerUp={clearGroupLongPressTimer} onPointerCancel={clearGroupLongPressTimer} onPointerLeave={clearGroupLongPressTimer} onContextMenu={(event) => handleGroupMessageContextMenu(event, item.id)} onClick={() => { if (suppressNextGroupMessageClick.current) { suppressNextGroupMessageClick.current = false; return } if (selectedGroupMessageIds.length > 0) toggleGroupMessageSelection(item.id) }}>
             {!mine && <strong className="community-group-message__sender">{senderName}</strong>}
             {item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{item.media_signed_url && item.media_type === 'image' && <img className="chat-message-media" src={item.media_signed_url} alt="Shared photo" loading="lazy" />}{item.media_signed_url && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={item.media_signed_url} controls playsInline preload="metadata" />}{item.content && <p className="chat-message-text">{item.content}</p>}</>}
@@ -2841,7 +2996,7 @@ export function CommunityGroupPage() {
         <Input aria-label="Search username to add" placeholder="Search username to add" value={memberQuery} onChange={(event) => void searchGroupMembers(event.target.value)} />
         {memberError && <p className="field__error" role="alert">{memberError}</p>}
         {membersLoading && <Loading label="Loading members" />}
-        {memberResults.length > 0 && <div className="community-group-member-results">{memberResults.map((profile) => <div className="community-group-member-row" key={profile.id}><Avatar name={profile.display_name || profile.username} image={profile.avatar_url ?? undefined} /><span><strong>{profile.display_name || profile.username}</strong><small>@{profile.username}</small></span><Button type="button" onClick={() => void requestGroupMember(profile.id)} disabled={memberAction === profile.id}>{memberAction === profile.id ? '…' : 'Request'}</Button></div>)}</div>}
+        {memberResults.length > 0 && <div className="community-group-member-results">{memberResults.map((profile) => <div className="community-group-member-row" key={profile.id}><Avatar name={profile.display_name || profile.username} image={profile.avatar_url ?? undefined} /><span><strong>{profile.display_name || profile.username}</strong><small>@{profile.username}</small></span><Button type="button" onClick={() => void requestGroupMember(profile.id)} disabled={memberAction === profile.id}>{memberAction === profile.id ? '…' : 'Add'}</Button></div>)}</div>}
         <div className="community-group-member-list">{members.map((member) => {
           const currentUser = members.find((item) => item.user_id === session?.user.id)
           const isCurrentAdmin = currentUser?.role === 'admin'
@@ -2942,7 +3097,7 @@ export function NotificationsPage() {
       const { error: responseError } = await supabase.rpc('respond_community_group_join_request', { p_request_id: notification.group_join_request_id, p_approve: approve })
       if (responseError) throw responseError
       await markNotificationRead(notification.id)
-      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true } : item))
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true, group_join_request_status: approve ? 'approved' : 'declined' } : item))
     } catch (caught) {
       setError(userFacingError(caught, approve ? 'Could not approve this group request.' : 'Could not decline this group request.'))
     } finally { setPendingId('') }
@@ -2975,7 +3130,7 @@ export function NotificationsPage() {
     return 'sent you a notification'
   }
 
-  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => { const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'; const Icon = notification.type.includes('like') ? Heart : notification.type.startsWith('group_') ? Users : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles; return <article className={`notification-row${notification.type === 'group_join_request' ? ' notification-row--request' : ''}`} key={notification.id}><Link className="notification-row__actor" to={notification.actor?.username ? `/profile/${encodeURIComponent(notification.actor.username)}` : '/connect'}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__body"><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></span></Link><span className="notification-row__icon"><Icon size={15} /></span>{notification.type === 'group_join_request' ? <span className="notification-row__request-actions"><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, true)}>Approve</button><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, false)}>Decline</button></span> : !notification.is_read && <button type="button" className="icon-button" aria-label={`Mark ${actorName}'s notification read`} disabled={pendingId === notification.id} onClick={() => markRead(notification)}><Check size={17} /></button>}</article>})}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}</section>
+  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => { const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'; const Icon = notification.type.includes('like') ? Heart : notification.type.startsWith('group_') ? Users : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles; return <article className={`notification-row${notification.type === 'group_join_request' ? ' notification-row--request' : ''}`} key={notification.id}><Link className="notification-row__actor" to={notification.actor?.username ? `/profile/${encodeURIComponent(notification.actor.username)}` : '/connect'}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__body"><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></span></Link><span className="notification-row__icon"><Icon size={15} /></span>{notification.type === 'group_join_request' ? <span className="notification-row__request-actions">{notification.group_join_request_status === 'approved' || notification.group_join_request_status === 'declined' ? <span className={`notification-row__request-status notification-row__request-status--${notification.group_join_request_status}`}>{notification.group_join_request_status === 'approved' ? 'Approved' : 'Declined'}</span> : <><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, true)}>Approve</button><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, false)}>Decline</button></>}</span> : !notification.is_read && <button type="button" className="icon-button" aria-label={`Mark ${actorName}'s notification read`} disabled={pendingId === notification.id} onClick={() => markRead(notification)}><Check size={17} /></button>}</article>})}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}</section>
 }
 
 export function AssistantPage() {
