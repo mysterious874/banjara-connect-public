@@ -97,9 +97,10 @@ export function subscribeToPostgresChanges(
     if (!entry || entry.subscribers.size) return
 
     queueMicrotask(() => {
-      if (entry?.subscribers.size || subscriptions.get(key) !== entry) return
+      const currentEntry = entry
+      if (!currentEntry || currentEntry.subscribers.size || subscriptions.get(key) !== currentEntry) return
       subscriptions.delete(key)
-      void supabase.removeChannel(entry.channel).catch((error: unknown) => {
+      void supabase.removeChannel(currentEntry.channel).catch((error: unknown) => {
         console.error(`Could not remove realtime channel ${subscription.topic}.`, error)
       })
     })
