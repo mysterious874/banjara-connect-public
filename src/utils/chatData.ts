@@ -60,22 +60,27 @@ async function createOrFindConversation(targetUserId: string) {
   return data as string
 }
 async function loadConversationSummaryMessages(conversationId: string, userId: string) {
-  const { data: latestRows, error: latestError } = await supabase.from('messages').select(messageColumns)
-    .eq('conversation_id', conversationId)
-    .eq('is_deleted_for_everyone', false)
-    .order('created_at', { ascending: false })
-    .order('id', { ascending: false })
-    .limit(1)
+  // These reads are independent; run them together to avoid adding a network
+  // round-trip for every conversation on the chat list.
+  const [latestResult, incomingResult] = await Promise.all([
+    supabase.from('messages').select(messageColumns)
+      .eq('conversation_id', conversationId)
+      .eq('is_deleted_for_everyone', false)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(1),
+    // Keep the list fast: only inspect the most recent incoming messages when
+    // calculating the badge instead of walking the entire conversation history.
+    supabase.from('messages').select('id')
+      .eq('conversation_id', conversationId)
+      .eq('is_deleted_for_everyone', false)
+      .neq('sender_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(200),
+  ])
+  const { data: latestRows, error: latestError } = latestResult
+  const { data: incoming, error: incomingError } = incomingResult
   if (latestError) throw latestError
-
-  // Keep the list fast: only inspect the most recent incoming messages when
-  // calculating the badge instead of walking the entire conversation history.
-  const { data: incoming, error: incomingError } = await supabase.from('messages').select('id')
-    .eq('conversation_id', conversationId)
-    .eq('is_deleted_for_everyone', false)
-    .neq('sender_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(200)
   if (incomingError) throw incomingError
   if (!incoming?.length) return { lastMessage: (latestRows?.[0] as ChatMessage | undefined) ?? null, unreadCount: 0 }
 
@@ -162,13 +167,19 @@ export async function loadConversationMessages(
   if (before) {
     query = query.or(`created_at.lt.${before.created_at},and(created_at.eq.${before.created_at},id.lt.${before.id})`)
   }
-  const [{ data: membership, error: membershipError }, { data, error }] = await Promise.all([
+  const [
+    { data: membership, error: membershipError },
+    { data, error },
+    { data: peerMember, error: peerMemberError },
+  ] = await Promise.all([
     supabase.from('conversation_members').select('conversation_id').eq('conversation_id', conversationId).eq('user_id', userId).maybeSingle(),
     query,
+    supabase.from('conversation_members').select('user_id').eq('conversation_id', conversationId).neq('user_id', userId).maybeSingle(),
   ])
   if (membershipError) throw membershipError
   if (!membership) throw new Error('You are not a member of this conversation.')
   if (error) throw error
+  if (peerMemberError) throw peerMemberError
   let page = (data ?? []) as ChatMessage[]
   if (page.length) {
     const ids = page.map((message) => message.id)
@@ -178,7 +189,6 @@ export async function loadConversationMessages(
     page = page.filter((message) => !hiddenIds.has(message.id))
   }
   const messages = page.reverse()
-  const peerMember = (await supabase.from('conversation_members').select('user_id').eq('conversation_id', conversationId).neq('user_id', userId).maybeSingle()).data
   if (peerMember?.user_id && messages.length) {
     const outgoingIds = messages.filter((message) => message.sender_id === userId).map((message) => message.id)
     if (outgoingIds.length) {
