@@ -60,7 +60,10 @@ export function StoriesRail() {
     loadActiveStories().then((next) => { if (active) setStories(next) }).catch(() => { if (active) setStories([]) })
     return () => { active = false }
   }, [session?.user.id])
-  const grouped = Array.from(new Map(stories.map((story) => [story.user_id, story])).values())
+  const grouped = Array.from(stories.reduce((map, story) => {
+    if (!map.has(story.user_id)) map.set(story.user_id, story)
+    return map
+  }, new Map<string, StoryRecord>()).values())
   const ownStory = grouped.find((story) => story.user_id === session?.user.id)
   const otherStories = grouped.filter((story) => story.user_id !== session?.user.id).slice(0, 8)
   return <section className="stories-rail" aria-labelledby="stories-heading"><div className="section-heading"><div><span className="eyebrow">A LITTLE WINDOW INTO TODAY</span><h2 id="stories-heading">Stories</h2></div><Link to="/stories" className="text-link">See all</Link></div><div className="stories-rail__items"><StoryCard story={ownStory} own />{otherStories.map((story) => <StoryCard key={story.user_id} story={story} />)}</div></section>
