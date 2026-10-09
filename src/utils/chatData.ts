@@ -138,11 +138,14 @@ async function loadConversationsUncached(userId: string): Promise<ConversationSu
   const otherUserIds = [...new Set(otherUsers.values())]
   if (!otherUserIds.length) return []
 
-  const summaryMessages = await Promise.all(
-    visibleConversationIds.map((id) => loadConversationSummaryMessages(id, userId)),
-  )
-  const { data: profiles, error: profilesError } = await supabase.from('profiles')
-    .select('id,username,display_name,avatar_url').in('id', otherUserIds)
+  // Conversation summaries and profile cards are independent; avoid making
+  // the user wait for every summary before starting the profile query.
+  const [summaryMessages, profilesResult] = await Promise.all([
+    Promise.all(visibleConversationIds.map((id) => loadConversationSummaryMessages(id, userId))),
+    supabase.from('profiles')
+      .select('id,username,display_name,avatar_url').in('id', otherUserIds),
+  ])
+  const { data: profiles, error: profilesError } = profilesResult
   if (profilesError) throw profilesError
 
   const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
@@ -189,19 +192,28 @@ export async function loadConversationMessages(
     page = page.filter((message) => !hiddenIds.has(message.id))
   }
   const messages = page.reverse()
+  // Read receipts and media URL signing should not delay the text conversation
+  // from opening. Both are best-effort follow-up work and realtime refreshes will
+  // reconcile read status after the chat is already visible.
   if (peerMember?.user_id && messages.length) {
     const outgoingIds = messages.filter((message) => message.sender_id === userId).map((message) => message.id)
     if (outgoingIds.length) {
-      const { data: peerReads, error: peerReadError } = await supabase.from('message_reads').select('message_id').eq('user_id', peerMember.user_id).in('message_id', outgoingIds)
-      if (peerReadError) throw peerReadError
-      const readSet = new Set((peerReads ?? []).map((row) => row.message_id as string))
-      for (const message of messages) message.readByPeer = readSet.has(message.id)
+      void supabase.from('message_reads').select('message_id')
+        .eq('user_id', peerMember.user_id).in('message_id', outgoingIds)
+        .then(({ data: peerReads, error: peerReadError }) => {
+          if (peerReadError) {
+            if (import.meta.env.DEV) console.error('Could not load peer read receipts.', peerReadError)
+            return
+          }
+          const readSet = new Set((peerReads ?? []).map((row) => row.message_id as string))
+          for (const message of messages) message.readByPeer = readSet.has(message.id)
+        })
     }
   }
-  await Promise.all(messages.map(async (chatMessage) => {
-    if (!chatMessage.media_url) return
+  const mediaMessages = messages.filter((message) => message.media_url)
+  void Promise.all(mediaMessages.map(async (chatMessage) => {
     try {
-      chatMessage.media_signed_url = await createChatMediaUrl(chatMessage.media_url)
+      chatMessage.media_signed_url = await createChatMediaUrl(chatMessage.media_url!)
     } catch (mediaError) {
       if (import.meta.env.DEV) console.error('Could not create chat media URL.', mediaError)
       chatMessage.media_signed_url = null
@@ -209,15 +221,21 @@ export async function loadConversationMessages(
   }))
   const unreadIds = messages.filter((message) => message.sender_id !== userId).map((message) => message.id)
   if (unreadIds.length) {
-    const { data: existingReads, error: readError } = await supabase.from('message_reads').select('message_id')
-      .eq('user_id', userId).in('message_id', unreadIds)
-    if (readError) throw readError
-    const readSet = new Set((existingReads ?? []).map((read) => read.message_id))
-    const newReads = unreadIds.filter((id) => !readSet.has(id)).map((message_id) => ({ message_id, user_id: userId }))
-    if (newReads.length) {
-      const { error: insertError } = await supabase.from('message_reads').insert(newReads.map((read) => ({ ...read, read_at: new Date().toISOString() })))
-      if (insertError && insertError.code !== '23505') throw insertError
-    }
+    void (async () => {
+      try {
+        const { data: existingReads, error: readError } = await supabase.from('message_reads').select('message_id')
+          .eq('user_id', userId).in('message_id', unreadIds)
+        if (readError) throw readError
+        const readSet = new Set((existingReads ?? []).map((read) => read.message_id))
+        const newReads = unreadIds.filter((id) => !readSet.has(id)).map((message_id) => ({ message_id, user_id: userId }))
+        if (newReads.length) {
+          const { error: insertError } = await supabase.from('message_reads').insert(newReads.map((read) => ({ ...read, read_at: new Date().toISOString() })))
+          if (insertError && insertError.code !== '23505') throw insertError
+        }
+      } catch (readError) {
+        if (import.meta.env.DEV) console.error('Could not mark chat messages as read.', readError)
+      }
+    })()
   }
   return { messages, hasMore: page.length === conversationMessagePageSize }
 }
