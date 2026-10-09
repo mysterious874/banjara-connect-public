@@ -1729,7 +1729,7 @@ export function StoriesPage() {
     {!isLoading && !selectedStory && <>
           <PageHeading
             eyebrow={isManagingOwnStories ? 'YOUR MOMENTS' : isDirectCreate ? 'CREATE A STORY' : 'LITTLE WINDOWS INTO TODAY'}
-            title={isManagingOwnStories ? 'Your stories' : isDirectCreate ? 'Create story' : 'Stories'}
+            title={isManagingOwnStories ? 'Stories' : isDirectCreate ? 'Create story' : 'Stories'}
             description={isManagingOwnStories ? 'View the stories you have shared and add another whenever you like.' : 'Share a photo, video, or message. Stories disappear after 24 hours.'}
           />
           {(!isManagingOwnStories || showCreateStory) && <form className="story-create-box" onSubmit={publishStory}>
@@ -1760,7 +1760,7 @@ export function StoriesPage() {
                   <button type="button" className="story-manage-row__delete" onClick={() => void removeStory(story)} aria-label="Delete story"><Trash2 size={17} /></button>
                 </div>
               })}</div> : <EmptyState title="No active stories" description="Add a photo, video, or message to share your first story." />}
-              {!showCreateStory && <Button block onClick={() => setShowCreateStory(true)}><Plus size={17} /> Add to story</Button>}
+              {!showCreateStory && <Button block onClick={() => setShowCreateStory(true)}><Plus size={17} /> Add Story</Button>}
               {showCreateStory && <Button variant="quiet" onClick={() => { setShowCreateStory(false); setError(''); setSuccess('') }}>Cancel adding story</Button>}
             </div>
           ) : isDirectCreate ? null : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="story-page-thumbs"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div><div className="stories-rail__items">{grouped.map((story) => {
