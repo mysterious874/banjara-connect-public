@@ -1445,6 +1445,9 @@ export function StoriesPage() {
   const [storyViewersOpen, setStoryViewersOpen] = useState(false)
   const [storyViewers, setStoryViewers] = useState<StoryViewer[]>([])
   const [storyViewersLoading, setStoryViewersLoading] = useState(false)
+  const [storyMenuOpen, setStoryMenuOpen] = useState(false)
+  const [storyLikedIds, setStoryLikedIds] = useState<string[]>([])
+  const [storyActionBusy, setStoryActionBusy] = useState(false)
   const storyTimer = useRef<number | null>(null)
   const storySwipeStart = useRef<{ x: number; y: number } | null>(null)
   const storySwipeMoved = useRef(false)
@@ -1543,6 +1546,65 @@ export function StoriesPage() {
     const dy = event.clientY - start.y
     if (dy > 80 && Math.abs(dy) > Math.abs(dx) * 1.15) {
       closeStoryViewer()
+    }
+  }
+
+  async function likeSelectedStory() {
+    if (!selectedStory || !session?.user.id || selectedStory.user_id === session.user.id || storyLikedIds.includes(selectedStory.id)) return
+    setStoryActionBusy(true)
+    setError('')
+    try {
+      const { error: notificationError } = await supabase.from('notifications').insert({
+        user_id: selectedStory.user_id,
+        actor_id: session.user.id,
+        type: 'story_like',
+        is_read: false,
+      })
+      if (notificationError) throw notificationError
+      setStoryLikedIds((current) => [...current, selectedStory.id])
+      setSuccess('Story liked')
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not like this story.'))
+    } finally {
+      setStoryActionBusy(false)
+    }
+  }
+
+  function muteSelectedStory() {
+    if (!selectedStory || !session?.user.id || selectedStory.user_id === session.user.id) return
+    try {
+      const key = 'banjara_connect_muted_stories_v1'
+      const muted = JSON.parse(localStorage.getItem(key) || '[]') as string[]
+      if (!muted.includes(selectedStory.user_id)) localStorage.setItem(key, JSON.stringify([...muted, selectedStory.user_id]))
+      setStoryMenuOpen(false)
+      closeStoryViewer()
+      setSuccess('Story muted')
+      window.dispatchEvent(new CustomEvent('banjara:muted-stories-changed'))
+    } catch {
+      setError('Could not mute this story on this device.')
+    }
+  }
+
+  async function downloadSelectedStory() {
+    if (!selectedStory?.media_url) {
+      setError('This story has no downloadable photo or video.')
+      return
+    }
+    try {
+      const response = await fetch(selectedStory.media_url)
+      if (!response.ok) throw new Error('Download failed')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `banjara-story-${selectedStory.id}.${selectedStory.media_type === 'video' ? 'mp4' : 'jpg'}`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+      setStoryMenuOpen(false)
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not download this story.'))
     }
   }
 
@@ -1776,7 +1838,17 @@ export function StoriesPage() {
         {selectedStory.user_id === session?.user.id ? <button type="button" className="story-fullscreen__view-button" onClick={(event) => { event.stopPropagation(); void openStoryViewers() }} aria-label="View story viewers"><Eye size={16} /> <span>View</span></button> : null}
         <div className="story-fullscreen__head">
           <div className="post-card__author"><Avatar name={selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'} image={selectedStory.author?.avatar_url ?? undefined} /><span><strong>{selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'}</strong><span>{new Date(selectedStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span></div>
-          <button type="button" className="story-fullscreen__close" onClick={closeStoryViewer} aria-label="Close story"><X size={22} /></button>
+          <div className="story-fullscreen__head-actions">
+            {selectedStory.user_id !== session?.user.id && <div className="story-fullscreen__menu-wrap">
+              <button type="button" className="story-fullscreen__close" aria-label="Story options" onClick={() => setStoryMenuOpen((open) => !open)}><MoreVertical size={22} /></button>
+              {storyMenuOpen && <div className="story-fullscreen__menu" role="menu">
+                <button type="button" role="menuitem" onClick={() => { setStoryMenuOpen(false); setStoryShareOpen(true); setStoryShareError('') }}><Forward size={16} /> Share story</button>
+                <button type="button" role="menuitem" onClick={muteSelectedStory}><VolumeX size={16} /> Mute story</button>
+                <button type="button" role="menuitem" onClick={() => void downloadSelectedStory()}><Download size={16} /> Download</button>
+              </div>}
+            </div>}
+            <button type="button" className="story-fullscreen__close" onClick={closeStoryViewer} aria-label="Close story"><X size={22} /></button>
+          </div>
         </div>
         <button type="button" className="story-fullscreen__prev" onClick={() => activeIndex > 0 && setSelectedStory(storySequence[activeIndex - 1])} disabled={activeIndex <= 0} aria-label="Previous story"><ArrowLeft size={25} /></button>
         <div className="story-fullscreen__touch-left" role="button" tabIndex={0} aria-label="Previous story" onClick={() => activeIndex > 0 && setSelectedStory(storySequence[activeIndex - 1])} />
@@ -1794,8 +1866,8 @@ export function StoriesPage() {
               <Input aria-label="Reply to story" placeholder="Send message…" value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} />
               <Button type="submit" iconOnly aria-label="Send message" disabled={!replyMessage.trim() || isReplying}>{isReplying ? '…' : <Send size={17} />}</Button>
             </form>
-            <Button type="button" variant="quiet" iconOnly aria-label="Share story" title="Share story" onClick={() => { setStoryShareOpen(true); setStoryShareError('') }}>
-              <Send size={17} />
+            <Button type="button" variant="quiet" iconOnly aria-label={storyLikedIds.includes(selectedStory.id) ? 'Story liked' : 'Like story'} title={storyLikedIds.includes(selectedStory.id) ? 'Liked' : 'Like story'} disabled={storyLikedIds.includes(selectedStory.id) || storyActionBusy} onClick={() => void likeSelectedStory()} className={storyLikedIds.includes(selectedStory.id) ? 'story-like-button is-liked' : 'story-like-button'}>
+              <Heart size={20} fill={storyLikedIds.includes(selectedStory.id) ? 'currentColor' : 'none'} />
             </Button>
           </div>
         )}
