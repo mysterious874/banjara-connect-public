@@ -2800,7 +2800,9 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 
 
 /* Connect profile cards: keep the Instagram-style horizontal cards and contain the Connect button. */
-.connect-people-carousel { box-sizing: border-box; width: 100%; max-width: 100%; align-items: stretch; }
+.connect-people-carousel { box-sizing: border-box; width: 100%; max-width: 100%; align-items: stretch; touch-action: pan-x pan-y; overscroll-behavior-x: contain; }
+.connect-page { min-width: 0; touch-action: pan-y; }
+.connect-search-status { margin: -12px 0 0; color: var(--bc-muted); font-size: 12px; }
 .connect-people-carousel .user-card--suggestion { box-sizing: border-box; overflow: hidden; }
 .connect-people-carousel .user-card--suggestion .user-card__follow.button { box-sizing: border-box; display: flex; width: 100%; max-width: 100%; min-width: 0; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0 8px; white-space: nowrap; overflow: hidden; }
 .connect-people-carousel .user-card--suggestion .user-card__follow.button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
