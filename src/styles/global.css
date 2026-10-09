@@ -3872,3 +3872,19 @@ select {
     border-radius: 18px;
   }
 }
+
+
+/* Mobile main-tab swiping: keep vertical feed scrolling native and avoid sideways overscroll. */
+.route-content {
+  min-width: 0;
+  touch-action: pan-y;
+  overscroll-behavior-x: contain;
+}
+@media (max-width: 799px) {
+  .route-content {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-content { scroll-behavior: auto; }
+}
