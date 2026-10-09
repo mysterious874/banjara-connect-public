@@ -85,6 +85,6 @@ export function StoriesRail() {
   const ownStory = railStories.find((story) => story.user_id === session?.user.id)
   const otherStories = railStories.filter((story) => story.user_id !== session?.user.id)
     .sort((a, b) => Number(mutedUserIds.includes(a.user_id)) - Number(mutedUserIds.includes(b.user_id)))
-    .slice(0, 8)
+
   return <section className="stories-rail" aria-labelledby="stories-heading"><div className="section-heading"><div><span className="eyebrow">A LITTLE WINDOW INTO TODAY</span><h2 id="stories-heading">Stories</h2></div><Link to="/stories" className="text-link">See all</Link></div><div className="stories-rail__items"><StoryCard story={ownStory} own />{otherStories.map((story) => <StoryCard key={story.user_id} story={story} muted={mutedUserIds.includes(story.user_id)} />)}</div></section>
 }
