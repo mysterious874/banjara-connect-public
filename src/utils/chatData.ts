@@ -210,10 +210,10 @@ export async function loadConversationMessages(
         })
     }
   }
-  const mediaMessages = messages.filter((message) => message.media_url)
-  void Promise.all(mediaMessages.map(async (chatMessage) => {
+  await Promise.all(messages.map(async (chatMessage) => {
+    if (!chatMessage.media_url) return
     try {
-      chatMessage.media_signed_url = await createChatMediaUrl(chatMessage.media_url!)
+      chatMessage.media_signed_url = await createChatMediaUrl(chatMessage.media_url)
     } catch (mediaError) {
       if (import.meta.env.DEV) console.error('Could not create chat media URL.', mediaError)
       chatMessage.media_signed_url = null
