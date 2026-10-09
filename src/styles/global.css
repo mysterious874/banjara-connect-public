@@ -3874,17 +3874,40 @@ select {
 }
 
 
-/* Mobile main-tab swiping: keep vertical feed scrolling native and avoid sideways overscroll. */
+/* Mobile main-tab swiping: preserve native vertical scrolling and animate tab changes. */
 .route-content {
   min-width: 0;
   touch-action: pan-y;
   overscroll-behavior-x: contain;
 }
+.route-content__page {
+  min-width: 0;
+  width: 100%;
+  min-height: 100%;
+}
+@keyframes connect-tab-enter-next {
+  from { opacity: .72; transform: translate3d(9%, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes connect-tab-enter-previous {
+  from { opacity: .72; transform: translate3d(-9%, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
 @media (max-width: 799px) {
   .route-content {
     -webkit-overflow-scrolling: touch;
   }
+  .route-content__page--next {
+    animation: connect-tab-enter-next 280ms cubic-bezier(.22, .7, .25, 1) both;
+    will-change: transform, opacity;
+  }
+  .route-content__page--previous {
+    animation: connect-tab-enter-previous 280ms cubic-bezier(.22, .7, .25, 1) both;
+    will-change: transform, opacity;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .route-content { scroll-behavior: auto; }
+  .route-content__page--next,
+  .route-content__page--previous { animation: none; }
 }
