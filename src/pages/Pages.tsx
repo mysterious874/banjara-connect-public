@@ -26,7 +26,7 @@ import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
-import { deleteMessageForEveryone, deleteMessageForMe, invalidateConversationListCache, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
+import { deleteMessageForEveryone, deleteMessageForMe, hydrateConversationMediaUrls, invalidateConversationListCache, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
 import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostLikesBatch, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 import { getCached, invalidateCache, setCached } from '../utils/performanceCache'
 
@@ -2045,6 +2045,13 @@ export function ChatConversationPage() {
         setMessages(history.messages)
         setHasOlderMessages(history.hasMore)
         if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: history.messages, hasOlderMessages: history.hasMore }, 60_000)
+        void hydrateConversationMediaUrls(history.messages).then((ready) => {
+          if (!active) return
+          setMessages((current) => current.map((item) => {
+            const media = ready.find((candidate) => candidate.id === item.id)
+            return media ? { ...item, media_signed_url: media.media_signed_url } : item
+          }))
+        })
         const refreshLatestMessages = async () => {
           if (messageRefreshPending) {
             messageRefreshQueued = true
@@ -2062,6 +2069,16 @@ export function ChatConversationPage() {
                 const merged = [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
                 if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: merged, hasOlderMessages: history.hasMore }, 60_000)
                 return merged
+              })
+              void hydrateConversationMediaUrls(latest.messages).then((ready) => {
+                if (!active) return
+                setMessages((current) => {
+                  const byId = new Map(current.map((item) => [item.id, item]))
+                  for (const item of ready) byId.set(item.id, { ...byId.get(item.id), media_signed_url: item.media_signed_url })
+                  const merged = [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
+                  if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: merged, hasOlderMessages: history.hasMore }, 60_000)
+                  return merged
+                })
               })
             } catch (caught) {
               if (active) setError(userFacingError(caught, 'Could not refresh messages.'))
@@ -2274,15 +2291,17 @@ export function CommunityGroupPage() {
   useChatKeyboardViewportLock()
   const { groupId = '' } = useParams()
   const { session } = useAuth()
-  const [group, setGroup] = useState<{ id: string; name: string; description: string; created_by: string } | null>(null)
-  const [messages, setMessages] = useState<CommunityGroupMessage[]>([])
-  const [profiles, setProfiles] = useState<Record<string, ProfileRecord>>({})
+  const groupChatCacheKey = session?.user.id && groupId ? `group-chat:${session.user.id}:${groupId}` : ''
+  const cachedGroupChat = groupChatCacheKey ? getCached<{ group: { id: string; name: string; description: string; created_by: string }; messages: CommunityGroupMessage[]; profiles: Record<string, ProfileRecord>; members: Array<{ user_id: string; role: string; username: string; display_name: string | null; avatar_url: string | null }>; hasOlderGroupMessages: boolean }>(groupChatCacheKey) : null
+  const [group, setGroup] = useState<{ id: string; name: string; description: string; created_by: string } | null>(cachedGroupChat?.group ?? null)
+  const [messages, setMessages] = useState<CommunityGroupMessage[]>(cachedGroupChat?.messages ?? [])
+  const [profiles, setProfiles] = useState<Record<string, ProfileRecord>>(cachedGroupChat?.profiles ?? {})
   const [message, setMessage] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(cachedGroupChat === null)
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
   const [realtimeError, setRealtimeError] = useState('')
-  const [members, setMembers] = useState<Array<{ user_id: string; role: string; username: string; display_name: string | null; avatar_url: string | null }>>([])
+  const [members, setMembers] = useState<Array<{ user_id: string; role: string; username: string; display_name: string | null; avatar_url: string | null }>>(cachedGroupChat?.members ?? [])
   const [membersOpen, setMembersOpen] = useState(false)
   const [groupMenuOpen, setGroupMenuOpen] = useState(false)
   const [memberQuery, setMemberQuery] = useState('')
@@ -2303,7 +2322,7 @@ export function CommunityGroupPage() {
   const [isSendingGroupMedia, setIsSendingGroupMedia] = useState(false)
   const groupMediaInputRef = useRef<HTMLInputElement | null>(null)
   const groupCameraInputRef = useRef<HTMLInputElement | null>(null)
-  const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(false)
+  const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(cachedGroupChat?.hasOlderGroupMessages ?? false)
   const [isLoadingOlderGroupMessages, setIsLoadingOlderGroupMessages] = useState(false)
   const isGroupCreator = Boolean(session?.user && group && group.created_by === session.user.id)
   const isGroupAdmin = Boolean(session?.user && group && (isGroupCreator || members.some((member) => member.user_id === session.user.id && member.role === 'admin')))
@@ -2372,9 +2391,12 @@ export function CommunityGroupPage() {
   useEffect(() => {
     let active = true
     let unsubscribe: (() => void) | null = null
-    setIsLoading(true)
+    const cached = session?.user.id ? getCached<{ group: { id: string; name: string; description: string; created_by: string }; messages: CommunityGroupMessage[]; profiles: Record<string, ProfileRecord>; members: Array<{ user_id: string; role: string; username: string; display_name: string | null; avatar_url: string | null }>; hasOlderGroupMessages: boolean }>(`group-chat:${session.user.id}:${groupId}`) : null
+    setIsLoading(cached === null)
     setError('')
     setRealtimeError('')
+    if (cached) { setGroup(cached.group); setMessages(cached.messages); setProfiles(cached.profiles); setMembers(cached.members); setHasOlderGroupMessages(cached.hasOlderGroupMessages) }
+    else { setGroup(null); setMessages([]); setProfiles({}); setMembers([]); setHasOlderGroupMessages(false) }
     let groupMessageRefreshPending = false
     let groupMessageRefreshQueued = false
     let groupMemberRefreshPending = false
@@ -2402,21 +2424,37 @@ export function CommunityGroupPage() {
           if (hiddenError) throw hiddenError
           const hiddenIds = new Set((hiddenRows ?? []).map((row) => row.message_id as string))
           const incoming = ((latest ?? []) as CommunityGroupMessage[]).filter((row) => !hiddenIds.has(row.id)).reverse()
-          for (const item of incoming) {
-            if (item.media_url) {
-              try { item.media_signed_url = await createGroupMediaUrl(item.media_url) } catch { item.media_signed_url = null }
-            }
-          }
           setMessages((current) => {
             const byId = new Map(current.map((item) => [item.id, item]))
             for (const item of incoming) byId.set(item.id, { ...byId.get(item.id), ...item })
-            return [...byId.values()].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            const merged = [...byId.values()].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            if (session?.user.id && group) setCached(`group-chat:${session.user.id}:${groupId}`, { group, messages: merged, profiles, members, hasOlderGroupMessages }, 60_000)
+            return merged
           })
           const ids = [...new Set(incoming.map((row) => row.sender_id))]
-          if (ids.length) {
-            const { data: latestProfiles, error: profileError } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
-            if (profileError) throw profileError
-            if (active) setProfiles((current) => ({ ...current, ...Object.fromEntries((latestProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])) }))
+          const profilePromise = ids.length
+            ? supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
+            : Promise.resolve({ data: [], error: null })
+          void Promise.all(incoming.filter((item) => item.media_url).map(async (item) => {
+            try { item.media_signed_url = await createGroupMediaUrl(item.media_url!) } catch { item.media_signed_url = null }
+          })).then(() => {
+            if (!active) return
+            setMessages((current) => {
+              const byId = new Map(current.map((item) => [item.id, item]))
+              for (const item of incoming) byId.set(item.id, { ...byId.get(item.id), ...item })
+              const merged = [...byId.values()].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+              if (session?.user.id && group) setCached(`group-chat:${session.user.id}:${groupId}`, { group, messages: merged, profiles, members, hasOlderGroupMessages }, 60_000)
+              return merged
+            })
+          })
+          const { data: latestProfiles, error: profileError } = await profilePromise
+          if (profileError) throw profileError
+          if (active && latestProfiles?.length) {
+            setProfiles((current) => {
+              const merged = { ...current, ...Object.fromEntries(latestProfiles.map((profile) => [profile.id, profile as ProfileRecord])) }
+              if (session?.user.id && group) setCached(`group-chat:${session.user.id}:${groupId}`, { group, messages, profiles: merged, members, hasOlderGroupMessages }, 60_000)
+              return merged
+            })
           }
         } catch (caught) {
           if (active) setRealtimeError(userFacingError(caught, 'Live group messages could not be refreshed.'))
@@ -2479,10 +2517,6 @@ export function CommunityGroupPage() {
         const fetchedRows = ((rows ?? []) as CommunityGroupMessage[]).filter((row) => !initialHiddenIds.has(row.id))
         setHasOlderGroupMessages(fetchedRows.length > 100)
         const nextMessages = fetchedRows.slice(0, 100).reverse()
-        await Promise.all(nextMessages.map(async (groupMessage) => {
-          if (!groupMessage.media_url) return
-          try { groupMessage.media_signed_url = await createGroupMediaUrl(groupMessage.media_url) } catch { groupMessage.media_signed_url = null }
-        }))
         const senderIds = [...new Set([...nextMessages.map((row) => row.sender_id), ...((memberRows ?? []) as Array<{ user_id: string }>).map((row) => row.user_id)])]
         const { data: senderProfiles, error: profilesError } = senderIds.length
           ? await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', senderIds)
@@ -2490,17 +2524,32 @@ export function CommunityGroupPage() {
         if (profilesError) throw profilesError
         if (!active) return
         const latestMessage = nextMessages[nextMessages.length - 1]
-        if (latestMessage) {
-          const { error: markReadError } = await supabase.rpc('mark_community_group_read', { p_group_id: groupId, p_message_id: latestMessage.id })
-          if (markReadError && import.meta.env.DEV) console.error('Could not mark community group as read.', markReadError)
-        }
-        setGroup(groupRow)
-        setMessages(nextMessages)
-        setProfiles(Object.fromEntries((senderProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])))
-        setMembers(((memberRows ?? []) as Array<{ user_id: string; role: string }>).map((member) => {
+        const nextProfiles = Object.fromEntries((senderProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord]))
+        const nextMembers = ((memberRows ?? []) as Array<{ user_id: string; role: string }>).map((member) => {
           const profile = (senderProfiles ?? []).find((item) => item.id === member.user_id) as ProfileRecord | undefined
           return { user_id: member.user_id, role: member.role, username: profile?.username ?? '', display_name: profile?.display_name ?? null, avatar_url: profile?.avatar_url ?? null }
-        }))
+        })
+        setGroup(groupRow)
+        setMessages(nextMessages)
+        setProfiles(nextProfiles)
+        setMembers(nextMembers)
+        if (session?.user.id) setCached(`group-chat:${session.user.id}:${groupId}`, { group: groupRow, messages: nextMessages, profiles: nextProfiles, members: nextMembers, hasOlderGroupMessages: fetchedRows.length > 100 }, 60_000)
+        if (latestMessage) {
+          void supabase.rpc('mark_community_group_read', { p_group_id: groupId, p_message_id: latestMessage.id })
+            .then(({ error: markReadError }) => { if (markReadError && import.meta.env.DEV) console.error('Could not mark community group as read.', markReadError) })
+        }
+        void Promise.all(nextMessages.filter((item) => item.media_url).map(async (item) => {
+          try { item.media_signed_url = await createGroupMediaUrl(item.media_url!) } catch { item.media_signed_url = null }
+        })).then(() => {
+          if (!active) return
+          setMessages((current) => {
+            const byId = new Map(current.map((item) => [item.id, item]))
+            for (const item of nextMessages) byId.set(item.id, { ...byId.get(item.id), ...item })
+            const merged = [...byId.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            if (session?.user.id) setCached(`group-chat:${session.user.id}:${groupId}`, { group: groupRow, messages: merged, profiles: nextProfiles, members: nextMembers, hasOlderGroupMessages: fetchedRows.length > 100 }, 60_000)
+            return merged
+          })
+        })
         const unsubscribeMessages = subscribeToPostgresChanges({
           topic: `community-group:${groupId}:messages`,
           event: '*',
