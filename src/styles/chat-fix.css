@@ -621,3 +621,22 @@ body:has(.community-group-screen) {
 .chat-screen[class*="chat-screen--theme-"] .chat-compose-area .micro-note {
   color: var(--chat-muted) !important;
 }
+
+
+/* Refine themed chat header: use the app's warm heritage palette, not pure white. */
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head {
+  color: #f7e8d8 !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__identity,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__identity strong {
+  color: #f7e8d8 !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__identity small {
+  color: #dfc3aa !important;
+}
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__action,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head > button svg,
+.chat-screen[class*="chat-screen--theme-"] .chat-screen__head .chat-screen__action svg {
+  color: #f0bd77 !important;
+  stroke: #f0bd77 !important;
+}
