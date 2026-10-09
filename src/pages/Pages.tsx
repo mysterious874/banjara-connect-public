@@ -2074,7 +2074,10 @@ export function ChatConversationPage() {
                 if (!active) return
                 setMessages((current) => {
                   const byId = new Map(current.map((item) => [item.id, item]))
-                  for (const item of ready) byId.set(item.id, { ...byId.get(item.id), media_signed_url: item.media_signed_url })
+                  for (const item of ready) {
+                    const existing = byId.get(item.id) ?? item
+                    byId.set(item.id, { ...existing, media_signed_url: item.media_signed_url })
+                  }
                   const merged = [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
                   if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: merged, hasOlderMessages: history.hasMore }, 60_000)
                   return merged
