@@ -1433,6 +1433,9 @@ export function StoriesPage() {
   const [error, setError] = useState('')
   const [replyMessage, setReplyMessage] = useState('')
   const [success, setSuccess] = useState('')
+  const [showCreateStory, setShowCreateStory] = useState(storyParams.get('create') === '1')
+  const isManagingOwnStories = storyParams.get('manage') === '1'
+  const isDirectCreate = storyParams.get('create') === '1'
   const [storyShareOpen, setStoryShareOpen] = useState(false)
   const [storyShareQuery, setStoryShareQuery] = useState('')
   const [storyShareResults, setStoryShareResults] = useState<ProfileRecord[]>([])
@@ -1464,6 +1467,7 @@ export function StoriesPage() {
     .filter((story) => story.user_id === latest.user_id)
     .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)))
   const activeIndex = selectedStory ? storySequence.findIndex((story) => story.id === selectedStory.id) : -1
+  const ownStories = stories.filter((story) => story.user_id === session?.user.id).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
 
   async function refreshStories() {
     setIsLoading(true)
@@ -1473,8 +1477,9 @@ export function StoriesPage() {
       setStories(next)
       const requestedStoryId = storyParams.get('story')
       setSelectedStory((current) => {
+        if (isManagingOwnStories || isDirectCreate) return null
         if (requestedStoryId) return next.find((item) => item.id === requestedStoryId) ?? current ?? next[0] ?? null
-        if (current) return next.find((item) => item.user_id === current.user_id) ?? next[0] ?? null
+        if (current) return next.find((item) => item.id === current.id) ?? next.find((item) => item.user_id === current.user_id) ?? next[0] ?? null
         return next[0] ?? null
       })
     } catch (caught) {
@@ -1492,14 +1497,10 @@ export function StoriesPage() {
   }, [session?.user.id])
 
   useEffect(() => {
-    if (!selectedStory || isLoading || activeIndex < 0) return
+    if (!selectedStory || isLoading || activeIndex < 0 || activeIndex >= storySequence.length - 1) return
     if (storyTimer.current) window.clearTimeout(storyTimer.current)
     storyTimer.current = window.setTimeout(() => {
-      if (activeIndex < storySequence.length - 1) {
-        setSelectedStory(storySequence[activeIndex + 1])
-      } else {
-        navigate('/home')
-      }
+      setSelectedStory(storySequence[activeIndex + 1])
     }, selectedStory.media_type === 'video' ? 8000 : 5000)
     return () => {
       if (storyTimer.current) window.clearTimeout(storyTimer.current)
@@ -1510,6 +1511,15 @@ export function StoriesPage() {
     if (!selectedStory || !session?.user.id || selectedStory.user_id === session.user.id) return
     void recordStoryView(selectedStory.id, session.user.id).catch(() => undefined)
   }, [selectedStory?.id, selectedStory?.user_id, session?.user.id])
+
+  function closeStoryViewer() {
+    if (storyTimer.current) window.clearTimeout(storyTimer.current)
+    if (isManagingOwnStories) {
+      setSelectedStory(null)
+      return
+    }
+    navigate('/home')
+  }
 
   function handleStoryPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (event.pointerType === 'mouse') return
@@ -1532,8 +1542,7 @@ export function StoriesPage() {
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
     if (dy > 80 && Math.abs(dy) > Math.abs(dx) * 1.15) {
-      if (storyTimer.current) window.clearTimeout(storyTimer.current)
-      navigate('/home')
+      closeStoryViewer()
     }
   }
 
@@ -1585,7 +1594,7 @@ export function StoriesPage() {
   useEffect(() => {
     if (!selectedStory) return
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') navigate('/home')
+      if (event.key === 'Escape') closeStoryViewer()
       if (event.key === 'ArrowRight' && activeIndex < storySequence.length - 1) setSelectedStory(storySequence[activeIndex + 1])
       if (event.key === 'ArrowLeft' && activeIndex > 0) setSelectedStory(storySequence[activeIndex - 1])
     }
@@ -1619,6 +1628,7 @@ export function StoriesPage() {
       const input = document.getElementById('story-media') as HTMLInputElement | null
       if (input) input.value = ''
       await refreshStories()
+      if (isManagingOwnStories) setShowCreateStory(false)
       setSuccess('Your story is live for 24 hours.')
     } catch (caught) {
       setError(storyPublishError(caught))
@@ -1633,6 +1643,10 @@ export function StoriesPage() {
       await deleteStory(story)
       const remaining = stories.filter((item) => item.id !== story.id)
       setStories(remaining)
+      if (isManagingOwnStories) {
+        setSelectedStory(null)
+        return
+      }
       const nextGrouped = Array.from(remaining.reduce((map, item) => {
         if (!map.has(item.user_id)) map.set(item.user_id, item)
         return map
@@ -1713,8 +1727,12 @@ export function StoriesPage() {
 
   return <section className="page-stack">
     {!isLoading && !selectedStory && <>
-          <PageHeading eyebrow="LITTLE WINDOWS INTO TODAY" title="Stories" description="Share a photo, video, or message. Stories disappear after 24 hours." />
-          <form className="story-create-box" onSubmit={publishStory}>
+          <PageHeading
+            eyebrow={isManagingOwnStories ? 'YOUR MOMENTS' : isDirectCreate ? 'CREATE A STORY' : 'LITTLE WINDOWS INTO TODAY'}
+            title={isManagingOwnStories ? 'Your stories' : isDirectCreate ? 'Create story' : 'Stories'}
+            description={isManagingOwnStories ? 'View the stories you have shared and add another whenever you like.' : 'Share a photo, video, or message. Stories disappear after 24 hours.'}
+          />
+          {(!isManagingOwnStories || showCreateStory) && <form className="story-create-box" onSubmit={publishStory}>
             <div className="post-card__author"><Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} /><span><strong>Your story</strong><span>Visible for 24 hours</span></span></div>
             <textarea aria-label="Story message" value={storyText} onChange={(event) => setStoryText(event.target.value)} placeholder="Add a message to your story (optional)" maxLength={500} />
             {storyFile && storyPreviewUrl && <div className="story-create-preview">
@@ -1723,35 +1741,53 @@ export function StoriesPage() {
             </div>}
             <div className="story-create-box__media"><label className="button button--outline" htmlFor="story-media">Add photo or video</label><button type="button" className="button button--outline" onClick={() => storyCameraInputRef.current?.click()}><Camera size={15} /> Camera</button><input id="story-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleStoryFile} /><input ref={storyCameraInputRef} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={handleStoryFile} />{storyFile && <span className="micro-note">{storyFile.name} · {(storyFile.size / (1024 * 1024)).toFixed(1)} MB</span>}<span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span></div>
             <Button type="submit" disabled={isPublishing || (!storyText.trim() && !storyFile)}>{isPublishing ? 'Publishing…' : 'Post story'} <Send size={15} /></Button>
-          </form>
+          </form>}
           {error && <p className="field__error" role="alert">{error}</p>}
           {success && <p className="micro-note" role="status">{success}</p>}
-          {isLoading ? <Loading label="Loading stories" /> : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="story-page-thumbs"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div><div className="stories-rail__items">{grouped.map((story) => {
+          {isLoading ? <Loading label="Loading stories" /> : isManagingOwnStories ? (
+            <div className="story-page-thumbs story-page-thumbs--manage">
+              <div className="section-heading"><h2>Active stories</h2><span className="local-label">{ownStories.length} {ownStories.length === 1 ? 'story' : 'stories'}</span></div>
+              {ownStories.length ? <div className="story-manage-list">{ownStories.map((story) => {
+                const storyName = story.content.trim() || (story.media_type === 'video' ? 'Video story' : story.media_type === 'image' ? 'Photo story' : 'Text story')
+                return <div className="story-manage-row" key={story.id}>
+                  <button type="button" className="story-manage-row__open" onClick={() => openViewer(story)}>
+                    <span className="story-manage-row__thumb">
+                      {story.media_url && story.media_type === 'video' ? <video src={story.media_url} muted playsInline /> : story.media_url ? <img src={story.media_url} alt="" /> : <span>✦</span>}
+                    </span>
+                    <span className="story-manage-row__details"><strong>{storyName}</strong><small>{new Date(story.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</small><small>Tap to view story</small></span>
+                    <ChevronRight size={18} />
+                  </button>
+                  <button type="button" className="story-manage-row__delete" onClick={() => void removeStory(story)} aria-label="Delete story"><Trash2 size={17} /></button>
+                </div>
+              })}</div> : <EmptyState title="No active stories" description="Add a photo, video, or message to share your first story." />}
+              {!showCreateStory && <Button block onClick={() => setShowCreateStory(true)}><Plus size={17} /> Add to story</Button>}
+              {showCreateStory && <Button variant="quiet" onClick={() => { setShowCreateStory(false); setError(''); setSuccess('') }}>Cancel adding story</Button>}
+            </div>
+          ) : isDirectCreate ? null : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="story-page-thumbs"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div><div className="stories-rail__items">{grouped.map((story) => {
             const name = story.author?.display_name || story.author?.username || 'Community member'
             return <button type="button" key={story.user_id} className="story-card story-card--button" onClick={() => openViewer(story)}><span className="story-card__ring"><Avatar name={name} image={story.author?.avatar_url ?? undefined} size="large" /></span><span className="story-card__name">{name}</span></button>
           })}</div></div>}
-      
     </>}
       {storyViewersOpen && selectedStory?.user_id === session?.user.id && <div className="story-viewers-modal-backdrop" onClick={() => setStoryViewersOpen(false)}><div className="story-viewers-modal" role="dialog" aria-modal="true" aria-label="Story viewers" onClick={(event) => event.stopPropagation()}><div className="story-viewers-modal__head"><div><strong>Story viewers</strong><span>{storyViewers.length} {storyViewers.length === 1 ? 'view' : 'views'}</span></div><button type="button" onClick={() => setStoryViewersOpen(false)} aria-label="Close"><X size={19} /></button></div><div className="story-viewers-modal__list">{storyViewersLoading ? <Loading label="Loading viewers" /> : storyViewers.length === 0 ? <EmptyState title="No views yet" description="People who view your story will appear here." /> : storyViewers.map((viewer) => { const name = viewer.display_name || viewer.username || 'Community member'; return <div className="story-viewer-row" key={viewer.id}><Avatar name={name} image={viewer.avatar_url ?? undefined} /><div><strong>{name}</strong>{viewer.username && <span>@{viewer.username}</span>}</div></div> })}</div></div></div>}
     {selectedStory && (grouped.length > 0 || Boolean(initialStory)) && <div className="story-fullscreen" role="dialog" aria-modal="true" aria-label="Story viewer">
-      <div className="story-fullscreen__backdrop" onClick={() => navigate('/home')} />
+      <div className="story-fullscreen__backdrop" onClick={closeStoryViewer} />
       <div className="story-fullscreen__card" onPointerDown={handleStoryPointerDown} onPointerMove={handleStoryPointerMove} onPointerUp={handleStoryPointerUp} onPointerCancel={() => { storySwipeStart.current = null }}>
         <div className="story-fullscreen__progress">{storySequence.map((story, index) => <span key={story.id} style={index === activeIndex ? ({ '--story-duration': selectedStory.media_type === 'video' ? '8s' : '5s' } as React.CSSProperties) : undefined} className={`story-fullscreen__progress-segment${index < activeIndex ? ' is-complete' : index === activeIndex ? ' is-active' : ''}`} />)}</div>
         {selectedStory.user_id === session?.user.id ? <button type="button" className="story-fullscreen__view-button" onClick={(event) => { event.stopPropagation(); void openStoryViewers() }} aria-label="View story viewers"><Eye size={16} /> <span>View</span></button> : null}
         <div className="story-fullscreen__head">
           <div className="post-card__author"><Avatar name={selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'} image={selectedStory.author?.avatar_url ?? undefined} /><span><strong>{selectedStory.author?.display_name || selectedStory.author?.username || 'Community member'}</strong><span>{new Date(selectedStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span></div>
-          <button type="button" className="story-fullscreen__close" onClick={() => navigate('/home')} aria-label="Close story"><X size={22} /></button>
+          <button type="button" className="story-fullscreen__close" onClick={closeStoryViewer} aria-label="Close story"><X size={22} /></button>
         </div>
         <button type="button" className="story-fullscreen__prev" onClick={() => activeIndex > 0 && setSelectedStory(storySequence[activeIndex - 1])} disabled={activeIndex <= 0} aria-label="Previous story"><ArrowLeft size={25} /></button>
         <div className="story-fullscreen__touch-left" role="button" tabIndex={0} aria-label="Previous story" onClick={() => activeIndex > 0 && setSelectedStory(storySequence[activeIndex - 1])} />
-        <div className="story-fullscreen__touch-right" role="button" tabIndex={0} aria-label="Next story" onClick={() => activeIndex < storySequence.length - 1 ? setSelectedStory(storySequence[activeIndex + 1]) : navigate('/home')} />
+        <div className="story-fullscreen__touch-right" role="button" tabIndex={0} aria-label="Next story" onClick={() => activeIndex < storySequence.length - 1 && setSelectedStory(storySequence[activeIndex + 1])} />
         <div className="story-fullscreen__content">
           {selectedStory.media_url && selectedStory.media_type === 'video' && <video src={selectedStory.media_url} controls autoPlay playsInline className="story-fullscreen__asset" />}
           {selectedStory.media_url && selectedStory.media_type === 'image' && <img src={selectedStory.media_url} alt="Story" className="story-fullscreen__asset" />}
           {!selectedStory.media_url && <div className="story-fullscreen__text">{selectedStory.content}</div>}
           {selectedStory.media_url && selectedStory.content && <div className="story-fullscreen__caption">{selectedStory.content}</div>}
         </div>
-        <button type="button" className="story-fullscreen__next" onClick={() => activeIndex < grouped.length - 1 ? setSelectedStory(grouped[activeIndex + 1]) : navigate('/home')} aria-label="Next story"><ArrowRight size={25} /></button>
+        <button type="button" className="story-fullscreen__next" onClick={() => activeIndex < storySequence.length - 1 && setSelectedStory(storySequence[activeIndex + 1])} aria-label="Next story"><ArrowRight size={25} /></button>
         {selectedStory.user_id !== session?.user.id && (
           <div className="story-fullscreen__reply">
             <form onSubmit={replyToStory}>
