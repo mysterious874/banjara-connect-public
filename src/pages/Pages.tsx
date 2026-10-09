@@ -2484,10 +2484,6 @@ export function CommunityGroupPage() {
         const fetchedRows = ((rows ?? []) as CommunityGroupMessage[]).filter((row) => !initialHiddenIds.has(row.id))
         setHasOlderGroupMessages(fetchedRows.length > 100)
         const nextMessages = fetchedRows.slice(0, 100).reverse()
-        await Promise.all(nextMessages.map(async (groupMessage) => {
-          if (!groupMessage.media_url) return
-          try { groupMessage.media_signed_url = await createGroupMediaUrl(groupMessage.media_url) } catch { groupMessage.media_signed_url = null }
-        }))
         const senderIds = [...new Set([...nextMessages.map((row) => row.sender_id), ...((memberRows ?? []) as Array<{ user_id: string }>).map((row) => row.user_id)])]
         const { data: senderProfiles, error: profilesError } = senderIds.length
           ? await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', senderIds)
@@ -2495,17 +2491,32 @@ export function CommunityGroupPage() {
         if (profilesError) throw profilesError
         if (!active) return
         const latestMessage = nextMessages[nextMessages.length - 1]
-        if (latestMessage) {
-          const { error: markReadError } = await supabase.rpc('mark_community_group_read', { p_group_id: groupId, p_message_id: latestMessage.id })
-          if (markReadError && import.meta.env.DEV) console.error('Could not mark community group as read.', markReadError)
-        }
-        setGroup(groupRow)
-        setMessages(nextMessages)
-        setProfiles(Object.fromEntries((senderProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord])))
-        setMembers(((memberRows ?? []) as Array<{ user_id: string; role: string }>).map((member) => {
+        const nextProfiles = Object.fromEntries((senderProfiles ?? []).map((profile) => [profile.id, profile as ProfileRecord]))
+        const nextMembers = ((memberRows ?? []) as Array<{ user_id: string; role: string }>).map((member) => {
           const profile = (senderProfiles ?? []).find((item) => item.id === member.user_id) as ProfileRecord | undefined
           return { user_id: member.user_id, role: member.role, username: profile?.username ?? '', display_name: profile?.display_name ?? null, avatar_url: profile?.avatar_url ?? null }
-        }))
+        })
+        setGroup(groupRow)
+        setMessages(nextMessages)
+        setProfiles(nextProfiles)
+        setMembers(nextMembers)
+        if (session?.user.id) setCached(`group-chat:${session.user.id}:${groupId}`, { group: groupRow, messages: nextMessages, profiles: nextProfiles, members: nextMembers, hasOlderGroupMessages: fetchedRows.length > 100 }, 60_000)
+        if (latestMessage) {
+          void supabase.rpc('mark_community_group_read', { p_group_id: groupId, p_message_id: latestMessage.id })
+            .then(({ error: markReadError }) => { if (markReadError && import.meta.env.DEV) console.error('Could not mark community group as read.', markReadError) })
+        }
+        void Promise.all(nextMessages.filter((item) => item.media_url).map(async (item) => {
+          try { item.media_signed_url = await createGroupMediaUrl(item.media_url!) } catch { item.media_signed_url = null }
+        })).then(() => {
+          if (!active) return
+          setMessages((current) => {
+            const byId = new Map(current.map((item) => [item.id, item]))
+            for (const item of nextMessages) byId.set(item.id, { ...byId.get(item.id), ...item })
+            const merged = [...byId.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            if (session?.user.id) setCached(`group-chat:${session.user.id}:${groupId}`, { group: groupRow, messages: merged, profiles: nextProfiles, members: nextMembers, hasOlderGroupMessages: fetchedRows.length > 100 }, 60_000)
+            return merged
+          })
+        })
         const unsubscribeMessages = subscribeToPostgresChanges({
           topic: `community-group:${groupId}:messages`,
           event: '*',
