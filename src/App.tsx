@@ -1,7 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
 import { Route, Routes, useNavigate } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
-import { BrandMark } from './components/brand'
 import { Loading } from './components/ui'
 
 const SplashPage = lazy(() => import('./pages/AuthPages').then(({ SplashPage }) => ({ default: SplashPage })))
