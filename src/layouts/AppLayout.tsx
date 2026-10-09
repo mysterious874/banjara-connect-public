@@ -34,7 +34,7 @@ export function AppLayout() {
     }
     const target = event.target
     if (!(target instanceof Element)) return
-    if (target.closest('input, textarea, select, [contenteditable="true"], .chat-messages, .stories-rail__items, .story-fullscreen, .community-group-members-panel, .community-discover-list, .connect-people-carousel, [data-no-page-swipe]')) {
+    if (target.closest('input, textarea, select, [contenteditable="true"], .chat-messages, .stories-rail__items, .story-fullscreen, .community-group-members-panel, .community-discover-list, .connect-page, .connect-people-carousel, [data-no-page-swipe]')) {
       touchStart.current = null
       return
     }

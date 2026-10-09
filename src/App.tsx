@@ -33,6 +33,32 @@ const AboutPage = lazy(() => import('./pages/Pages').then(({ AboutPage }) => ({ 
 const DeveloperPage = lazy(() => import('./pages/DeveloperPage').then(({ DeveloperPage }) => ({ default: DeveloperPage })))
 const NotFoundPage = lazy(() => import('./pages/Pages').then(({ NotFoundPage }) => ({ default: NotFoundPage })))
 
+// Warm route modules after the first screen paints so tab changes do not
+// trigger a fresh Suspense/loading screen. Network work runs in the background.
+function useWarmRouteModules() {
+  useEffect(() => {
+    let cancelled = false
+    const warm = () => {
+      if (cancelled) return
+      void Promise.all([
+        import('./pages/Pages'),
+        import('./pages/BanjaraHistoryPage'),
+        import('./pages/DeveloperPage'),
+        import('./pages/AuthPages'),
+      ]).catch(() => undefined)
+    }
+    const idleWindow = window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
+    const idleId = idleWindow.requestIdleCallback
+      ? idleWindow.requestIdleCallback(warm, { timeout: 1800 })
+      : window.setTimeout(warm, 900)
+    return () => {
+      cancelled = true
+      if (idleWindow.cancelIdleCallback && idleWindow.requestIdleCallback) idleWindow.cancelIdleCallback(idleId)
+      else window.clearTimeout(idleId)
+    }
+  }, [])
+}
+
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null }
 
@@ -99,6 +125,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
 }
 
 export default function App() {
+  useWarmRouteModules()
   const navigate = useNavigate()
   const [showStartupIntro, setShowStartupIntro] = useState(() => {
     return window.sessionStorage.getItem('connect-startup-intro-seen') !== '1'
