@@ -104,10 +104,13 @@ export async function createStory(userId: string, content: string, mediaFile?: F
     if (mediaFile) {
       const uploaded = await uploadStoryMedia(mediaFile, userId, data.id)
       uploadedPath = uploaded.path
-      const { error: updateError } = await supabase.from('stories').update({
+      const { data: updatedStory, error: updateError } = await supabase.from('stories').update({
         media_url: uploaded.path,
-      }).eq('id', data.id).eq('user_id', userId)
+      }).eq('id', data.id).eq('user_id', userId).select('id').maybeSingle()
       if (updateError) throw updateError
+      if (!updatedStory) {
+        throw new Error('The story was created, but its media could not be attached. Please retry; if this repeats, check the stories table update policy.')
+      }
     }
     return data.id
   } catch (error) {
