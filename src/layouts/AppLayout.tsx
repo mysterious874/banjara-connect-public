@@ -11,6 +11,7 @@ export function AppLayout() {
   const navigate = useNavigate()
   const pathname = location.pathname
   const touchStart = useRef<{ x: number; y: number } | null>(null)
+  const [swipeAnimation, setSwipeAnimation] = useState<'next' | 'previous' | ''>('')
   const mainTabs = ['/home', '/chat', '/connect', '/create', '/community', '/notifications', '/settings']
   const tabForPath = (path: string) => {
     if (path.startsWith('/chat')) return 1
@@ -29,7 +30,7 @@ export function AppLayout() {
     }
     const target = event.target
     if (!(target instanceof Element)) return
-    if (target.closest('input, textarea, select, button, a, [role="button"], .chat-messages, .stories-rail__items, .story-fullscreen, .community-group-members-panel, [data-no-page-swipe]')) {
+    if (target.closest('input, textarea, select, [contenteditable="true"], .chat-messages, .stories-rail__items, .story-fullscreen, .community-group-members-panel, [data-no-page-swipe]')) {
       touchStart.current = null
       return
     }
@@ -49,6 +50,8 @@ export function AppLayout() {
     if (currentTab < 0) return
     const nextTab = dx < 0 ? currentTab + 1 : currentTab - 1
     if (nextTab < 0 || nextTab >= mainTabs.length) return
+    setSwipeAnimation(dx < 0 ? 'next' : 'previous')
+    window.setTimeout(() => setSwipeAnimation(''), 340)
     navigate(mainTabs[nextTab])
   }
   const assistantOpen = pathname === '/assistant'
@@ -64,5 +67,5 @@ export function AppLayout() {
   if (isLoading) return <Loading label="Checking your session" />
   if (initializationError) return <ErrorState title="Could not check your session" description={userFacingError(initializationError, 'Could not check your session. Please try again.')} />
   if (!session) return <Navigate to="/login" replace state={{ from: location }} />
-  return <div className={`app-shell${assistantOpen ? ' app-shell--assistant' : ''}${chatOpen ? ' app-shell--chat' : ''}${communityGroupOpen ? ' app-shell--community-group' : ''}${storiesOpen ? ' app-shell--stories' : ''}`}>{!chatOpen && !communityGroupOpen && <><Header /><DesktopNavigation /></>}<div className="app-shell__body"><main className="route-content" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchStart.current = null }}><Outlet context={{ notify } satisfies ToastApi} /></main></div>{!chatOpen && !communityGroupOpen && <BottomNavigation />}<Toast message={message} onClose={() => setMessage('')} /></div>
+  return <div className={`app-shell${assistantOpen ? ' app-shell--assistant' : ''}${chatOpen ? ' app-shell--chat' : ''}${communityGroupOpen ? ' app-shell--community-group' : ''}${storiesOpen ? ' app-shell--stories' : ''}`}>{!chatOpen && !communityGroupOpen && <><Header /><DesktopNavigation /></>}<div className="app-shell__body"><main className="route-content" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchStart.current = null }}><div key={pathname} className={`route-content__page${swipeAnimation ? ` route-content__page--${swipeAnimation}` : ''}`}><Outlet context={{ notify } satisfies ToastApi} /></div></main></div>{!chatOpen && !communityGroupOpen && <BottomNavigation />}<Toast message={message} onClose={() => setMessage('')} /></div>
 }
