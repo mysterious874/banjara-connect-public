@@ -610,8 +610,10 @@ export function CommunityPage() {
 export function ConnectPage() {
   const { session } = useAuth()
   const [query, setQuery] = useState('')
-  const [profiles, setProfiles] = useState<ProfileRecord[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const cacheKey = session?.user?.id ? `connect-people:${session.user.id}` : ''
+  const cachedProfiles = cacheKey ? getCached<ProfileRecord[]>(cacheKey) : null
+  const [profiles, setProfiles] = useState<ProfileRecord[]>(cachedProfiles ?? [])
+  const [isLoading, setIsLoading] = useState(!cachedProfiles)
   const [isSearching, setIsSearching] = useState(false)
   const [error, setError] = useState('')
 
@@ -622,10 +624,19 @@ export function ConnectPage() {
       setIsLoading(false)
       return () => { active = false }
     }
+    const key = `connect-people:${session.user.id}`
+    const cached = getCached<ProfileRecord[]>(key)
+    if (cached) {
+      setProfiles(cached)
+      setIsLoading(false)
+    } else {
+      setIsLoading(true)
+    }
     setError('')
-    setIsLoading(true)
     void loadProfilesPage().then(({ profiles: nextProfiles }) => {
-      if (active) setProfiles(nextProfiles)
+      if (!active) return
+      setProfiles(nextProfiles)
+      setCached(key, nextProfiles, 60_000)
     }).catch((caught: unknown) => {
       if (active) setError(userFacingError(caught, 'Could not load people.'))
     }).finally(() => {
@@ -659,7 +670,7 @@ export function ConnectPage() {
     }
   }, [query])
 
-  return <section className="page-stack">
+  return <section className="page-stack connect-page">
     <PageHeading eyebrow="FIND YOUR CIRCLE" title="Connect" description="Discover people from the Banjara Connect community and connect with them." />
     <label className="connect-search" aria-label="Search username">
       <Search size={18} aria-hidden="true" />
@@ -667,7 +678,7 @@ export function ConnectPage() {
       {query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')}><X size={17} /></button>}
     </label>
     {error && <p className="field__error" role="alert">{error}</p>}
-    {isLoading || isSearching ? <Loading label={isSearching ? 'Searching people' : 'Loading people'} /> : profiles.length ? <div className="connect-people-carousel" aria-label="People to connect">{profiles.map((user) => <UserCard key={user.id} user={user} suggestion />)}</div> : <EmptyState title={query ? 'No people found' : 'No people to show'} description={query ? 'Try another username.' : 'New community members will appear here.'} />}
+    {(isLoading || isSearching) && !profiles.length ? <Loading label={isSearching ? 'Searching people' : 'Loading people'} /> : profiles.length ? <><div className="connect-people-carousel" aria-label="People to connect">{profiles.map((user) => <UserCard key={user.id} user={user} suggestion />)}</div>{isSearching && <p className="connect-search-status" role="status">Searching people…</p>}</> : <EmptyState title={query ? 'No people found' : 'No people to show'} description={query ? 'Try another username.' : 'New community members will appear here.'} />}
   </section>
 }
 
