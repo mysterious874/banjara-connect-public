@@ -3323,21 +3323,27 @@ export function CommunityGroupPage() {
     setIsSending(mediaToSend.length === 0)
     setError('')
     let uploadedPath = ''
+    let pendingMessageId = ''
     try {
       const outgoing = mediaToSend.length ? mediaToSend : [null]
       for (let index = 0; index < outgoing.length; index += 1) {
         const file = outgoing[index]
+        // The database requires non-empty text until a media_url exists.
+        // Insert a temporary value for media-only messages, then replace it
+        // with the real caption together with media_url in one update.
+        const initialContent = index === 0 && textToSend ? textToSend : (file ? 'Uploading media…' : '')
         const { data, error: sendError } = await supabase.from('community_group_messages')
-          .insert({ group_id: groupId, sender_id: session.user.id, content: index === 0 ? textToSend : '' })
+          .insert({ group_id: groupId, sender_id: session.user.id, content: initialContent })
           .select('id,group_id,sender_id,content,media_url,media_type,created_at')
           .single()
         if (sendError) throw sendError
         let created = data as CommunityGroupMessage
+        pendingMessageId = created.id
         if (file) {
           const media = await uploadGroupMedia(file, session.user.id, groupId, created.id)
           uploadedPath = media.path
           const { data: updated, error: updateError } = await supabase.from('community_group_messages')
-            .update({ media_url: media.path, media_type: media.type, updated_at: new Date().toISOString() })
+            .update({ content: index === 0 ? textToSend : '', media_url: media.path, media_type: media.type, updated_at: new Date().toISOString() })
             .eq('id', created.id).eq('sender_id', session.user.id)
             .select('id,group_id,sender_id,content,media_url,media_type,created_at').single()
           if (updateError) throw updateError
@@ -3346,6 +3352,7 @@ export function CommunityGroupPage() {
           uploadedPath = ''
         }
         setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
+        pendingMessageId = ''
       }
       setMessage('')
       setSelectedGroupMedia([])
@@ -3353,6 +3360,7 @@ export function CommunityGroupPage() {
       window.requestAnimationFrame(() => { const pane = document.querySelector('.community-group-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
     } catch (caught) {
       if (uploadedPath) await deleteGroupMedia([uploadedPath]).catch(() => undefined)
+      if (pendingMessageId) await supabase.from('community_group_messages').delete().eq('id', pendingMessageId).eq('sender_id', session.user.id).catch(() => undefined)
       setError(userFacingError(caught, 'Could not send this message.'))
     } finally {
       setIsSending(false)
