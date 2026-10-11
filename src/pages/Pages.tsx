@@ -2457,31 +2457,6 @@ export function ChatConversationPage() {
     finally { setForwardingTo('') }
   }
 
-  async function forwardSelectedMessagesTo(destinationId: string) {
-    if (!selectedMessageIds.length || forwardingTo) return
-    setForwardingTo(destinationId)
-    setForwardError('')
-    try {
-      const selected = messages.filter((item) => selectedMessageIds.includes(item.id) && !item.is_deleted_for_everyone)
-      for (const item of selected) {
-        let file: File | undefined
-        if (item.media_type && !item.media_signed_url) throw new Error('This media is still loading. Try forwarding again in a moment.')
-        if (item.media_type && item.media_signed_url) {
-          const response = await fetch(item.media_signed_url)
-          if (!response.ok) throw new Error('Could not download a selected media item to forward.')
-          const blob = await response.blob()
-          const extension = item.media_type === 'image' ? 'jpg' : item.media_type === 'video' ? 'mp4' : 'bin'
-          file = new File([blob], `forwarded-${item.media_type}-${Date.now()}.${extension}`, { type: blob.type || (item.media_type === 'image' ? 'image/jpeg' : item.media_type === 'video' ? 'video/mp4' : 'application/octet-stream') })
-        }
-        if (item.content.trim() || file) await sendConversationMessage(destinationId, item.content, file)
-      }
-      setForwardOpen(false)
-      setForwardQuery('')
-      setSelectedMessageIds([])
-    } catch (caught) {
-      setForwardError(userFacingError(caught, 'Could not forward the selected messages.'))
-    } finally { setForwardingTo('') }
-  }
 
   async function deleteSelectedMessages(mode: 'me' | 'everyone') {
     if (!selectedMessageIds.length || pendingDeleteId) return
