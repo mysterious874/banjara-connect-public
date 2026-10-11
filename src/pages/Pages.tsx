@@ -2653,7 +2653,7 @@ export function CommunityGroupPage() {
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [groupSaving, setGroupSaving] = useState(false)
-  const [selectedGroupMedia, setSelectedGroupMedia] = useState<File | null>(null)
+  const [selectedGroupMedia, setSelectedGroupMedia] = useState<File[]>([])
   const [groupAttachmentMenuOpen, setGroupAttachmentMenuOpen] = useState(false)
   const [selectedGroupMessageIds, setSelectedGroupMessageIds] = useState<string[]>([])
   const [pendingGroupDelete, setPendingGroupDelete] = useState('')
@@ -2725,9 +2725,16 @@ export function CommunityGroupPage() {
   }, [groupMenuOpen])
 
   function handleGroupMediaFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null
-    if (!file) return
-    try { validateGroupMedia(file); setError(''); setSelectedGroupMedia(file) } catch (caught) { event.target.value = ''; setSelectedGroupMedia(null); setError(userFacingError(caught, 'This media file could not be selected.')) }
+    const files = Array.from(event.target.files ?? [])
+    if (!files.length) return
+    try {
+      files.forEach(validateGroupMedia)
+      setError('')
+      setSelectedGroupMedia((current) => [...current, ...files])
+    } catch (caught) {
+      event.target.value = ''
+      setError(userFacingError(caught, 'This media file could not be selected.'))
+    }
   }
 
   useEffect(() => {
@@ -3310,33 +3317,40 @@ export function CommunityGroupPage() {
   async function sendGroupMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const textToSend = message.trim()
-    if ((!textToSend && !selectedGroupMedia) || isSending || isSendingGroupMedia || !session?.user || !groupId) return
-    setIsSendingGroupMedia(!!selectedGroupMedia)
-    setIsSending(!selectedGroupMedia)
+    const mediaToSend = [...selectedGroupMedia]
+    if ((!textToSend && !mediaToSend.length) || isSending || isSendingGroupMedia || !session?.user || !groupId) return
+    setIsSendingGroupMedia(mediaToSend.length > 0)
+    setIsSending(mediaToSend.length === 0)
     setError('')
     let uploadedPath = ''
     try {
-      const { data, error: sendError } = await supabase.from('community_group_messages')
-        .insert({ group_id: groupId, sender_id: session.user.id, content: textToSend })
-        .select('id,group_id,sender_id,content,media_url,media_type,created_at')
-        .single()
-      if (sendError) throw sendError
-      let created = data as CommunityGroupMessage
-      if (selectedGroupMedia) {
-        const media = await uploadGroupMedia(selectedGroupMedia, session.user.id, groupId, created.id)
-        uploadedPath = media.path
-        const { data: updated, error: updateError } = await supabase.from('community_group_messages')
-          .update({ media_url: media.path, media_type: media.type, updated_at: new Date().toISOString() })
-          .eq('id', created.id).eq('sender_id', session.user.id)
-          .select('id,group_id,sender_id,content,media_url,media_type,created_at').single()
-        if (updateError) throw updateError
-        created = updated as CommunityGroupMessage
-        created.media_signed_url = await createGroupMediaUrl(media.path)
+      const outgoing = mediaToSend.length ? mediaToSend : [null]
+      for (let index = 0; index < outgoing.length; index += 1) {
+        const file = outgoing[index]
+        const { data, error: sendError } = await supabase.from('community_group_messages')
+          .insert({ group_id: groupId, sender_id: session.user.id, content: index === 0 ? textToSend : '' })
+          .select('id,group_id,sender_id,content,media_url,media_type,created_at')
+          .single()
+        if (sendError) throw sendError
+        let created = data as CommunityGroupMessage
+        if (file) {
+          const media = await uploadGroupMedia(file, session.user.id, groupId, created.id)
+          uploadedPath = media.path
+          const { data: updated, error: updateError } = await supabase.from('community_group_messages')
+            .update({ media_url: media.path, media_type: media.type, updated_at: new Date().toISOString() })
+            .eq('id', created.id).eq('sender_id', session.user.id)
+            .select('id,group_id,sender_id,content,media_url,media_type,created_at').single()
+          if (updateError) throw updateError
+          created = updated as CommunityGroupMessage
+          created.media_signed_url = await createGroupMediaUrl(media.path)
+          uploadedPath = ''
+        }
+        setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
       }
-      setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
       setMessage('')
-      setSelectedGroupMedia(null)
-      if (groupMediaInputRef.current) groupMediaInputRef.current.value = ''
+      setSelectedGroupMedia([])
+      for (const input of [groupMediaInputRef.current, groupPhotoInputRef.current, groupVideoInputRef.current, groupCameraInputRef.current]) if (input) input.value = ''
+      window.requestAnimationFrame(() => { const pane = document.querySelector('.community-group-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
     } catch (caught) {
       if (uploadedPath) await deleteGroupMedia([uploadedPath]).catch(() => undefined)
       setError(userFacingError(caught, 'Could not send this message.'))
@@ -3427,19 +3441,19 @@ export function CommunityGroupPage() {
       {error && <p className="field__error" role="alert">{error}</p>}
     </div>
     <div className="chat-compose-area">
-      {selectedGroupMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedGroupMedia.name}</span><button type="button" onClick={() => { setSelectedGroupMedia(null); if (groupMediaInputRef.current) groupMediaInputRef.current.value = '' }} aria-label="Remove selected media">×</button></div>}
+      {selectedGroupMedia.length > 0 && !isSendingGroupMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedGroupMedia.length} file{selectedGroupMedia.length === 1 ? '' : 's'} selected</span><button type="button" onClick={() => { setSelectedGroupMedia([]); for (const input of [groupMediaInputRef.current, groupPhotoInputRef.current, groupVideoInputRef.current, groupCameraInputRef.current]) if (input) input.value = '' }} aria-label="Remove selected media">×</button></div>}
       <form className="chat-disabled-compose" onSubmit={sendGroupMessage}>
-        <input ref={groupMediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleGroupMediaFile} />
-        <input ref={groupPhotoInputRef} className="chat-media-input" type="file" accept="image/*" onChange={handleGroupMediaFile} />
-        <input ref={groupVideoInputRef} className="chat-media-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/*" onChange={handleGroupMediaFile} />
+        <input ref={groupMediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" multiple onChange={handleGroupMediaFile} />
+        <input ref={groupPhotoInputRef} className="chat-media-input" type="file" accept="image/*" multiple onChange={handleGroupMediaFile} />
+        <input ref={groupVideoInputRef} className="chat-media-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/*" multiple onChange={handleGroupMediaFile} />
         <input ref={groupCameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleGroupMediaFile} />
-        <Input aria-label="Group message" placeholder={selectedGroupMedia ? 'Add a caption (optional)' : 'Message this community'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} />
+        <Input aria-label="Group message" placeholder={selectedGroupMedia.length ? 'Add a caption (optional)' : 'Message this community'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} />
         <div className="chat-attachment-wrap">
           <Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" aria-expanded={groupAttachmentMenuOpen} onClick={() => setGroupAttachmentMenuOpen((open) => !open)} disabled={isSendingGroupMedia}><Paperclip size={18} /></Button>
           {groupAttachmentMenuOpen && <div className="chat-attachment-menu" role="menu" aria-label="Choose attachment type"><button type="button" role="menuitem" onClick={() => { setGroupAttachmentMenuOpen(false); groupPhotoInputRef.current?.click() }}><span className="chat-attachment-menu__icon"><Camera size={16} /></span><span>Photo</span></button><button type="button" role="menuitem" onClick={() => { setGroupAttachmentMenuOpen(false); groupVideoInputRef.current?.click() }}><span className="chat-attachment-menu__icon"><Video size={16} /></span><span>Video</span></button></div>}
         </div>
         <Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => groupCameraInputRef.current?.click()} disabled={isSendingGroupMedia}><Camera size={18} /></Button>
-        <Button type="submit" disabled={(!message.trim() && !selectedGroupMedia) || isSending || isSendingGroupMedia} iconOnly aria-label="Send group message">{isSending || isSendingGroupMedia ? '…' : <Send size={17} />}</Button>
+        <Button type="submit" disabled={(!message.trim() && !selectedGroupMedia.length) || isSending || isSendingGroupMedia} iconOnly aria-label="Send group message">{isSending || isSendingGroupMedia ? '…' : <Send size={17} />}</Button>
       </form>
       <p className="micro-note">Photos and videos up to 50 MB</p>
     </div>
