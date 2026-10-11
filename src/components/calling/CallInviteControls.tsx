@@ -158,10 +158,13 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
           const pc = createPeer(signal.from, stream)
           try {
             if (signal.kind === 'join') {
-              // Direct-call offers are created once by the caller in the setup path below.
-              // Group mesh calls elect one offerer per peer pair by user ID.
-              const shouldOffer = Boolean(activeCall.group_id) && userId.localeCompare(signal.from) < 0
-              if (shouldOffer && !pc.localDescription) {
+              // Wait for a peer's join handshake before offering so early broadcasts
+              // cannot be lost before the recipient subscribes to the private channel.
+              // Direct calls use the caller as offerer; group calls elect one offerer per pair.
+              const shouldOffer = activeCall.group_id
+                ? userId.localeCompare(signal.from) < 0
+                : activeCall.caller_id === userId
+              if (shouldOffer && !pc.remoteDescription && pc.signalingState === 'stable') {
                 const offer = await pc.createOffer()
                 await pc.setLocalDescription(offer)
                 await sendSignal({ from: userId, to: signal.from, kind: 'offer', description: offer })
@@ -207,12 +210,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
           if (remoteId) {
             createPeer(remoteId, stream)
             await sendSignal({ from: userId, to: remoteId, kind: 'join' })
-            if (activeCall.caller_id === userId) {
-              const pc = peersRef.current.get(remoteId)!
-              const offer = await pc.createOffer()
-              await pc.setLocalDescription(offer)
-              await sendSignal({ from: userId, to: remoteId, kind: 'offer', description: offer })
-            }
+            // The caller creates the offer after receiving the callee's join handshake.
           }
         }
       } catch (error) {
