@@ -32,7 +32,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
 
   const refreshCalls = useCallback(async () => {
     if (!userId) return
-    let incomingQuery = supabase.from('call_sessions').select('id,caller_id,recipient_id,group_id,call_type,status,created_at').eq('status', 'ringing').neq('caller_id', userId).order('created_at', { ascending: false }).limit(1)
+    let incomingQuery = supabase.from('call_sessions').select('id,caller_id,recipient_id,group_id,call_type,status,created_at').in('status', ['ringing', 'active']).neq('caller_id', userId).order('created_at', { ascending: false }).limit(1)
     incomingQuery = groupId
       ? incomingQuery.eq('group_id', groupId)
       : incomingQuery.eq('recipient_id', userId).is('group_id', null)
@@ -108,13 +108,13 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     {(incoming || ringingOutgoing || activeCall || notice) && <div className="call-invite-backdrop" role="presentation">
       <section className="call-invite-dialog" role="dialog" aria-modal="true" aria-label="Call controls">
         <span className="call-invite-dialog__icon">{isGroup ? <Users size={25} /> : incoming?.call_type === 'video' || outgoing?.call_type === 'video' ? <Video size={25} /> : <Phone size={25} />}</span>
-        <h2>{incoming ? `${peerName} is calling` : activeCall ? 'Call accepted' : ringingOutgoing ? 'Calling…' : 'Calling setup'}</h2>
-        <p>{incoming ? `Incoming ${incoming.call_type} call${isGroup ? ' for this community' : ''}.` : activeCall ? 'The invitation was accepted. Audio/video transport is not connected yet.' : ringingOutgoing ? `Waiting for ${isGroup ? 'community members' : peerName} to answer.` : notice}</p>
-        {incoming && <div className="call-invite-dialog__actions">
+        <h2>{incoming?.status === 'ringing' ? `${peerName} is calling` : incoming?.status === 'active' || activeCall ? 'Call accepted' : ringingOutgoing ? 'Calling…' : 'Calling setup'}</h2>
+        <p>{incoming?.status === 'ringing' ? `Incoming ${incoming.call_type} call${isGroup ? ' for this community' : ''}.` : incoming?.status === 'active' || activeCall ? 'The invitation was accepted. Audio/video transport is not connected yet.' : ringingOutgoing ? `Waiting for ${isGroup ? 'community members' : peerName} to answer.` : notice}</p>
+        {incoming?.status === 'ringing' && <div className="call-invite-dialog__actions">
           <button type="button" className="call-invite-button call-invite-button--accept" disabled={busy} onClick={() => void updateStatus(incoming, 'active')}><Check size={17} /> Accept</button>
           <button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void updateStatus(incoming, 'rejected')}><PhoneOff size={17} /> Decline</button>
         </div>}
-        {(ringingOutgoing || activeCall) && <div className="call-invite-dialog__actions"><button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void updateStatus((activeCall || ringingOutgoing)!, 'ended')}><PhoneOff size={17} /> End call</button></div>}
+        {(ringingOutgoing || activeCall || incoming?.status === 'active') && <div className="call-invite-dialog__actions"><button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void updateStatus((activeCall || ringingOutgoing || incoming)!, 'ended')}><PhoneOff size={17} /> End call</button></div>}
         {notice && !incoming && !ringingOutgoing && !activeCall && <button type="button" className="call-invite-button" onClick={closeNotice}><X size={16} /> Close</button>}
       </section>
     </div>}
