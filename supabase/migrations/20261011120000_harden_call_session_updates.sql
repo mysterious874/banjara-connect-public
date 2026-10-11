@@ -16,6 +16,14 @@ begin
     raise exception 'Call participants and call type cannot be changed';
   end if;
 
+  -- A community member may join a ringing group call, but only its initiator
+  -- may reject or end the shared session for everyone else.
+  if old.group_id is not null
+     and new.status in ('rejected', 'ended', 'missed')
+     and (select auth.uid()) is distinct from old.caller_id then
+    raise exception 'Only the call initiator can end a community call';
+  end if;
+
   if old.status in ('rejected', 'ended', 'missed') then
     raise exception 'This call has already finished';
   end if;
