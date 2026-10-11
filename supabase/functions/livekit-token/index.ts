@@ -52,8 +52,21 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (callError || !call) return json({ error: "You are not allowed to join this call." }, 403);
     if (!["ringing", "active"].includes(call.status)) return json({ error: "This call has already ended." }, 409);
-    if (call.group_id === null && call.caller_id !== user.id && call.recipient_id !== user.id) {
-      return json({ error: "You are not a participant in this call." }, 403);
+    if (call.group_id === null) {
+      if (call.caller_id !== user.id && call.recipient_id !== user.id) {
+        return json({ error: "You are not a participant in this call." }, 403);
+      }
+    } else {
+      // Group-call tokens are only issued to current members of that community.
+      const { data: membership, error: membershipError } = await supabase
+        .from("community_group_members")
+        .select("group_id")
+        .eq("group_id", call.group_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (membershipError || !membership) {
+        return json({ error: "You are not a member of this community call." }, 403);
+      }
     }
 
     const { data: profile } = await supabase.from("profiles").select("username,display_name").eq("id", user.id).maybeSingle();
