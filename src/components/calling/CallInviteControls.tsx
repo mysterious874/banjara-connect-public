@@ -151,11 +151,9 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
           const pc = createPeer(signal.from, stream)
           try {
             if (signal.kind === 'join') {
-              // Direct calls have a single offerer: the original caller.
+              // Direct-call offers are created once by the caller in the setup path below.
               // Group mesh calls elect one offerer per peer pair by user ID.
-              const shouldOffer = activeCall.group_id
-                ? userId.localeCompare(signal.from) < 0
-                : activeCall.caller_id === userId
+              const shouldOffer = Boolean(activeCall.group_id) && userId.localeCompare(signal.from) < 0
               if (shouldOffer && !pc.localDescription) {
                 const offer = await pc.createOffer()
                 await pc.setLocalDescription(offer)
