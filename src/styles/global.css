@@ -4079,3 +4079,18 @@ select {
 }
 .profile-summary--centered h1 { margin-top: 12px; }
 .profile-summary--centered .profile-handle { margin-top: 2px; }
+
+
+/* Voice/video call invitation controls */
+.call-invite-controls { display: contents; }
+.call-invite-controls > button:disabled { opacity: .5; cursor: wait; }
+.call-invite-backdrop { position: fixed; inset: 0; z-index: 10050; display: grid; place-items: center; padding: 20px; background: rgba(12, 9, 8, .68); backdrop-filter: blur(8px); }
+.call-invite-dialog { width: min(100%, 360px); padding: 26px 22px 22px; text-align: center; color: var(--text, #fff); background: var(--surface, #211b19); border: 1px solid rgba(229, 163, 68, .4); border-radius: 24px; box-shadow: 0 24px 80px rgba(0,0,0,.38); }
+.call-invite-dialog__icon { display: inline-grid; width: 58px; height: 58px; place-items: center; color: #fff; background: linear-gradient(145deg, #e99b31, #a92d35); border-radius: 50%; box-shadow: 0 0 0 8px rgba(229, 163, 68, .1); }
+.call-invite-dialog h2 { margin: 18px 0 7px; font-size: 20px; }
+.call-invite-dialog p { margin: 0 0 20px; color: var(--muted, #bdb3ad); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.call-invite-dialog__actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.call-invite-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 16px; border: 1px solid rgba(255,255,255,.15); border-radius: 999px; background: rgba(255,255,255,.07); color: inherit; font: inherit; font-weight: 650; cursor: pointer; }
+.call-invite-button:disabled { opacity: .55; cursor: wait; }
+.call-invite-button--accept { color: #fff; background: #267b53; border-color: #267b53; }
+.call-invite-button--decline { color: #fff; background: #b62e3d; border-color: #b62e3d; }
