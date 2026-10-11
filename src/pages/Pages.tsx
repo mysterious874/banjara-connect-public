@@ -2660,6 +2660,7 @@ export function CommunityGroupPage() {
   const groupLongPressTimer = useRef<number | null>(null)
   const suppressNextGroupMessageClick = useRef(false)
   const [isSendingGroupMedia, setIsSendingGroupMedia] = useState(false)
+  const groupSendLock = useRef(false)
   const groupMediaInputRef = useRef<HTMLInputElement | null>(null)
   const groupPhotoInputRef = useRef<HTMLInputElement | null>(null)
   const groupVideoInputRef = useRef<HTMLInputElement | null>(null)
@@ -3318,10 +3319,19 @@ export function CommunityGroupPage() {
     event.preventDefault()
     const textToSend = message.trim()
     const mediaToSend = [...selectedGroupMedia]
-    if ((!textToSend && !mediaToSend.length) || isSending || isSendingGroupMedia || !session?.user || !groupId) return
+    // Lock synchronously so rapid taps cannot start duplicate uploads before React rerenders.
+    if (groupSendLock.current || (!textToSend && !mediaToSend.length) || isSending || isSendingGroupMedia || !session?.user || !groupId) return
+    groupSendLock.current = true
     setIsSendingGroupMedia(mediaToSend.length > 0)
     setIsSending(mediaToSend.length === 0)
     setError('')
+    // Detach the selected files from the composer immediately; the local snapshot above
+    // keeps them available for upload while the preview and native file input are cleared.
+    if (mediaToSend.length) {
+      setSelectedGroupMedia([])
+      for (const input of [groupMediaInputRef.current, groupPhotoInputRef.current, groupVideoInputRef.current, groupCameraInputRef.current]) if (input) input.value = ''
+      setGroupAttachmentMenuOpen(false)
+    }
     let uploadedPath = ''
     let pendingMessageId = ''
     try {
@@ -3363,6 +3373,7 @@ export function CommunityGroupPage() {
       if (pendingMessageId) await supabase.from('community_group_messages').delete().eq('id', pendingMessageId).eq('sender_id', session.user.id).catch(() => undefined)
       setError(userFacingError(caught, 'Could not send this message.'))
     } finally {
+      groupSendLock.current = false
       setIsSending(false)
       setIsSendingGroupMedia(false)
     }
