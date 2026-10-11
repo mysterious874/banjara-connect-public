@@ -4094,3 +4094,10 @@ select {
 .call-invite-button:disabled { opacity: .55; cursor: wait; }
 .call-invite-button--accept { color: #fff; background: #267b53; border-color: #267b53; }
 .call-invite-button--decline { color: #fff; background: #b62e3d; border-color: #b62e3d; }
+
+
+.call-invite-dialog--media { max-height: min(88dvh, 760px); overflow-y: auto; }
+.call-media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 16px 0; }
+.call-media-tile { width: 100%; min-height: 120px; max-height: 260px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 14px; background: #100e0d; }
+.call-media-tile--local { outline: 2px solid rgba(229, 163, 68, .65); }
+.call-voice-status { display: flex; min-height: 76px; align-items: center; justify-content: center; gap: 10px; border-radius: 14px; background: rgba(229, 163, 68, .1); color: var(--text, #fff); font-size: 14px; }
