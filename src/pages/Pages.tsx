@@ -2654,12 +2654,15 @@ export function CommunityGroupPage() {
   const [editDescription, setEditDescription] = useState('')
   const [groupSaving, setGroupSaving] = useState(false)
   const [selectedGroupMedia, setSelectedGroupMedia] = useState<File | null>(null)
+  const [groupAttachmentMenuOpen, setGroupAttachmentMenuOpen] = useState(false)
   const [selectedGroupMessageIds, setSelectedGroupMessageIds] = useState<string[]>([])
   const [pendingGroupDelete, setPendingGroupDelete] = useState('')
   const groupLongPressTimer = useRef<number | null>(null)
   const suppressNextGroupMessageClick = useRef(false)
   const [isSendingGroupMedia, setIsSendingGroupMedia] = useState(false)
   const groupMediaInputRef = useRef<HTMLInputElement | null>(null)
+  const groupPhotoInputRef = useRef<HTMLInputElement | null>(null)
+  const groupVideoInputRef = useRef<HTMLInputElement | null>(null)
   const groupCameraInputRef = useRef<HTMLInputElement | null>(null)
   const [hasOlderGroupMessages, setHasOlderGroupMessages] = useState(cachedGroupChat?.hasOlderGroupMessages ?? false)
   const [isLoadingOlderGroupMessages, setIsLoadingOlderGroupMessages] = useState(false)
@@ -3415,7 +3418,7 @@ export function CommunityGroupPage() {
           <div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startGroupMessageLongPress(item.id)} onPointerUp={clearGroupLongPressTimer} onPointerCancel={clearGroupLongPressTimer} onPointerLeave={clearGroupLongPressTimer} onContextMenu={(event) => handleGroupMessageContextMenu(event, item.id)} onClick={() => { if (suppressNextGroupMessageClick.current) { suppressNextGroupMessageClick.current = false; return } if (selectedGroupMessageIds.length > 0) toggleGroupMessageSelection(item.id) }}>
             {!mine && <strong className="community-group-message__sender">{senderName}</strong>}
             {item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{item.media_signed_url && item.media_type === 'image' && <img className="chat-message-media" src={item.media_signed_url} alt="Shared photo" loading="lazy" />}{item.media_signed_url && item.media_type === 'video' && <video className="chat-message-media chat-message-media--video" src={item.media_signed_url} controls playsInline preload="metadata" />}{item.content && <p className="chat-message-text">{item.content}</p>}</>}
-            <span>{new Date(item.created_at).toLocaleTimeString()}</span>
+            <span className="chat-bubble__meta"><time>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></span>
             {!mine && !selectedGroupMessageIds.length && <button type="button" className="community-group-message__delete" onClick={(event) => { event.stopPropagation(); setReportTarget({ messageId: item.id, userId: item.sender_id, label: senderName }); setReportError('') }} aria-label="Report message"><Flag size={13} /> Report</button>}
           </div>
         </div>
@@ -3427,8 +3430,13 @@ export function CommunityGroupPage() {
       {selectedGroupMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedGroupMedia.name}</span><button type="button" onClick={() => { setSelectedGroupMedia(null); if (groupMediaInputRef.current) groupMediaInputRef.current.value = '' }} aria-label="Remove selected media">×</button></div>}
       <form className="chat-disabled-compose" onSubmit={sendGroupMessage}>
         <input ref={groupMediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleGroupMediaFile} />
+        <input ref={groupPhotoInputRef} className="chat-media-input" type="file" accept="image/*" multiple onChange={handleGroupMediaFile} />
+        <input ref={groupVideoInputRef} className="chat-media-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/*" multiple onChange={handleGroupMediaFile} />
         <input ref={groupCameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleGroupMediaFile} />
-        <Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" onClick={() => groupMediaInputRef.current?.click()} disabled={isSendingGroupMedia}><Paperclip size={18} /></Button>
+        <div className="chat-attachment-wrap">
+          <Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" aria-expanded={groupAttachmentMenuOpen} onClick={() => setGroupAttachmentMenuOpen((open) => !open)} disabled={isSendingGroupMedia}><Paperclip size={18} /></Button>
+          {groupAttachmentMenuOpen && <div className="chat-attachment-menu" role="menu" aria-label="Choose attachment type"><button type="button" role="menuitem" onClick={() => { setGroupAttachmentMenuOpen(false); groupPhotoInputRef.current?.click() }}><span className="chat-attachment-menu__icon"><Camera size={16} /></span><span>Photo</span></button><button type="button" role="menuitem" onClick={() => { setGroupAttachmentMenuOpen(false); groupVideoInputRef.current?.click() }}><span className="chat-attachment-menu__icon"><Video size={16} /></span><span>Video</span></button></div>}
+        </div>
         <Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => groupCameraInputRef.current?.click()} disabled={isSendingGroupMedia}><Camera size={18} /></Button>
         <Input aria-label="Group message" placeholder={selectedGroupMedia ? 'Add a caption (optional)' : 'Message this community'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} />
         <Button type="submit" disabled={(!message.trim() && !selectedGroupMedia) || isSending || isSendingGroupMedia} iconOnly aria-label="Send group message">{isSending || isSendingGroupMedia ? '…' : <Send size={17} />}</Button>
