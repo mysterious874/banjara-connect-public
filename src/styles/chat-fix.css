@@ -772,13 +772,13 @@ body:has(.community-group-screen) {
 
 
 /* Compact attachment chooser anchored just above the paperclip. */
-.app-shell--chat .chat-attachment-wrap {
+:is(.app-shell--chat, .community-group-screen) .chat-attachment-wrap {
   position: relative;
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
 }
-.app-shell--chat .chat-attachment-menu {
+:is(.app-shell--chat, .community-group-screen) .chat-attachment-menu {
   position: absolute;
   z-index: 120;
   left: 50%;
@@ -794,7 +794,7 @@ body:has(.community-group-screen) {
   color: var(--chat-other-text, #34231f);
   box-shadow: 0 8px 24px rgb(35 20 15 / 20%);
 }
-.app-shell--chat .chat-attachment-menu::after {
+:is(.app-shell--chat, .community-group-screen) .chat-attachment-menu::after {
   content: "";
   position: absolute;
   left: calc(50% - 5px);
@@ -806,7 +806,7 @@ body:has(.community-group-screen) {
   border-right: 1px solid var(--chat-line, #ead7c4);
   border-bottom: 1px solid var(--chat-line, #ead7c4);
 }
-.app-shell--chat .chat-attachment-menu button {
+:is(.app-shell--chat, .community-group-screen) .chat-attachment-menu button {
   position: relative;
   z-index: 1;
   display: flex;
@@ -824,12 +824,12 @@ body:has(.community-group-screen) {
   text-align: left;
   cursor: pointer;
 }
-.app-shell--chat .chat-attachment-menu button:hover,
-.app-shell--chat .chat-attachment-menu button:focus-visible {
+:is(.app-shell--chat, .community-group-screen) .chat-attachment-menu button:hover,
+:is(.app-shell--chat, .community-group-screen) .chat-attachment-menu button:focus-visible {
   background: color-mix(in srgb, var(--chat-head, #7b1e2b) 10%, transparent);
   outline: none;
 }
-.app-shell--chat .chat-attachment-menu__icon {
+:is(.app-shell--chat, .community-group-screen) .chat-attachment-menu__icon {
   display: grid;
   width: 27px;
   height: 27px;
