@@ -21,12 +21,12 @@ type Signal = {
   description?: RTCSessionDescriptionInit
   candidate?: RTCIceCandidateInit
 }
-type Props = { recipientId?: string; groupId?: string; peerName: string; compact?: boolean }
+type Props = { recipientId?: string; groupId?: string; peerName: string; compact?: boolean; hideIncomingPrompt?: boolean }
 const rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
 }
 
-export function CallInviteControls({ recipientId, groupId, peerName, compact = false }: Props) {
+export function CallInviteControls({ recipientId, groupId, peerName, compact = false, hideIncomingPrompt = false }: Props) {
   const { session } = useAuth()
   const userId = session?.user.id
   const [incoming, setIncoming] = useState<CallSession | null>(null)
@@ -251,7 +251,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
       <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group voice call' : 'Voice call'} title={isGroup ? 'Group voice call' : 'Voice call'} onClick={() => void startCall('voice')} disabled={busy || Boolean(incoming || outgoing)}><Phone size={18} /></button>
       <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group video call' : 'Video call'} title={isGroup ? 'Group video call' : 'Video call'} onClick={() => void startCall('video')} disabled={busy || Boolean(incoming || outgoing)}><Video size={19} /></button>
     </div>
-    {(incoming || ringingOutgoing || activeCall || notice) && <div className="call-invite-backdrop" role="presentation">
+    {((incoming && (!hideIncomingPrompt || incoming.status !== 'ringing')) || ringingOutgoing || activeCall || notice) && <div className="call-invite-backdrop" role="presentation">
       <section className="call-invite-dialog call-invite-dialog--media" role="dialog" aria-modal="true" aria-label="Call controls">
         <span className="call-invite-dialog__icon">{isGroup ? <Users size={25} /> : (activeCall?.call_type ?? incoming?.call_type ?? outgoing?.call_type) === 'video' ? <Video size={25} /> : <Phone size={25} />}</span>
         <h2>{incoming?.status === 'ringing' ? `${peerName} is calling` : activeCall ? (isGroup ? `${peerName} call` : 'Connected') : incoming?.status === 'active' && incoming.group_id ? 'Community call is live' : ringingOutgoing ? 'Calling…' : 'Calling setup'}</h2>
