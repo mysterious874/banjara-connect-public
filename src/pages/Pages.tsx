@@ -3430,15 +3430,15 @@ export function CommunityGroupPage() {
       {selectedGroupMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedGroupMedia.name}</span><button type="button" onClick={() => { setSelectedGroupMedia(null); if (groupMediaInputRef.current) groupMediaInputRef.current.value = '' }} aria-label="Remove selected media">×</button></div>}
       <form className="chat-disabled-compose" onSubmit={sendGroupMessage}>
         <input ref={groupMediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleGroupMediaFile} />
-        <input ref={groupPhotoInputRef} className="chat-media-input" type="file" accept="image/*" multiple onChange={handleGroupMediaFile} />
-        <input ref={groupVideoInputRef} className="chat-media-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/*" multiple onChange={handleGroupMediaFile} />
+        <input ref={groupPhotoInputRef} className="chat-media-input" type="file" accept="image/*" onChange={handleGroupMediaFile} />
+        <input ref={groupVideoInputRef} className="chat-media-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/*" onChange={handleGroupMediaFile} />
         <input ref={groupCameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleGroupMediaFile} />
+        <Input aria-label="Group message" placeholder={selectedGroupMedia ? 'Add a caption (optional)' : 'Message this community'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} />
         <div className="chat-attachment-wrap">
           <Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" aria-expanded={groupAttachmentMenuOpen} onClick={() => setGroupAttachmentMenuOpen((open) => !open)} disabled={isSendingGroupMedia}><Paperclip size={18} /></Button>
           {groupAttachmentMenuOpen && <div className="chat-attachment-menu" role="menu" aria-label="Choose attachment type"><button type="button" role="menuitem" onClick={() => { setGroupAttachmentMenuOpen(false); groupPhotoInputRef.current?.click() }}><span className="chat-attachment-menu__icon"><Camera size={16} /></span><span>Photo</span></button><button type="button" role="menuitem" onClick={() => { setGroupAttachmentMenuOpen(false); groupVideoInputRef.current?.click() }}><span className="chat-attachment-menu__icon"><Video size={16} /></span><span>Video</span></button></div>}
         </div>
         <Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => groupCameraInputRef.current?.click()} disabled={isSendingGroupMedia}><Camera size={18} /></Button>
-        <Input aria-label="Group message" placeholder={selectedGroupMedia ? 'Add a caption (optional)' : 'Message this community'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} />
         <Button type="submit" disabled={(!message.trim() && !selectedGroupMedia) || isSending || isSendingGroupMedia} iconOnly aria-label="Send group message">{isSending || isSendingGroupMedia ? '…' : <Send size={17} />}</Button>
       </form>
       <p className="micro-note">Photos and videos up to 50 MB</p>
