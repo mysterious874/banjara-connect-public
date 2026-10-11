@@ -37,12 +37,13 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({})
   const [muted, setMuted] = useState(false)
   const [cameraOff, setCameraOff] = useState(false)
+  const [joinedGroupCallId, setJoinedGroupCallId] = useState<string | null>(null)
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map())
   const localStreamRef = useRef<MediaStream | null>(null)
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map())
   const isGroup = Boolean(groupId)
-  const activeCall = incoming?.status === 'active' ? incoming : outgoing?.status === 'active' ? outgoing : null
+  const activeCall = outgoing?.status === 'active' ? outgoing : incoming?.status === 'active' && (!incoming.group_id || joinedGroupCallId === incoming.id) ? incoming : null
   const ringingOutgoing = outgoing?.status === 'ringing' ? outgoing : null
 
   const refreshCalls = useCallback(async () => {
@@ -240,14 +241,14 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     {(incoming || ringingOutgoing || activeCall || notice) && <div className="call-invite-backdrop" role="presentation">
       <section className="call-invite-dialog call-invite-dialog--media" role="dialog" aria-modal="true" aria-label="Call controls">
         <span className="call-invite-dialog__icon">{isGroup ? <Users size={25} /> : (activeCall?.call_type ?? incoming?.call_type ?? outgoing?.call_type) === 'video' ? <Video size={25} /> : <Phone size={25} />}</span>
-        <h2>{incoming?.status === 'ringing' ? `${peerName} is calling` : activeCall ? (isGroup ? `${peerName} call` : 'Connected') : ringingOutgoing ? 'Calling…' : 'Calling setup'}</h2>
-        <p>{incoming?.status === 'ringing' ? `Incoming ${incoming.call_type} call${isGroup ? ' for this community' : ''}.` : activeCall ? (localStream ? 'Audio/video connection starting.' : 'Requesting microphone/camera permission…') : ringingOutgoing ? `Waiting for ${isGroup ? 'community members' : peerName} to answer.` : notice}</p>
+        <h2>{incoming?.status === 'ringing' ? `${peerName} is calling` : activeCall ? (isGroup ? `${peerName} call` : 'Connected') : incoming?.status === 'active' && incoming.group_id ? 'Community call is live' : ringingOutgoing ? 'Calling…' : 'Calling setup'}</h2>
+        <p>{incoming?.status === 'ringing' ? `Incoming ${incoming.call_type} call${isGroup ? ' for this community' : ''}.` : activeCall ? (localStream ? 'Audio/video connection starting.' : 'Requesting microphone/camera permission…') : incoming?.status === 'active' && incoming.group_id ? 'Join when you are ready; your microphone and camera stay off until you join.' : ringingOutgoing ? `Waiting for ${isGroup ? 'community members' : peerName} to answer.` : notice}</p>
         {activeCall && <div className="call-media-grid">
           {activeCall.call_type === 'video' && localStream && <video className="call-media-tile call-media-tile--local" autoPlay playsInline muted ref={element => { if (element && element.srcObject !== localStream) element.srcObject = localStream }} />}
           {Object.entries(remoteStreams).map(([id, stream]) => <video key={id} className="call-media-tile" autoPlay playsInline ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} />)}
           {activeCall.call_type === 'voice' && <span className="call-voice-status"><Phone size={20} /> Voice connected</span>}
         </div>}
-        {incoming?.status === 'ringing' && <div className="call-invite-dialog__actions">
+        {incoming?.status === 'active' && incoming.group_id && !activeCall && <div className="call-invite-dialog__actions"><button type="button" className="call-invite-button call-invite-button--accept" onClick={() => setJoinedGroupCallId(incoming.id)}><Phone size={17} /> Join community call</button></div>}\n        {incoming?.status === 'ringing' && <div className="call-invite-dialog__actions">
           <button type="button" className="call-invite-button call-invite-button--accept" disabled={busy} onClick={() => void updateStatus(incoming, 'active')}><Check size={17} /> Accept</button>
           <button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void updateStatus(incoming, 'rejected')}><PhoneOff size={17} /> Decline</button>
         </div>}
