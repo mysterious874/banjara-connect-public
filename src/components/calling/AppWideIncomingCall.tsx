@@ -92,8 +92,18 @@ export function AppWideIncomingCall() {
       if (error) throw error
       setCall(null)
       if (accept) {
-        if (call.group_id) navigate(`/community/groups/${call.group_id}`)
-        else navigate(`/chat/${call.caller_id}`)
+        if (call.group_id) {
+          navigate(`/community/groups/${call.group_id}`)
+        } else {
+          // Chat routes use the conversation UUID, not a user UUID.
+          const [{ data: callerMemberships }, { data: myMemberships }] = await Promise.all([
+            supabase.from('conversation_members').select('conversation_id').eq('user_id', call.caller_id),
+            supabase.from('conversation_members').select('conversation_id').eq('user_id', userId),
+          ])
+          const myIds = new Set((myMemberships ?? []).map(row => row.conversation_id))
+          const conversationId = (callerMemberships ?? []).find(row => myIds.has(row.conversation_id))?.conversation_id
+          navigate(conversationId ? `/chat/${conversationId}` : '/chat')
+        }
       }
       void refresh()
     } catch {
