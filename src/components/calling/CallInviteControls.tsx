@@ -68,6 +68,11 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
 
   const startCall = async (callType: CallType) => {
     if (!userId || busy) return
+    if (incoming || outgoing) { setNotice('Finish your current call before starting another one.'); return }
+    if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
+      setNotice('Voice/video calling is not supported by this browser. Try the latest version of Chrome, Safari, or Edge.')
+      return
+    }
     setBusy(true); setNotice('')
     try {
       const { data, error } = await supabase.from('call_sessions').insert({
@@ -232,11 +237,19 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     setCameraOff(next)
   }
   const dismissNotice = () => setNotice('')
+  const endOrLeaveCall = async () => {
+    if (!activeCall) return
+    if (activeCall.group_id && activeCall.caller_id !== userId) {
+      setJoinedGroupCallId(null)
+      return
+    }
+    await updateStatus(activeCall, 'ended')
+  }
 
   return <>
     <div className={compact ? 'call-invite-controls call-invite-controls--compact' : 'call-invite-controls'}>
-      <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group voice call' : 'Voice call'} title={isGroup ? 'Group voice call' : 'Voice call'} onClick={() => void startCall('voice')} disabled={busy}><Phone size={18} /></button>
-      <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group video call' : 'Video call'} title={isGroup ? 'Group video call' : 'Video call'} onClick={() => void startCall('video')} disabled={busy}><Video size={19} /></button>
+      <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group voice call' : 'Voice call'} title={isGroup ? 'Group voice call' : 'Voice call'} onClick={() => void startCall('voice')} disabled={busy || Boolean(incoming || outgoing)}><Phone size={18} /></button>
+      <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group video call' : 'Video call'} title={isGroup ? 'Group video call' : 'Video call'} onClick={() => void startCall('video')} disabled={busy || Boolean(incoming || outgoing)}><Video size={19} /></button>
     </div>
     {(incoming || ringingOutgoing || activeCall || notice) && <div className="call-invite-backdrop" role="presentation">
       <section className="call-invite-dialog call-invite-dialog--media" role="dialog" aria-modal="true" aria-label="Call controls">
@@ -255,7 +268,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         {activeCall && <div className="call-invite-dialog__actions">
           <button type="button" className="call-invite-button" onClick={toggleMute} title={muted ? 'Unmute microphone' : 'Mute microphone'}>{muted ? <MicOff size={17} /> : <Mic size={17} />}{muted ? 'Unmute' : 'Mute'}</button>
           {activeCall.call_type === 'video' && <button type="button" className="call-invite-button" onClick={toggleCamera} title={cameraOff ? 'Turn camera on' : 'Turn camera off'}>{cameraOff ? <CameraOff size={17} /> : <Camera size={17} />}{cameraOff ? 'Camera on' : 'Camera off'}</button>}
-          <button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void updateStatus(activeCall, 'ended')}><PhoneOff size={17} /> End call</button>
+          <button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void endOrLeaveCall()}><PhoneOff size={17} />{activeCall.group_id && activeCall.caller_id !== userId ? 'Leave call' : 'End call'}</button>
         </div>}
         {ringingOutgoing && <div className="call-invite-dialog__actions"><button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void updateStatus(ringingOutgoing, 'ended')}><PhoneOff size={17} /> Cancel call</button></div>}
         {notice && !activeCall && !incoming && !ringingOutgoing && <button type="button" className="call-invite-button" onClick={dismissNotice}><X size={16} /> Close</button>}
