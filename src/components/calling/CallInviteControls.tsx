@@ -125,7 +125,14 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         if (event.candidate) void sendSignal({ from: userId, to: remoteId, kind: 'candidate', candidate: event.candidate.toJSON() })
       }
       pc.onconnectionstatechange = () => {
-        if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+        if (pc.connectionState === 'connected') setNotice('')
+        if (pc.connectionState === 'failed') {
+          setNotice('Call connection failed. Check your network; some networks need a TURN relay to connect.')
+          setRemoteStreams(previous => { const next = { ...previous }; delete next[remoteId]; return next })
+        } else if (pc.connectionState === 'disconnected') {
+          setNotice('Connection is unstable. Waiting for the network to recover…')
+          setRemoteStreams(previous => { const next = { ...previous }; delete next[remoteId]; return next })
+        } else if (pc.connectionState === 'closed') {
           setRemoteStreams(previous => { const next = { ...previous }; delete next[remoteId]; return next })
         }
       }
@@ -259,6 +266,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         <span className="call-invite-dialog__icon">{isGroup ? <Users size={25} /> : (activeCall?.call_type ?? incoming?.call_type ?? outgoing?.call_type) === 'video' ? <Video size={25} /> : <Phone size={25} />}</span>
         <h2>{incoming?.status === 'ringing' ? `${peerName} is calling` : activeCall ? (isGroup ? `${peerName} call` : 'Connected') : incoming?.status === 'active' && incoming.group_id ? 'Community call is live' : ringingOutgoing ? 'Calling…' : 'Calling setup'}</h2>
         <p>{incoming?.status === 'ringing' ? `Incoming ${incoming.call_type} call${isGroup ? ' for this community' : ''}.` : activeCall ? (localStream ? 'Audio/video connection starting.' : 'Requesting microphone/camera permission…') : incoming?.status === 'active' && incoming.group_id ? 'Join when you are ready; your microphone and camera stay off until you join.' : ringingOutgoing ? `Waiting for ${isGroup ? 'community members' : peerName} to answer.` : notice}</p>
+        {activeCall && notice && <p role="status" className="call-invite-dialog__notice">{notice}</p>}
         {activeCall && <div className="call-media-grid">
           {activeCall.call_type === 'video' && localStream && <video className="call-media-tile call-media-tile--local" autoPlay playsInline muted ref={element => { if (element && element.srcObject !== localStream) element.srcObject = localStream }} />}
           {Object.entries(remoteStreams).map(([id, stream]) => <video key={id} className="call-media-tile" autoPlay playsInline ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} />)}
