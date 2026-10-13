@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Phone, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Volume2, Ban, LogOut, Download, Maximize2, Minimize2, Forward } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Volume2, Ban, LogOut, Download, Maximize2, Minimize2, Forward } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
@@ -29,6 +29,7 @@ import type { FeedPost, ProfileRecord } from '../types/app'
 import { deleteMessageForEveryone, deleteMessageForMe, hydrateConversationMediaUrls, invalidateConversationListCache, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
 import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostLikesBatch, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 import { getCached, invalidateCache, setCached } from '../utils/performanceCache'
+import { CallInviteControls } from '../components/calling/CallInviteControls'
 
 function renderChatMessageContent(content: string) {
   return content.split('\n').map((line, index, lines) => {
@@ -368,7 +369,7 @@ export function HomePage() {
 }
 
 export function CommunityPage() {
-  const { profile, session } = useAuth()
+  const { session } = useAuth()
   const [posts, setPosts] = useState<FeedPost[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -1900,7 +1901,7 @@ export function StoriesPage() {
                   <button type="button" className="story-manage-row__delete" onClick={() => void removeStory(story)} aria-label="Delete story"><Trash2 size={17} /></button>
                 </div>
               })}</div> : <EmptyState title="No active stories" description="Add a photo, video, or message to share your first story." />}
-              {!showCreateStory && <Button block onClick={() => setShowCreateStory(true)}><Plus size={17} /> Add Story</Button>}
+              {!showCreateStory && <Button onClick={() => setShowCreateStory(true)}><Plus size={17} /> Add Story</Button>}
               {showCreateStory && <Button variant="quiet" onClick={() => { setShowCreateStory(false); setError(''); setSuccess('') }}>Cancel adding story</Button>}
             </div>
           ) : isDirectCreate ? null : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="story-page-thumbs"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div><div className="stories-rail__items">{grouped.map((story) => {
@@ -2428,15 +2429,6 @@ export function ChatConversationPage() {
     finally { setForwardLoading(false) }
   }
 
-  async function forwardSelectedMessagesToUser(userId: string) {
-    try {
-      const existing = forwardConversations.find((row) => row.member.id === userId)
-      const destinationId = existing?.id ?? await getOrCreateConversation(userId)
-      await forwardSelectedMessagesTo(destinationId)
-    } catch (caught) {
-      setForwardError(userFacingError(caught, 'Could not open this contact for forwarding.'))
-    }
-  }
 
   async function sendForwardedToSelectedContacts() {
     if (!selectedForwardIds.length || forwardingTo) return
@@ -2465,31 +2457,6 @@ export function ChatConversationPage() {
     finally { setForwardingTo('') }
   }
 
-  async function forwardSelectedMessagesTo(destinationId: string) {
-    if (!selectedMessageIds.length || forwardingTo) return
-    setForwardingTo(destinationId)
-    setForwardError('')
-    try {
-      const selected = messages.filter((item) => selectedMessageIds.includes(item.id) && !item.is_deleted_for_everyone)
-      for (const item of selected) {
-        let file: File | undefined
-        if (item.media_type && !item.media_signed_url) throw new Error('This media is still loading. Try forwarding again in a moment.')
-        if (item.media_type && item.media_signed_url) {
-          const response = await fetch(item.media_signed_url)
-          if (!response.ok) throw new Error('Could not download a selected media item to forward.')
-          const blob = await response.blob()
-          const extension = item.media_type === 'image' ? 'jpg' : item.media_type === 'video' ? 'mp4' : 'bin'
-          file = new File([blob], `forwarded-${item.media_type}-${Date.now()}.${extension}`, { type: blob.type || (item.media_type === 'image' ? 'image/jpeg' : item.media_type === 'video' ? 'video/mp4' : 'application/octet-stream') })
-        }
-        if (item.content.trim() || file) await sendConversationMessage(destinationId, item.content, file)
-      }
-      setForwardOpen(false)
-      setForwardQuery('')
-      setSelectedMessageIds([])
-    } catch (caught) {
-      setForwardError(userFacingError(caught, 'Could not forward the selected messages.'))
-    } finally { setForwardingTo('') }
-  }
 
   async function deleteSelectedMessages(mode: 'me' | 'everyone') {
     if (!selectedMessageIds.length || pendingDeleteId) return
@@ -2600,7 +2567,7 @@ export function ChatConversationPage() {
     setChatMenuOpen(false)
     try { window.localStorage.setItem(`banjara-chat-theme-${conversationId}`, themeId) } catch { /* local storage may be unavailable */ }
   }
-  return <section className={`chat-screen chat-screen--theme-${chatTheme}`}><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Link to={`/profile/${encodeURIComponent(person.username)}`} className="chat-screen__profile"><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>{peerOnline ? (peerInApp ? "online" : "online · not in app") : "offline"}</small></span></Link><div className="chat-screen__actions"><button type="button" className="chat-screen__action" aria-label="Voice call" title="Voice call"><Phone size={18} /></button><button type="button" className="chat-screen__action" aria-label="Video call" title="Video call"><Video size={19} /></button><button type="button" className="chat-screen__action" aria-label="Chat options" title="Chat options" aria-expanded={chatMenuOpen} onClick={() => { setChatMenuOpen((current) => !current); setChatThemeOpen(false) }}><MoreVertical size={20} /></button>{chatMenuOpen && <div className="chat-options-menu"><button type="button" className="chat-options-menu__item" onClick={() => { setChatThemeOpen(true); setChatMenuOpen(false) }}><Palette size={17} /><span>Chat Background</span><ChevronRight size={15} /></button></div>}</div></header>{chatThemeOpen && <Modal open={chatThemeOpen} title="Chat background" onClose={() => setChatThemeOpen(false)}><div className="chat-theme-picker">{chatThemes.map((theme) => <button type="button" key={theme.id} className={`chat-theme-option${chatTheme === theme.id ? ' chat-theme-option--active' : ''}`} onClick={() => selectChatTheme(theme.id)}><span className="chat-theme-option__swatch" style={{ background: theme.preview }} /><span><strong>{theme.label}</strong><small>{theme.id === 'classic' ? 'Banjara Connect default' : 'Apply only to this chat'}</small></span>{chatTheme === theme.id && <Check size={17} />}</button>)}</div></Modal>}
+  return <section className={`chat-screen chat-screen--theme-${chatTheme}`}><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Link to={`/profile/${encodeURIComponent(person.username)}`} className="chat-screen__profile"><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>{peerOnline ? (peerInApp ? "online" : "online · not in app") : "offline"}</small></span></Link><div className="chat-screen__actions"><CallInviteControls recipientId={person.id} peerName={personName} hideIncomingPrompt /><button type="button" className="chat-screen__action" aria-label="Chat options" title="Chat options" aria-expanded={chatMenuOpen} onClick={() => { setChatMenuOpen((current) => !current); setChatThemeOpen(false) }}><MoreVertical size={20} /></button>{chatMenuOpen && <div className="chat-options-menu"><button type="button" className="chat-options-menu__item" onClick={() => { setChatThemeOpen(true); setChatMenuOpen(false) }}><Palette size={17} /><span>Chat Background</span><ChevronRight size={15} /></button></div>}</div></header>{chatThemeOpen && <Modal open={chatThemeOpen} title="Chat background" onClose={() => setChatThemeOpen(false)}><div className="chat-theme-picker">{chatThemes.map((theme) => <button type="button" key={theme.id} className={`chat-theme-option${chatTheme === theme.id ? ' chat-theme-option--active' : ''}`} onClick={() => selectChatTheme(theme.id)}><span className="chat-theme-option__swatch" style={{ background: theme.preview }} /><span><strong>{theme.label}</strong><small>{theme.id === 'classic' ? 'Banjara Connect default' : 'Apply only to this chat'}</small></span>{chatTheme === theme.id && <Check size={17} />}</button>)}</div></Modal>}
     <div className="chat-messages" onScroll={(event) => { const pane = event.currentTarget; stickToLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120 }}>{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{selectedMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelMessageSelection} aria-label="Close message selection">×</button><strong>{selectedMessageIds.length} selected</strong><button type="button" onClick={() => void copySelectedMessages()}>Copy</button><button type="button" onClick={() => void openForwardPicker()}><Forward size={14} /> Forward</button><button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('me')}>Delete for me</button>{messages.some((item) => selectedMessageIds.includes(item.id) && item.sender_id === session?.user.id && !item.is_deleted_for_everyone && (item.media_type === 'image' || item.media_type === 'video' || item.content)) && <button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('everyone')}>Delete for everyone</button>}</div>}{isSendingMedia && <div className="chat-media-sending chat-media-sending--inline" role="status" aria-live="polite"><span className="chat-media-sending__icon"><Paperclip size={14} /></span><span className="chat-media-sending__info"><strong>Sending media…</strong><small>Uploading into this conversation</small><span className="chat-media-sending__track"><span /></span></span></div>}{messages.length ? messages.map((item, index) => { const mine = item.sender_id === session?.user.id; const selected = selectedMessageIds.includes(item.id); const mediaUrl = item.media_signed_url; return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}${index === 0 ? ' chat-message-row--first' : ''}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startMessageLongPress(item.id)} onPointerUp={clearLongPressTimer} onPointerCancel={clearLongPressTimer} onPointerLeave={clearLongPressTimer} onContextMenu={(event) => handleMessageContextMenu(event, item.id)} onClick={() => {
   if (suppressNextMessageClick.current) {
     suppressNextMessageClick.current = false
@@ -3370,7 +3337,7 @@ export function CommunityGroupPage() {
       window.requestAnimationFrame(() => { const pane = document.querySelector('.community-group-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
     } catch (caught) {
       if (uploadedPath) await deleteGroupMedia([uploadedPath]).catch(() => undefined)
-      if (pendingMessageId) await supabase.from('community_group_messages').delete().eq('id', pendingMessageId).eq('sender_id', session.user.id).catch(() => undefined)
+      if (pendingMessageId) { try { await supabase.from('community_group_messages').delete().eq('id', pendingMessageId).eq('sender_id', session.user.id) } catch { /* best-effort rollback */ } }
       setError(userFacingError(caught, 'Could not send this message.'))
     } finally {
       groupSendLock.current = false
@@ -3390,6 +3357,7 @@ export function CommunityGroupPage() {
         <span className="chat-screen__identity"><strong>{group.name}</strong><small>{members.length} members · tap for members</small></span>
       </button>
       <div className="chat-screen__actions">
+        <CallInviteControls groupId={group.id} peerName={group.name} hideIncomingPrompt />
         <button type="button" className="chat-screen__action" aria-label="Community options" title="Community options" aria-expanded={groupMenuOpen} onClick={() => setGroupMenuOpen((current) => !current)}>
           <MoreVertical size={20} />
         </button>

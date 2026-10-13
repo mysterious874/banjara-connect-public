@@ -47,7 +47,7 @@ function useWarmRouteModules() {
         import('./pages/AuthPages'),
       ]).catch(() => undefined)
     }
-    const idleWindow = window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
+    const idleWindow = window as unknown as { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
     const idleId = idleWindow.requestIdleCallback
       ? idleWindow.requestIdleCallback(warm, { timeout: 1800 })
       : window.setTimeout(warm, 900)
