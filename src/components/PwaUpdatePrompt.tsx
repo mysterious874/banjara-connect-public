@@ -5,9 +5,22 @@ export function PwaUpdatePrompt() {
   const [registrationError, setRegistrationError] = useState<string | null>(null)
   const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW({
     immediate: true,
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration || typeof window === 'undefined') return
+
+      // Check for newly deployed versions while the website stays open.
+      // The browser still controls whether the worker can be installed.
+      const checkForUpdate = () => {
+        void registration.update().catch((error) => {
+          console.warn('Could not check for an app update:', error)
+        })
+      }
+      checkForUpdate()
+      window.setInterval(checkForUpdate, 60_000)
+    },
     onRegisterError(error) {
       console.error('Service worker registration failed:', error)
-      setRegistrationError('Offline support could not be started. The app remains available online.')
+      setRegistrationError('App update checks could not start. You can keep using Connect online.')
     },
   })
 
@@ -17,9 +30,9 @@ export function PwaUpdatePrompt() {
     <aside className="pwa-status" aria-live="polite" aria-label="App update status">
       {needRefresh ? (
         <>
-          <p>A new version of Banjara Connect is ready.</p>
+          <p>New update available for Connect.</p>
           <button className="button" onClick={() => void updateServiceWorker(true)}>
-            Update app
+            Update now
           </button>
         </>
       ) : (
