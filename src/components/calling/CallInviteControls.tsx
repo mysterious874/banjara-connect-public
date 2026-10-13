@@ -59,13 +59,20 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
   }, [userId, recipientId, groupId, refreshCalls])
 
   const startCall = async (callType: CallType) => {
-    if (!userId || busy) return
-    if (incoming || outgoing) { setNotice('Finish your current call before starting another one.'); return }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setNotice('Voice/video calling is not supported by this browser. Try the latest version of Chrome, Safari, or Edge.')
+    if (!userId) {
+      setNotice('Please sign in again to start a call.')
       return
     }
-    setBusy(true); setNotice('')
+    if (busy) return
+    if (incoming || outgoing) {
+      setNotice('A call is already active or ringing. Use the call window to answer or end it first.')
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setNotice('Voice/video calling needs a secure connection and browser media support. Open the app in the latest Chrome or Edge and allow microphone/camera access.')
+      return
+    }
+    setBusy(true); setNotice(callType === 'voice' ? 'Starting voice call…' : 'Starting video call…')
     try {
       const { data, error } = await supabase.from('call_sessions').insert({
         caller_id: userId, recipient_id: recipientId ?? null, group_id: groupId ?? null,
@@ -74,10 +81,13 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
       if (error) throw error
       setOutgoing(data as CallSession)
     } catch (error) {
-      const message = error instanceof Error ? error.message : ''
+      const message = error instanceof Error ? error.message : String(error || '')
+      console.error('Banjara Connect start-call failed:', error)
       setNotice(message.includes('call_sessions') || message.includes('schema cache')
-        ? 'Calling setup is not active on the server yet.'
-        : 'Could not start the call. Check the connection and try again.')
+        ? 'Calling database setup is missing or not available yet.'
+        : message
+          ? `Could not start the call: ${message}`
+          : 'Could not start the call. Check the connection and try again.')
     } finally { setBusy(false) }
   }
 
@@ -203,8 +213,8 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
 
   return <>
     <div className={compact ? 'call-invite-controls call-invite-controls--compact' : 'call-invite-controls'}>
-      <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group voice call' : 'Voice call'} title={isGroup ? 'Group voice call' : 'Voice call'} onClick={() => void startCall('voice')} disabled={busy || Boolean(incoming || outgoing)}><Phone size={18} /></button>
-      <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group video call' : 'Video call'} title={isGroup ? 'Group video call' : 'Video call'} onClick={() => void startCall('video')} disabled={busy || Boolean(incoming || outgoing)}><Video size={19} /></button>
+      <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group voice call' : 'Voice call'} title={isGroup ? 'Group voice call' : 'Voice call'} onClick={() => void startCall('voice')} disabled={busy}><Phone size={18} /></button>
+      <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group video call' : 'Video call'} title={isGroup ? 'Group video call' : 'Video call'} onClick={() => void startCall('video')} disabled={busy}><Video size={19} /></button>
     </div>
     {((incoming && (!hideIncomingPrompt || incoming.status !== 'ringing')) || ringingOutgoing || activeCall || notice) && <div className="call-invite-backdrop" role="presentation">
       <section className="call-invite-dialog call-invite-dialog--media" role="dialog" aria-modal="true" aria-label="Call controls">
