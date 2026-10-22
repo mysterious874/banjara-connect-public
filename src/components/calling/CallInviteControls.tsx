@@ -100,6 +100,11 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         status, ...(status === 'active' ? { answered_at: new Date().toISOString() } : { ended_at: new Date().toISOString() }),
       }).eq('id', call.id)
       if (error) throw error
+      // Clear the local call UI immediately; do not rely only on Realtime delivery.
+      if (incoming?.id === call.id) setIncoming(null)
+      if (outgoing?.id === call.id) setOutgoing(null)
+      setJoinedGroupCallId(current => current === call.id ? null : current)
+      setNotice('')
       await refreshCalls()
     } catch { setNotice('Could not update this call. Please try again.') }
     finally { setBusy(false) }
@@ -185,6 +190,15 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
           else pendingIce.set(from, [...(pendingIce.get(from) ?? []), candidate])
         } else if (event === 'leave') {
           peers.get(from)?.close(); peers.delete(from); pendingIce.delete(from); setRemote(from, null)
+          // A direct call is over when the other participant leaves. Mark the
+          // database session ended so reopening the chat cannot resurrect it.
+          if (!activeCall.group_id) {
+            void supabase.from('call_sessions').update({ status: 'ended', ended_at: new Date().toISOString() })
+              .eq('id', activeCall.id).in('status', ['ringing', 'active'])
+            setIncoming(current => current?.id === activeCall.id ? null : current)
+            setOutgoing(current => current?.id === activeCall.id ? null : current)
+            setNotice('')
+          }
         }
       } catch (error) {
         if (!disposed) {
