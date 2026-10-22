@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, Phone, PhoneOff, Users, Video, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/AuthProvider'
@@ -118,7 +119,7 @@ export function AppWideIncomingCall() {
 
   if (!call) return null
   const groupCall = Boolean(call.group_id)
-  return <div className="call-invite-backdrop call-invite-backdrop--app-wide call-invite-backdrop--fullscreen" role="presentation">
+  return createPortal(<div className="call-invite-backdrop call-invite-backdrop--app-wide call-invite-backdrop--fullscreen" role="presentation">
     <section className="call-invite-dialog call-invite-dialog--app-wide call-invite-dialog--fullscreen" role="dialog" aria-modal="true" aria-label="Incoming call">
       <span className="call-invite-dialog__icon">{groupCall ? <Users size={25} /> : call.call_type === 'video' ? <Video size={25} /> : <Phone size={25} />}</span>
       <h2>{groupCall ? `${call.groupName} call` : `${call.callerName} is calling`}</h2>
@@ -130,5 +131,5 @@ export function AppWideIncomingCall() {
       </div>
       <button type="button" className="call-invite-dialog__close" aria-label="Dismiss incoming call" disabled={busy} onClick={() => { setCall(null); setNotice('') }}><X size={17} /></button>
     </section>
-  </div>
+  </div>, document.body)
 }
