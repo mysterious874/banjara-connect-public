@@ -267,27 +267,29 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     setMuted(next)
   }
   const toggleSpeaker = async () => {
+    // Always make the button respond by muting/unmuting remote call audio.
+    // Hardware output routing is an optional enhancement; many browsers lack setSinkId.
     const next = !speakerOn
     const audioElements = [...audioElementsRef.current.values()]
-    const devices = navigator.mediaDevices?.enumerateDevices
-      ? (await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[])).filter(device => device.kind === 'audiooutput')
-      : []
-    const preferred = devices.find(device => next
-      ? /speaker|loudspeaker|built.?in.*speaker/i.test(device.label)
-      : /earpiece|receiver|head(phone|set)/i.test(device.label))
-    let switched = false
-    if (preferred) {
-      for (const element of audioElements) {
-        const routable = element as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }
-        if (routable.setSinkId) {
-          try { await routable.setSinkId(preferred.deviceId); switched = true } catch { /* browser controls output */ }
+    audioElements.forEach(element => { element.muted = !next; element.volume = 1 })
+
+    try {
+      const devices = navigator.mediaDevices?.enumerateDevices
+        ? (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'audiooutput')
+        : []
+      const preferred = devices.find(device => next
+        ? /speaker|loudspeaker|built.?in.*speaker/i.test(device.label)
+        : /earpiece|receiver|head(phone|set)/i.test(device.label))
+      if (preferred) {
+        for (const element of audioElements) {
+          const routable = element as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }
+          if (routable.setSinkId) {
+            try { await routable.setSinkId(preferred.deviceId) } catch { /* keep browser/OS routing */ }
+          }
         }
       }
-    }
-    if (!switched) {
-      setNotice('This browser does not expose a speaker/earpiece selector on this device. Call audio still follows your phone/browser audio routing; use the phone audio-output control or volume buttons.')
-      return
-    }
+    } catch { /* audio output selection is not supported on every browser */ }
+
     setSpeakerOn(next)
     setNotice('')
   }
