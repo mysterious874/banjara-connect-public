@@ -108,6 +108,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     let disposed = false
     let channel: any = null
     let local: MediaStream | null = null
+    let joinInterval: number | undefined
     const peers = peerConnectionsRef.current
     const pendingIce = new Map<string, RTCIceCandidateInit[]>()
 
@@ -213,7 +214,21 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
             }
           })
         })
-        if (!disposed) { await sendSignal('join', {}); setNotice('') }
+        if (!disposed) {
+          await sendSignal('join', {})
+          // Broadcast join briefly more than once so peers that subscribed later
+          // still discover each other; Realtime broadcast itself is not durable.
+          let attempts = 0
+          joinInterval = window.setInterval(() => {
+            attempts += 1
+            if (attempts >= 5 || disposed) {
+              if (joinInterval !== undefined) window.clearInterval(joinInterval)
+              return
+            }
+            void sendSignal('join', {})
+          }, 1000)
+          setNotice('')
+        }
       } catch (error) {
         if (!disposed) {
           const message = error instanceof Error ? error.message : ''
@@ -226,6 +241,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     void start()
     return () => {
       disposed = true
+      if (joinInterval !== undefined) window.clearInterval(joinInterval)
       if (channelRef.current === channel) channelRef.current = null
       if (channel) {
         void channel.send({ type: 'broadcast', event: 'leave', payload: { from: userId } })
@@ -240,14 +256,22 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
 
   const toggleMute = () => {
     const next = !muted
-    const room = roomRef.current
-    if (room) void room.localParticipant.setMicrophoneEnabled(!next).catch(() => setNotice('Could not change microphone state.'))
+    const tracks = localStreamRef.current?.getAudioTracks() ?? []
+    if (!tracks.length) {
+      setNotice('Microphone is not ready yet. Please wait for the call to connect.')
+      return
+    }
+    tracks.forEach(track => { track.enabled = !next })
     setMuted(next)
   }
   const toggleCamera = () => {
     const next = !cameraOff
-    const room = roomRef.current
-    if (room) void room.localParticipant.setCameraEnabled(!next).catch(() => setNotice('Could not change camera state.'))
+    const tracks = localStreamRef.current?.getVideoTracks() ?? []
+    if (!tracks.length) {
+      setNotice('Camera is not ready yet. Please wait for the video call to connect.')
+      return
+    }
+    tracks.forEach(track => { track.enabled = !next })
     setCameraOff(next)
   }
   const dismissNotice = () => setNotice('')
