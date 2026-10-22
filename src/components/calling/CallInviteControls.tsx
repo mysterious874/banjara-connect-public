@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Phone, Video, PhoneOff, Check, X, Users, Mic, MicOff, Camera, CameraOff, Volume2, VolumeX } from 'lucide-react'
 import { useAuth } from '../../hooks/AuthProvider'
 import { supabase } from '../../utils/supabase'
@@ -315,7 +316,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
       <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group voice call' : 'Voice call'} title={isGroup ? 'Group voice call' : 'Voice call'} onClick={() => void startCall('voice')} disabled={busy}><Phone size={18} /></button>
       <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group video call' : 'Video call'} title={isGroup ? 'Group video call' : 'Video call'} onClick={() => void startCall('video')} disabled={busy}><Video size={19} /></button>
     </div>
-    {((incoming && (!hideIncomingPrompt || incoming.status !== 'ringing')) || ringingOutgoing || activeCall || notice) && <div className="call-invite-backdrop call-invite-backdrop--fullscreen" role="presentation">
+    {((incoming && (!hideIncomingPrompt || incoming.status !== 'ringing')) || ringingOutgoing || activeCall || notice) && createPortal(<div className="call-invite-backdrop call-invite-backdrop--fullscreen" role="presentation">
       <section className="call-invite-dialog call-invite-dialog--media call-invite-dialog--fullscreen" role="dialog" aria-modal="true" aria-label="Call controls">
         <span className="call-invite-dialog__icon">{isGroup ? <Users size={25} /> : (activeCall?.call_type ?? incoming?.call_type ?? outgoing?.call_type) === 'video' ? <Video size={25} /> : <Phone size={25} />}</span>
         <h2>{incoming?.status === 'ringing' ? `${peerName} is calling` : activeCall ? (isGroup ? `${peerName} call` : 'Connected') : incoming?.status === 'active' && incoming.group_id ? 'Community call is live' : ringingOutgoing ? 'Calling…' : 'Calling setup'}</h2>
@@ -340,6 +341,6 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         {ringingOutgoing && <div className="call-invite-dialog__actions"><button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void updateStatus(ringingOutgoing, 'ended')}><PhoneOff size={17} /> Cancel call</button></div>}
         {notice && !activeCall && !incoming && !ringingOutgoing && <button type="button" className="call-invite-button" onClick={dismissNotice}><X size={16} /> Close</button>}
       </section>
-    </div>}
+    </div>, document.body)}
   </>
 }
