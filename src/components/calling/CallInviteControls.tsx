@@ -20,6 +20,42 @@ declare global {
   interface Window { LivekitClient?: any }
 }
 
+// The static CDN tag normally loads before React, but an ad blocker or a
+// transient CDN failure can leave the calling UI mounted without the SDK.
+// Retry once on demand so the user gets a useful error instead of a dead call.
+let liveKitSdkPromise: Promise<any> | null = null
+function loadLiveKitSdk(): Promise<any> {
+  if (window.LivekitClient?.Room && window.LivekitClient?.RoomEvent) {
+    return Promise.resolve(window.LivekitClient)
+  }
+  if (liveKitSdkPromise) return liveKitSdkPromise
+  liveKitSdkPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = 'https://cdn.jsdelivr.net/npm/livekit-client@2.22.4/dist/livekit-client.umd.min.js'
+    script.crossOrigin = 'anonymous'
+    script.async = true
+    const timeout = window.setTimeout(() => {
+      script.remove()
+      reject(new Error('LiveKit browser SDK could not load. Check your internet connection or content blocker, then refresh.'))
+    }, 15000)
+    script.onload = () => {
+      window.clearTimeout(timeout)
+      if (window.LivekitClient?.Room && window.LivekitClient?.RoomEvent) resolve(window.LivekitClient)
+      else reject(new Error('LiveKit browser SDK loaded but was not available. Refresh the page and try again.'))
+    }
+    script.onerror = () => {
+      window.clearTimeout(timeout)
+      script.remove()
+      reject(new Error('LiveKit browser SDK could not load. Check your internet connection or content blocker, then refresh.'))
+    }
+    document.head.appendChild(script)
+  }).catch(error => {
+    liveKitSdkPromise = null
+    throw error
+  })
+  return liveKitSdkPromise
+}
+
 export function CallInviteControls({ recipientId, groupId, peerName, compact = false, hideIncomingPrompt = false }: Props) {
   const { session } = useAuth()
   const userId = session?.user.id
@@ -110,7 +146,6 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     if (!activeCall || !userId) return
     let disposed = false
     let room: any = null
-    const sdk = window.LivekitClient
     const streamByParticipant = new Map<string, MediaStream>()
     const refreshRemoteStreams = () => {
       const next: Record<string, MediaStream> = {}
@@ -119,9 +154,11 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     }
     const start = async () => {
       try {
+        const sdk = await loadLiveKitSdk()
         if (!sdk?.Room || !sdk?.RoomEvent || !sdk?.Track) {
           throw new Error('LiveKit browser SDK did not load. Refresh the page and try again.')
         }
+        if (disposed) return
         const { data: tokenData, error: tokenError } = await supabase.functions.invoke('livekit-token', {
           body: { callId: activeCall.id },
         })
@@ -224,7 +261,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         {activeCall && notice && <p role="status" className="call-invite-dialog__notice">{notice}</p>}
         {activeCall && <div className="call-media-grid">
           {activeCall.call_type === 'video' && localStream && <video className="call-media-tile call-media-tile--local" autoPlay playsInline muted ref={element => { if (element && element.srcObject !== localStream) element.srcObject = localStream }} />}
-          {Object.entries(remoteStreams).map(([id, stream]) => <div key={id} className="call-media-tile"><video autoPlay playsInline ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} /><audio autoPlay ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} /></div>)}
+          {Object.entries(remoteStreams).map(([id, stream]) => <div key={id} className="call-media-tile"><video autoPlay playsInline muted ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} /><audio autoPlay ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} /></div>)}
           {activeCall.call_type === 'voice' && <span className="call-voice-status"><Phone size={20} /> Voice call connected</span>}
         </div>}
         {incoming?.status === 'active' && incoming.group_id && !activeCall && <div className="call-invite-dialog__actions"><button type="button" className="call-invite-button call-invite-button--accept" onClick={() => setJoinedGroupCallId(incoming.id)}><Phone size={17} /> Join community call</button></div>}
