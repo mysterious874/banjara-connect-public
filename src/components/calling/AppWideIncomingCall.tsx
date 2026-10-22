@@ -118,8 +118,8 @@ export function AppWideIncomingCall() {
 
   if (!call) return null
   const groupCall = Boolean(call.group_id)
-  return <div className="call-invite-backdrop call-invite-backdrop--app-wide" role="presentation">
-    <section className="call-invite-dialog call-invite-dialog--app-wide" role="dialog" aria-modal="true" aria-label="Incoming call">
+  return <div className="call-invite-backdrop call-invite-backdrop--app-wide call-invite-backdrop--fullscreen" role="presentation">
+    <section className="call-invite-dialog call-invite-dialog--app-wide call-invite-dialog--fullscreen" role="dialog" aria-modal="true" aria-label="Incoming call">
       <span className="call-invite-dialog__icon">{groupCall ? <Users size={25} /> : call.call_type === 'video' ? <Video size={25} /> : <Phone size={25} />}</span>
       <h2>{groupCall ? `${call.groupName} call` : `${call.callerName} is calling`}</h2>
       <p>{groupCall && call.status === 'active' ? 'Community call is live. Join now?' : `Incoming ${call.call_type} call${groupCall ? ` from ${call.callerName} in the community` : ''}.`}</p>
