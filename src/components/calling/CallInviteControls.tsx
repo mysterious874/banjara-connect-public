@@ -16,46 +16,6 @@ type CallSession = {
 }
 type Props = { recipientId?: string; groupId?: string; peerName: string; compact?: boolean; hideIncomingPrompt?: boolean }
 
-declare global {
-  interface Window { LivekitClient?: any }
-}
-
-// The static CDN tag normally loads before React, but an ad blocker or a
-// transient CDN failure can leave the calling UI mounted without the SDK.
-// Retry once on demand so the user gets a useful error instead of a dead call.
-let liveKitSdkPromise: Promise<any> | null = null
-function loadLiveKitSdk(): Promise<any> {
-  if (window.LivekitClient?.Room && window.LivekitClient?.RoomEvent) {
-    return Promise.resolve(window.LivekitClient)
-  }
-  if (liveKitSdkPromise) return liveKitSdkPromise
-  liveKitSdkPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = 'https://cdn.jsdelivr.net/npm/livekit-client@2.22.4/dist/livekit-client.umd.min.js'
-    script.crossOrigin = 'anonymous'
-    script.async = true
-    const timeout = window.setTimeout(() => {
-      script.remove()
-      reject(new Error('LiveKit browser SDK could not load. Check your internet connection or content blocker, then refresh.'))
-    }, 15000)
-    script.onload = () => {
-      window.clearTimeout(timeout)
-      if (window.LivekitClient?.Room && window.LivekitClient?.RoomEvent) resolve(window.LivekitClient)
-      else reject(new Error('LiveKit browser SDK loaded but was not available. Refresh the page and try again.'))
-    }
-    script.onerror = () => {
-      window.clearTimeout(timeout)
-      script.remove()
-      reject(new Error('LiveKit browser SDK could not load. Check your internet connection or content blocker, then refresh.'))
-    }
-    document.head.appendChild(script)
-  }).catch(error => {
-    liveKitSdkPromise = null
-    throw error
-  })
-  return liveKitSdkPromise
-}
-
 export function CallInviteControls({ recipientId, groupId, peerName, compact = false, hideIncomingPrompt = false }: Props) {
   const { session } = useAuth()
   const userId = session?.user.id
@@ -70,6 +30,8 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
   const [joinedGroupCallId, setJoinedGroupCallId] = useState<string | null>(null)
   const roomRef = useRef<any>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
+  const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map())
+  const channelRef = useRef<any>(null)
   const isGroup = Boolean(groupId)
   const activeCall = outgoing?.status === 'active' ? outgoing : incoming?.status === 'active' && (!incoming.group_id || joinedGroupCallId === incoming.id) ? incoming : null
   const ringingOutgoing = outgoing?.status === 'ringing' ? outgoing : null
@@ -140,71 +102,118 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     finally { setBusy(false) }
   }
 
-  // LiveKit transports audio/video through the configured media server. Supabase
-  // remains responsible for invitations and the authenticated token endpoint.
+  // Native WebRTC carries media; private Supabase Realtime broadcasts exchange SDP and ICE.
   useEffect(() => {
     if (!activeCall || !userId) return
     let disposed = false
-    let room: any = null
-    const streamByParticipant = new Map<string, MediaStream>()
-    const refreshRemoteStreams = () => {
-      const next: Record<string, MediaStream> = {}
-      for (const [identity, stream] of streamByParticipant) next[identity] = stream
-      setRemoteStreams(next)
+    let channel: any = null
+    let local: MediaStream | null = null
+    const peers = peerConnectionsRef.current
+    const pendingIce = new Map<string, RTCIceCandidateInit[]>()
+
+    const sendSignal = async (event: string, payload: Record<string, unknown>) => {
+      if (!disposed && channel) {
+        try { await channel.send({ type: 'broadcast', event, payload: { ...payload, from: userId } }) }
+        catch (error) { if (!disposed) console.warn('Call signaling failed:', event, error) }
+      }
+    }
+    const setRemote = (id: string, stream: MediaStream | null) => setRemoteStreams(prev => {
+      const next = { ...prev }
+      if (stream?.getTracks().length) next[id] = stream
+      else delete next[id]
+      return next
+    })
+    const getPeer = (id: string) => {
+      const existing = peers.get(id)
+      if (existing) return existing
+      const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
+      peers.set(id, peer)
+      local?.getTracks().forEach(track => peer.addTrack(track, local!))
+      peer.onicecandidate = event => {
+        if (event.candidate) void sendSignal('ice', { to: id, candidate: event.candidate.toJSON() })
+      }
+      peer.ontrack = event => {
+        if (event.streams?.[0]) setRemote(id, event.streams[0])
+      }
+      peer.onconnectionstatechange = () => {
+        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+          peer.close(); peers.delete(id); setRemote(id, null)
+        }
+      }
+      return peer
+    }
+    const flushIce = async (id: string, peer: RTCPeerConnection) => {
+      const queued = pendingIce.get(id) ?? []
+      pendingIce.delete(id)
+      for (const candidate of queued) {
+        try { await peer.addIceCandidate(candidate) } catch (error) { console.warn('ICE candidate rejected', error) }
+      }
+    }
+    const onSignal = async (event: string, payload: any) => {
+      const from = typeof payload?.from === 'string' ? payload.from : ''
+      if (!from || from === userId || (payload?.to && payload.to !== userId)) return
+      try {
+        if (event === 'join') {
+          if (userId.localeCompare(from) < 0) {
+            const peer = getPeer(from)
+            const offer = await peer.createOffer()
+            await peer.setLocalDescription(offer)
+            await sendSignal('offer', { to: from, description: peer.localDescription })
+          }
+        } else if (event === 'offer') {
+          const peer = getPeer(from)
+          await peer.setRemoteDescription(payload.description as RTCSessionDescriptionInit)
+          await flushIce(from, peer)
+          const answer = await peer.createAnswer()
+          await peer.setLocalDescription(answer)
+          await sendSignal('answer', { to: from, description: peer.localDescription })
+        } else if (event === 'answer') {
+          const peer = peers.get(from)
+          if (peer) {
+            await peer.setRemoteDescription(payload.description as RTCSessionDescriptionInit)
+            await flushIce(from, peer)
+          }
+        } else if (event === 'ice') {
+          const candidate = payload.candidate as RTCIceCandidateInit | undefined
+          if (!candidate) return
+          const peer = peers.get(from)
+          if (peer?.remoteDescription) await peer.addIceCandidate(candidate)
+          else pendingIce.set(from, [...(pendingIce.get(from) ?? []), candidate])
+        } else if (event === 'leave') {
+          peers.get(from)?.close(); peers.delete(from); pendingIce.delete(from); setRemote(from, null)
+        }
+      } catch (error) {
+        if (!disposed) {
+          console.error('WebRTC signaling failed:', event, error)
+          setNotice('Could not establish the call connection. Check the network and try again.')
+        }
+      }
     }
     const start = async () => {
       try {
-        const sdk = await loadLiveKitSdk()
-        if (!sdk?.Room || !sdk?.RoomEvent || !sdk?.Track) {
-          throw new Error('LiveKit browser SDK did not load. Refresh the page and try again.')
+        if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
+          throw new Error('This browser does not support secure calling. Open Connect over HTTPS in a current browser.')
         }
-        if (disposed) return
-        const { data: tokenData, error: tokenError } = await supabase.functions.invoke('livekit-token', {
-          body: { callId: activeCall.id },
-        })
-        if (tokenError) throw tokenError
-        const serverUrl = tokenData?.serverUrl
-        const token = tokenData?.token
-        if (!serverUrl || !token) throw new Error('The calling server did not return a LiveKit connection token.')
-        if (disposed) return
-
-        room = new sdk.Room({ adaptiveStream: true, dynacast: true })
-        roomRef.current = room
-        room.on(sdk.RoomEvent.TrackSubscribed, (track: any, _publication: any, participant: any) => {
-          if (disposed) return
-          if (track.kind === sdk.Track.Kind.Audio || track.kind === sdk.Track.Kind.Video) {
-            let stream = streamByParticipant.get(participant.identity)
-            if (!stream) { stream = new MediaStream(); streamByParticipant.set(participant.identity, stream) }
-            if (!stream.getTracks().some((item: MediaStreamTrack) => item.id === track.mediaStreamTrack.id)) stream.addTrack(track.mediaStreamTrack)
-            refreshRemoteStreams()
-          }
-        })
-        room.on(sdk.RoomEvent.TrackUnsubscribed, (track: any, _publication: any, participant: any) => {
-          const stream = streamByParticipant.get(participant.identity)
-          if (stream) {
-            stream.getTracks().filter((item: MediaStreamTrack) => item.id === track.mediaStreamTrack.id).forEach((item: MediaStreamTrack) => stream.removeTrack(item))
-            if (!stream.getTracks().length) streamByParticipant.delete(participant.identity)
-            refreshRemoteStreams()
-          }
-        })
-        room.on(sdk.RoomEvent.ParticipantDisconnected, (participant: any) => {
-          streamByParticipant.delete(participant.identity)
-          refreshRemoteStreams()
-        })
-        room.on(sdk.RoomEvent.Disconnected, () => {
-          if (!disposed) setNotice('Call disconnected. Check your connection and rejoin if needed.')
-        })
-        await room.connect(serverUrl, token)
-        if (disposed) { await room.disconnect(); return }
-        await room.localParticipant.setMicrophoneEnabled(true)
-        if (activeCall.call_type === 'video') await room.localParticipant.setCameraEnabled(true)
-        const local = new MediaStream()
-        room.localParticipant.getTrackPublications().forEach((publication: any) => {
-          if (publication.track?.mediaStreamTrack) local.addTrack(publication.track.mediaStreamTrack)
-        })
+        local = await navigator.mediaDevices.getUserMedia({ audio: true, video: activeCall.call_type === 'video' })
+        if (disposed) { local.getTracks().forEach(track => track.stop()); return }
         localStreamRef.current = local
         setLocalStream(local)
-        setNotice('')
+        channel = supabase.channel(`call:${activeCall.id}`, { config: { private: true } })
+        channelRef.current = channel
+        for (const event of ['join', 'offer', 'answer', 'ice', 'leave']) {
+          channel.on('broadcast', { event }, (message: any) => { void onSignal(event, message?.payload) })
+        }
+        await new Promise<void>((resolve, reject) => {
+          const timeout = window.setTimeout(() => reject(new Error('Call signaling timed out. Check your connection.')), 12000)
+          channel.subscribe((status: string) => {
+            if (status === 'SUBSCRIBED') { window.clearTimeout(timeout); resolve() }
+            else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
+              window.clearTimeout(timeout)
+              reject(new Error('Private call signaling could not connect. Check Supabase Realtime permissions.'))
+            }
+          })
+        })
+        if (!disposed) { await sendSignal('join', {}); setNotice('') }
       } catch (error) {
         if (!disposed) {
           const message = error instanceof Error ? error.message : ''
@@ -217,12 +226,15 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     void start()
     return () => {
       disposed = true
-      if (roomRef.current === room) roomRef.current = null
-      if (room) void room.disconnect()
-      streamByParticipant.clear()
+      if (channelRef.current === channel) channelRef.current = null
+      if (channel) {
+        void channel.send({ type: 'broadcast', event: 'leave', payload: { from: userId } })
+        void supabase.removeChannel(channel)
+      }
+      peers.forEach(peer => peer.close()); peers.clear(); pendingIce.clear()
+      local?.getTracks().forEach(track => track.stop())
       localStreamRef.current = null
-      setLocalStream(null)
-      setRemoteStreams({})
+      setLocalStream(null); setRemoteStreams({})
     }
   }, [activeCall?.id, activeCall?.status, activeCall?.call_type, activeCall?.group_id, userId])
 
