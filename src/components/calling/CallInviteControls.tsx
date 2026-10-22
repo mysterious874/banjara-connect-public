@@ -154,7 +154,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
       if (!from || from === userId || (payload?.to && payload.to !== userId)) return
       try {
         if (event === 'join') {
-          if (userId.localeCompare(from) < 0) {
+          if (userId.localeCompare(from) < 0 && !peers.has(from)) {
             const peer = getPeer(from)
             const offer = await peer.createOffer()
             await peer.setLocalDescription(offer)
