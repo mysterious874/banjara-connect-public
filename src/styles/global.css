@@ -4129,3 +4129,72 @@ select {
 .app-shell--community-group .community-group-screen .chat-screen__head {
   isolation: isolate;
 }
+
+
+/* Full-screen WhatsApp-style voice/video call screen */
+.call-invite-backdrop--fullscreen {
+  z-index: 12000 !important;
+  display: flex !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  padding: 0 !important;
+  background: #100d0c !important;
+  backdrop-filter: none !important;
+}
+.call-invite-dialog--fullscreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100dvh !important;
+  min-height: 100dvh;
+  overflow: auto;
+  padding: max(28px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(163, 79, 36, .24), transparent 55%),
+    #100d0c !important;
+  box-shadow: none !important;
+}
+.call-invite-dialog--fullscreen h2 { font-size: clamp(22px, 5vw, 30px); }
+.call-invite-dialog--fullscreen .call-media-grid {
+  width: min(100%, 760px);
+  flex: 1 1 auto;
+  align-content: center;
+  grid-template-columns: repeat(auto-fit, minmax(min(42vw, 220px), 1fr));
+  min-height: 0;
+}
+.call-invite-dialog--fullscreen .call-media-tile {
+  width: 100%;
+  max-height: min(58dvh, 540px);
+  min-height: 180px;
+  aspect-ratio: 3 / 4;
+}
+.call-invite-dialog--fullscreen .call-media-tile--local {
+  position: relative;
+}
+.call-invite-dialog--fullscreen .call-invite-dialog__actions {
+  width: min(100%, 560px);
+  gap: 12px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+.call-invite-dialog--fullscreen .call-invite-button {
+  min-height: 48px;
+  padding-inline: 17px;
+}
+.call-invite-dialog--fullscreen .call-invite-button--decline {
+  background: #c6293e;
+}
+.call-invite-dialog--fullscreen .call-voice-status {
+  width: min(100%, 560px);
+  min-height: 150px;
+  font-size: 17px;
+}
+@media (max-width: 560px) {
+  .call-invite-dialog--fullscreen .call-invite-dialog__actions { gap: 8px; }
+  .call-invite-dialog--fullscreen .call-invite-button { flex: 1 1 38%; }
+}
