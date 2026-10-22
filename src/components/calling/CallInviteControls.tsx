@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Phone, Video, PhoneOff, Check, X, Users, Mic, MicOff, Camera, CameraOff } from 'lucide-react'
+import { Phone, Video, PhoneOff, Check, X, Users, Mic, MicOff, Camera, CameraOff, Volume2, VolumeX } from 'lucide-react'
 import { useAuth } from '../../hooks/AuthProvider'
 import { supabase } from '../../utils/supabase'
 
@@ -27,6 +27,8 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({})
   const [muted, setMuted] = useState(false)
   const [cameraOff, setCameraOff] = useState(false)
+  const [speakerOn, setSpeakerOn] = useState(true)
+  const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map())
   const [joinedGroupCallId, setJoinedGroupCallId] = useState<string | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map())
@@ -263,6 +265,29 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     tracks.forEach(track => { track.enabled = !next })
     setMuted(next)
   }
+  const toggleSpeaker = async () => {
+    const next = !speakerOn
+    const audioElements = [...audioElementsRef.current.values()]
+    const devices = navigator.mediaDevices?.enumerateDevices
+      ? (await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[])).filter(device => device.kind === 'audiooutput')
+      : []
+    const preferred = devices.find(device => next
+      ? /speaker|loudspeaker|built.?in.*speaker/i.test(device.label)
+      : /earpiece|receiver|head(phone|set)/i.test(device.label))
+    let switched = false
+    if (preferred) {
+      for (const element of audioElements) {
+        const routable = element as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }
+        if (routable.setSinkId) {
+          try { await routable.setSinkId(preferred.deviceId); switched = true } catch { /* browser controls output */ }
+        }
+      }
+    }
+    setSpeakerOn(next)
+    setNotice(!switched && devices.length <= 1
+      ? 'Speaker mode depends on your phone/browser audio routing. Use your device volume or audio-output menu if it does not switch.'
+      : '')
+  }
   const toggleCamera = () => {
     const next = !cameraOff
     const tracks = localStreamRef.current?.getVideoTracks() ?? []
@@ -288,15 +313,15 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
       <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group voice call' : 'Voice call'} title={isGroup ? 'Group voice call' : 'Voice call'} onClick={() => void startCall('voice')} disabled={busy}><Phone size={18} /></button>
       <button type="button" className="chat-screen__action" aria-label={isGroup ? 'Start group video call' : 'Video call'} title={isGroup ? 'Group video call' : 'Video call'} onClick={() => void startCall('video')} disabled={busy}><Video size={19} /></button>
     </div>
-    {((incoming && (!hideIncomingPrompt || incoming.status !== 'ringing')) || ringingOutgoing || activeCall || notice) && <div className="call-invite-backdrop" role="presentation">
-      <section className="call-invite-dialog call-invite-dialog--media" role="dialog" aria-modal="true" aria-label="Call controls">
+    {((incoming && (!hideIncomingPrompt || incoming.status !== 'ringing')) || ringingOutgoing || activeCall || notice) && <div className="call-invite-backdrop call-invite-backdrop--fullscreen" role="presentation">
+      <section className="call-invite-dialog call-invite-dialog--media call-invite-dialog--fullscreen" role="dialog" aria-modal="true" aria-label="Call controls">
         <span className="call-invite-dialog__icon">{isGroup ? <Users size={25} /> : (activeCall?.call_type ?? incoming?.call_type ?? outgoing?.call_type) === 'video' ? <Video size={25} /> : <Phone size={25} />}</span>
         <h2>{incoming?.status === 'ringing' ? `${peerName} is calling` : activeCall ? (isGroup ? `${peerName} call` : 'Connected') : incoming?.status === 'active' && incoming.group_id ? 'Community call is live' : ringingOutgoing ? 'Calling…' : 'Calling setup'}</h2>
         <p>{incoming?.status === 'ringing' ? `Incoming ${incoming.call_type} call${isGroup ? ' for this community' : ''}.` : activeCall ? (localStream ? 'Audio/video connection starting.' : 'Connecting securely to the call…') : incoming?.status === 'active' && incoming.group_id ? 'Join when you are ready; your microphone and camera stay off until you join.' : ringingOutgoing ? `Waiting for ${isGroup ? 'community members' : peerName} to answer.` : notice}</p>
         {activeCall && notice && <p role="status" className="call-invite-dialog__notice">{notice}</p>}
         {activeCall && <div className="call-media-grid">
           {activeCall.call_type === 'video' && localStream && <video className="call-media-tile call-media-tile--local" autoPlay playsInline muted ref={element => { if (element && element.srcObject !== localStream) element.srcObject = localStream }} />}
-          {Object.entries(remoteStreams).map(([id, stream]) => <div key={id} className="call-media-tile"><video autoPlay playsInline muted ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} /><audio autoPlay ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} /></div>)}
+          {Object.entries(remoteStreams).map(([id, stream]) => <div key={id} className="call-media-tile"><video autoPlay playsInline muted ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} /><audio autoPlay ref={element => { if (element) { audioElementsRef.current.set(id, element); if (element.srcObject !== stream) element.srcObject = stream } else { audioElementsRef.current.delete(id) } }} /></div>)}
           {activeCall.call_type === 'voice' && <span className="call-voice-status"><Phone size={20} /> Voice call connected</span>}
         </div>}
         {incoming?.status === 'active' && incoming.group_id && !activeCall && <div className="call-invite-dialog__actions"><button type="button" className="call-invite-button call-invite-button--accept" onClick={() => setJoinedGroupCallId(incoming.id)}><Phone size={17} /> Join community call</button></div>}
@@ -305,7 +330,8 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
           <button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void updateStatus(incoming, 'rejected')}><PhoneOff size={17} /> Decline</button>
         </div>}
         {activeCall && <div className="call-invite-dialog__actions">
-          <button type="button" className="call-invite-button" onClick={toggleMute} title={muted ? 'Unmute microphone' : 'Mute microphone'}>{muted ? <MicOff size={17} /> : <Mic size={17} />}{muted ? 'Unmute' : 'Mute'}</button>
+          <button type="button" className="call-invite-button" onClick={() => void toggleSpeaker()} title={speakerOn ? 'Speaker on' : 'Speaker off'}>{speakerOn ? <Volume2 size={17} /> : <VolumeX size={17} />}{speakerOn ? 'Speaker' : 'Earpiece'}</button>
+          <button type="button" className="call-invite-button" onClick={toggleMute title={muted ? 'Unmute microphone' : 'Mute microphone'}>{muted ? <MicOff size={17} /> : <Mic size={17} />}{muted ? 'Unmute' : 'Mute'}</button>
           {activeCall.call_type === 'video' && <button type="button" className="call-invite-button" onClick={toggleCamera} title={cameraOff ? 'Turn camera on' : 'Turn camera off'}>{cameraOff ? <CameraOff size={17} /> : <Camera size={17} />}{cameraOff ? 'Camera on' : 'Camera off'}</button>}
           <button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void endOrLeaveCall()}><PhoneOff size={17} />{activeCall.group_id && activeCall.caller_id !== userId ? 'Leave call' : 'End call'}</button>
         </div>}
