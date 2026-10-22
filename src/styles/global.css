@@ -4079,3 +4079,53 @@ select {
 }
 .profile-summary--centered h1 { margin-top: 12px; }
 .profile-summary--centered .profile-handle { margin-top: 2px; }
+
+
+/* Voice/video call invitation controls */
+.call-invite-controls { display: contents; }
+.call-invite-controls > button:disabled { opacity: .5; cursor: wait; }
+.call-invite-backdrop { position: fixed; inset: 0; z-index: 10050; display: grid; place-items: center; padding: 20px; background: rgba(12, 9, 8, .68); backdrop-filter: blur(8px); }
+.call-invite-dialog { width: min(100%, 360px); padding: 26px 22px 22px; text-align: center; color: var(--text, #fff); background: var(--surface, #211b19); border: 1px solid rgba(229, 163, 68, .4); border-radius: 24px; box-shadow: 0 24px 80px rgba(0,0,0,.38); }
+.call-invite-dialog__icon { display: inline-grid; width: 58px; height: 58px; place-items: center; color: #fff; background: linear-gradient(145deg, #e99b31, #a92d35); border-radius: 50%; box-shadow: 0 0 0 8px rgba(229, 163, 68, .1); }
+.call-invite-dialog h2 { margin: 18px 0 7px; font-size: 20px; }
+.call-invite-dialog p { margin: 0 0 20px; color: var(--muted, #bdb3ad); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.call-invite-dialog__actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.call-invite-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 16px; border: 1px solid rgba(255,255,255,.15); border-radius: 999px; background: rgba(255,255,255,.07); color: inherit; font: inherit; font-weight: 650; cursor: pointer; }
+.call-invite-button:disabled { opacity: .55; cursor: wait; }
+.call-invite-button--accept { color: #fff; background: #267b53; border-color: #267b53; }
+.call-invite-button--decline { color: #fff; background: #b62e3d; border-color: #b62e3d; }
+
+
+.call-invite-dialog--media { max-height: min(88dvh, 760px); overflow-y: auto; }
+.call-media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 16px 0; }
+.call-media-tile { width: 100%; min-height: 120px; max-height: 260px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 14px; background: #100e0d; }
+.call-media-tile--local { outline: 2px solid rgba(229, 163, 68, .65); }
+.call-voice-status { display: flex; min-height: 76px; align-items: center; justify-content: center; gap: 10px; border-radius: 14px; background: rgba(229, 163, 68, .1); color: var(--text, #fff); font-size: 14px; }
+
+.call-invite-backdrop--app-wide { z-index: 11000; }
+.call-invite-dialog--app-wide { position: relative; }
+.call-invite-dialog__close { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; color: var(--muted, #bdb3ad); background: rgba(255,255,255,.07); cursor: pointer; }
+.call-invite-dialog__close:disabled { opacity: .5; cursor: wait; }
+
+
+/* Make calling controls reliably tappable above chat-header layers on touch devices. */
+.call-invite-controls {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  position: relative !important;
+  z-index: 25 !important;
+  pointer-events: auto !important;
+  flex: 0 0 auto !important;
+}
+.call-invite-controls > button.chat-screen__action {
+  position: relative !important;
+  z-index: 26 !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: rgba(229, 163, 68, .25);
+}
+.app-shell--chat .chat-screen .chat-screen__head,
+.app-shell--community-group .community-group-screen .chat-screen__head {
+  isolation: isolate;
+}
