@@ -283,10 +283,12 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         }
       }
     }
+    if (!switched) {
+      setNotice('This browser does not expose a speaker/earpiece selector on this device. Call audio still follows your phone/browser audio routing; use the phone audio-output control or volume buttons.')
+      return
+    }
     setSpeakerOn(next)
-    setNotice(!switched && devices.length <= 1
-      ? 'Speaker mode depends on your phone/browser audio routing. Use your device volume or audio-output menu if it does not switch.'
-      : '')
+    setNotice('')
   }
   const toggleCamera = () => {
     const next = !cameraOff
