@@ -28,7 +28,6 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
   const [muted, setMuted] = useState(false)
   const [cameraOff, setCameraOff] = useState(false)
   const [joinedGroupCallId, setJoinedGroupCallId] = useState<string | null>(null)
-  const roomRef = useRef<any>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map())
   const channelRef = useRef<any>(null)
