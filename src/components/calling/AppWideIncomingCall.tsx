@@ -28,10 +28,11 @@ export function AppWideIncomingCall() {
   const refresh = useCallback(async () => {
     if (!userId) { setCall(null); return }
     try {
+      const recentCallCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       const [{ data: directRows }, { data: memberships }] = await Promise.all([
         supabase.from('call_sessions')
           .select('id,caller_id,recipient_id,group_id,call_type,status,created_at')
-          .eq('recipient_id', userId).eq('status', 'ringing')
+          .eq('recipient_id', userId).eq('status', 'ringing').gte('created_at', recentCallCutoff)
           .neq('caller_id', userId).is('group_id', null)
           .order('created_at', { ascending: false }).limit(1),
         supabase.from('community_group_members').select('group_id').eq('user_id', userId),
@@ -41,7 +42,7 @@ export function AppWideIncomingCall() {
       if (groupIds.length) {
         const { data } = await supabase.from('call_sessions')
           .select('id,caller_id,recipient_id,group_id,call_type,status,created_at')
-          .in('group_id', groupIds).in('status', ['ringing', 'active'])
+          .in('group_id', groupIds).in('status', ['ringing', 'active']).gte('created_at', recentCallCutoff)
           .neq('caller_id', userId).order('created_at', { ascending: false }).limit(1)
         groupRows = (data ?? []) as typeof groupRows
       }
