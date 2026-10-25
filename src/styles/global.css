@@ -4220,6 +4220,10 @@ select {
 
 
 /* Calling screen layout polish: persistent header and a reachable bottom control dock. */
+.call-invite-backdrop--fullscreen { z-index: 130000 !important; }
+.call-invite-backdrop--app-wide.call-invite-backdrop--fullscreen { z-index: 130001 !important; }
+.call-invite-dialog--fullscreen .call-invite-dialog__actions { z-index: 130003 !important; }
+.call-invite-dialog--fullscreen .call-invite-dialog__close { z-index: 130004 !important; }
 .call-invite-backdrop--fullscreen {
   position: fixed !important;
   inset: 0 !important;
