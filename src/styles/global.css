@@ -4335,7 +4335,7 @@ select {
   background: #c6293e !important;
   border-color: #c6293e !important;
 }
-.call-invite-dialog--fullscreen .call-media-grid .call-media-tile--local {
+.call-invite-dialog--fullscreen .call-media-grid > div.call-media-tile--local {
   position: fixed !important;
   z-index: 12 !important;
   min-height: 0 !important;
