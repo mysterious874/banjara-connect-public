@@ -41,9 +41,12 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
 
   const refreshCalls = useCallback(async () => {
     if (!userId) return
-    let incomingQuery = supabase.from('call_sessions').select('id,caller_id,recipient_id,group_id,call_type,status,created_at').in('status', ['ringing', 'active']).neq('caller_id', userId).order('created_at', { ascending: false }).limit(1)
+    // Ignore stale call sessions so an abandoned database row cannot reopen
+    // the fullscreen call UI whenever a conversation is mounted again.
+    const recentCallCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    let incomingQuery = supabase.from('call_sessions').select('id,caller_id,recipient_id,group_id,call_type,status,created_at').in('status', ['ringing', 'active']).gte('created_at', recentCallCutoff).neq('caller_id', userId).order('created_at', { ascending: false }).limit(1)
     incomingQuery = groupId ? incomingQuery.eq('group_id', groupId) : incomingQuery.eq('recipient_id', userId).is('group_id', null)
-    let outgoingQuery = supabase.from('call_sessions').select('id,caller_id,recipient_id,group_id,call_type,status,created_at').eq('caller_id', userId).in('status', ['ringing', 'active']).order('created_at', { ascending: false }).limit(1)
+    let outgoingQuery = supabase.from('call_sessions').select('id,caller_id,recipient_id,group_id,call_type,status,created_at').eq('caller_id', userId).in('status', ['ringing', 'active']).gte('created_at', recentCallCutoff).order('created_at', { ascending: false }).limit(1)
     outgoingQuery = groupId ? outgoingQuery.eq('group_id', groupId) : outgoingQuery.eq('recipient_id', recipientId || '').is('group_id', null)
     const [{ data: incomingRows }, { data: outgoingRows }] = await Promise.all([incomingQuery, outgoingQuery])
     setIncoming((incomingRows?.[0] as CallSession | undefined) ?? null)
