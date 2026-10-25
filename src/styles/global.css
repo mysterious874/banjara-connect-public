@@ -4208,3 +4208,12 @@ select {
 .connect-people-list .user-card--suggestion .user-card__copy strong { display: block; width: 100%; font-size: 14px; overflow-wrap: anywhere; }
 .connect-people-list .user-card--suggestion .user-card__follow.button { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; width: auto; max-width: 112px; min-width: 84px; min-height: 34px; margin-top: 0; padding: 0 12px; white-space: nowrap; }
 @media (max-width: 420px) { .connect-people-list .user-card--suggestion { gap: 8px; padding: 10px; } .connect-people-list .user-card--suggestion .user-card__identity { gap: 8px; } .connect-people-list .user-card--suggestion .user-card__follow.button { min-width: 76px; padding: 0 8px; } }
+
+
+/* Connect page stays within the app viewport; only the people results list scrolls. */
+.connect-page { display: flex; flex-direction: column; height: calc(100dvh - 190px); min-height: 0; overflow: hidden; gap: 18px; }
+.connect-page > .page-heading,
+.connect-page > .connect-search,
+.connect-page > .field__error { flex: 0 0 auto; }
+.connect-people-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+@media (max-width: 700px) { .connect-page { height: calc(100dvh - 184px); gap: 14px; } }
