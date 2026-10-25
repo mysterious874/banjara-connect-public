@@ -674,7 +674,7 @@ export function ConnectPage() {
       {query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')}><X size={17} /></button>}
     </label>
     {error && <p className="field__error" role="alert">{error}</p>}
-    {(isLoading || isSearching) && !profiles.length ? <Loading label={isSearching ? 'Searching people' : 'Loading people'} /> : profiles.length ? <><div className="connect-people-carousel" aria-label="People to connect">{profiles.map((user) => <UserCard key={user.id} user={user} suggestion />)}</div>{isSearching && <p className="connect-search-status" role="status">Searching people…</p>}</> : <EmptyState title={query ? 'No people found' : 'No people to show'} description={query ? 'Try another username.' : 'New community members will appear here.'} />}
+    {(isLoading || isSearching) && !profiles.length ? <Loading label={isSearching ? 'Searching people' : 'Loading people'} /> : profiles.length ? <><div className="connect-people-list" aria-label="People to connect">{profiles.map((user) => <UserCard key={user.id} user={user} suggestion />)}</div>{isSearching && <p className="connect-search-status" role="status">Searching people…</p>}</> : <EmptyState title={query ? 'No people found' : 'No people to show'} description={query ? 'Try another username.' : 'New community members will appear here.'} />}
   </section>
 }
 
