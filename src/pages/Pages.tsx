@@ -609,6 +609,7 @@ export function ConnectPage() {
   const cacheKey = session?.user?.id ? `connect-people:${session.user.id}` : ''
   const cachedProfiles = cacheKey ? getCached<ProfileRecord[]>(cacheKey) : null
   const [profiles, setProfiles] = useState<ProfileRecord[]>(cachedProfiles ?? [])
+  const [availableProfiles, setAvailableProfiles] = useState<ProfileRecord[]>(cachedProfiles ?? [])
   const [isLoading, setIsLoading] = useState(!cachedProfiles)
   const [isSearching, setIsSearching] = useState(false)
   const [error, setError] = useState('')
@@ -617,6 +618,7 @@ export function ConnectPage() {
     let active = true
     if (!session?.user) {
       setProfiles([])
+      setAvailableProfiles([])
       setIsLoading(false)
       return () => { active = false }
     }
@@ -624,6 +626,7 @@ export function ConnectPage() {
     const cached = getCached<ProfileRecord[]>(key)
     if (cached) {
       setProfiles(cached)
+      setAvailableProfiles(cached)
       setIsLoading(false)
     } else {
       setIsLoading(true)
@@ -632,6 +635,7 @@ export function ConnectPage() {
     void loadProfilesPage().then(({ profiles: nextProfiles }) => {
       if (!active) return
       setProfiles(nextProfiles)
+      setAvailableProfiles(nextProfiles)
       setCached(key, nextProfiles, 60_000)
     }).catch((caught: unknown) => {
       if (active) setError(userFacingError(caught, 'Could not load people.'))
@@ -644,6 +648,7 @@ export function ConnectPage() {
   useEffect(() => {
     const value = query.trim()
     if (!value) {
+      setProfiles(availableProfiles)
       setIsSearching(false)
       setError('')
       return
@@ -664,7 +669,7 @@ export function ConnectPage() {
       active = false
       window.clearTimeout(timer)
     }
-  }, [query])
+  }, [query, availableProfiles])
 
   return <section className="page-stack connect-page">
     <PageHeading eyebrow="FIND YOUR CIRCLE" title="Connect" description="Discover people from the Banjara Connect community and connect with them." />
