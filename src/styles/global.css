@@ -4198,3 +4198,13 @@ select {
   .call-invite-dialog--fullscreen .call-invite-dialog__actions { gap: 8px; }
   .call-invite-dialog--fullscreen .call-invite-button { flex: 1 1 38%; }
 }
+
+
+/* Connect page search results: stacked profile rows, without changing Search page carousel. */
+.connect-people-list { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; padding: 2px 0 8px; }
+.connect-people-list .user-card--suggestion { box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; min-height: 88px; padding: 12px 14px; text-align: left; border-radius: 14px; overflow: hidden; }
+.connect-people-list .user-card--suggestion .user-card__identity { display: flex; flex: 1 1 auto; flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; width: auto; min-width: 0; }
+.connect-people-list .user-card--suggestion .user-card__copy { display: block; width: auto; min-width: 0; text-align: left; }
+.connect-people-list .user-card--suggestion .user-card__copy strong { display: block; width: 100%; font-size: 14px; overflow-wrap: anywhere; }
+.connect-people-list .user-card--suggestion .user-card__follow.button { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; width: auto; max-width: 112px; min-width: 84px; min-height: 34px; margin-top: 0; padding: 0 12px; white-space: nowrap; }
+@media (max-width: 420px) { .connect-people-list .user-card--suggestion { gap: 8px; padding: 10px; } .connect-people-list .user-card--suggestion .user-card__identity { gap: 8px; } .connect-people-list .user-card--suggestion .user-card__follow.button { min-width: 76px; padding: 0 8px; } }
