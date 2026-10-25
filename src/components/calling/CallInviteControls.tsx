@@ -285,31 +285,45 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     setMuted(next)
   }
   const toggleSpeaker = async () => {
-    // Always make the button respond by muting/unmuting remote call audio.
-    // Hardware output routing is an optional enhancement; many browsers lack setSinkId.
-    const next = !speakerOn
     const audioElements = [...audioElementsRef.current.values()]
-    audioElements.forEach(element => { element.muted = !next; element.volume = 1 })
+    if (!audioElements.length) {
+      setNotice('Call audio is not ready yet. Please wait a moment and try again.')
+      return
+    }
 
+    const routable = audioElements.filter(element =>
+      typeof (element as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }).setSinkId === 'function'
+    )
+    if (!routable.length) {
+      setNotice('This browser does not support switching between speaker and earpiece inside Connect. Use your phone or browser audio-output controls.')
+      return
+    }
+
+    const next = !speakerOn
     try {
       const devices = navigator.mediaDevices?.enumerateDevices
         ? (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'audiooutput')
         : []
       const preferred = devices.find(device => next
         ? /speaker|loudspeaker|built.?in.*speaker/i.test(device.label)
-        : /earpiece|receiver|head(phone|set)/i.test(device.label))
-      if (preferred) {
-        for (const element of audioElements) {
-          const routable = element as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }
-          if (routable.setSinkId) {
-            try { await routable.setSinkId(preferred.deviceId) } catch { /* keep browser/OS routing */ }
-          }
-        }
-      }
-    } catch { /* audio output selection is not supported on every browser */ }
+        : /earpiece|receiver|earpiece|phone.*speaker|head(phone|set)/i.test(device.label))
 
-    setSpeakerOn(next)
-    setNotice('')
+      if (!preferred) {
+        setNotice(next
+          ? 'Your browser has not exposed a speaker output device to Connect.'
+          : 'Your browser has not exposed an earpiece output device to Connect. Use the phone audio controls to change the route.')
+        return
+      }
+
+      await Promise.all(routable.map(element =>
+        (element as HTMLAudioElement & { setSinkId: (id: string) => Promise<void> }).setSinkId(preferred.deviceId)
+      ))
+      setSpeakerOn(next)
+      setNotice('')
+    } catch (error) {
+      console.warn('Could not change call audio output:', error)
+      setNotice('Could not switch audio output. Use your phone or browser audio-output controls.')
+    }
   }
   const toggleCamera = () => {
     const next = !cameraOff
@@ -343,7 +357,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         <p style={{ position: 'relative', zIndex: 6 }}>{incoming?.status === 'ringing' ? `Incoming ${incoming.call_type} call${isGroup ? ' for this community' : ''}.` : activeCall ? (localStream ? 'Audio/video connection starting.' : 'Connecting securely to the call…') : incoming?.status === 'active' && incoming.group_id ? 'Join when you are ready; your microphone and camera stay off until you join.' : ringingOutgoing ? `Waiting for ${isGroup ? 'community members' : peerName} to answer.` : notice}</p>
         {activeCall && notice && <p role="status" className="call-invite-dialog__notice" style={{ position: 'relative', zIndex: 6 }}>{notice}</p>}
         {activeCall && <div className="call-media-grid" style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: '#080808', overflow: 'hidden' }}>
-          {Object.entries(remoteStreams).map(([id, stream]) => <div key={id} className="call-media-tile" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: '#080808' }}><video autoPlay playsInline ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', background: '#080808' }} /><audio autoPlay ref={element => { if (element) { audioElementsRef.current.set(id, element); if (element.srcObject !== stream) element.srcObject = stream } else { audioElementsRef.current.delete(id) } }} /></div>)}
+          {Object.entries(remoteStreams).map(([id, stream]) => <div key={id} className="call-media-tile" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: '#080808' }}><video autoPlay playsInline muted ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', background: '#080808' }} /><audio autoPlay ref={element => { if (element) { audioElementsRef.current.set(id, element); if (element.srcObject !== stream) element.srcObject = stream } else { audioElementsRef.current.delete(id) } }} /></div>)}
           {activeCall.call_type === 'video' && localStream && <div className="call-media-tile--local" onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); setLocalVideoPosition({ x: event.clientX - 65, y: event.clientY - 90 }) }} onPointerMove={event => { if (event.buttons === 1) setLocalVideoPosition({ x: Math.max(8, Math.min(window.innerWidth - 138, event.clientX - 65)), y: Math.max(8, Math.min(window.innerHeight - 188, event.clientY - 90)) }) }} style={{ position: 'fixed', zIndex: 5, pointerEvents: 'auto', width: 130, height: 180, left: localVideoPosition ? localVideoPosition.x : undefined, top: localVideoPosition ? localVideoPosition.y : undefined, right: localVideoPosition ? undefined : 16, bottom: localVideoPosition ? undefined : 110, borderRadius: 14, overflow: 'hidden', border: '2px solid rgba(255,255,255,.85)', boxShadow: '0 6px 24px rgba(0,0,0,.45)', touchAction: 'none', cursor: 'grab', background: '#222' }}><video className="call-media-tile call-media-tile--local" autoPlay playsInline muted ref={element => { if (element && element.srcObject !== localStream) element.srcObject = localStream }} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }} /></div>}
           {Object.keys(remoteStreams).length === 0 && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', textAlign: 'center', padding: 24 }}>Waiting for the other person’s video…</div>}
           {activeCall.call_type === 'voice' && <span className="call-voice-status" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><Phone size={20} /> Voice call connected</span>}
