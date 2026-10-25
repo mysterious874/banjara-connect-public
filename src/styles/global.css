@@ -4217,3 +4217,134 @@ select {
 .connect-page > .field__error { flex: 0 0 auto; }
 .connect-people-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
 @media (max-width: 700px) { .connect-page { height: calc(100dvh - 184px); gap: 14px; } }
+
+
+/* Calling screen layout polish: persistent header and a reachable bottom control dock. */
+.call-invite-backdrop--fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  overflow: hidden !important;
+}
+.call-invite-dialog--fullscreen {
+  position: relative !important;
+  isolation: isolate !important;
+  justify-content: flex-start !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  padding: max(24px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom)) !important;
+}
+.call-invite-dialog--fullscreen > .call-invite-dialog__icon {
+  position: absolute !important;
+  top: max(30px, calc(env(safe-area-inset-top) + 18px)) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 8 !important;
+}
+.call-invite-dialog--fullscreen > h2 {
+  position: absolute !important;
+  top: max(104px, calc(env(safe-area-inset-top) + 88px)) !important;
+  left: 18px !important;
+  right: 18px !important;
+  margin: 0 !important;
+  z-index: 8 !important;
+  color: #fff !important;
+  text-align: center !important;
+  text-shadow: 0 2px 12px rgba(0,0,0,.7) !important;
+}
+.call-invite-dialog--fullscreen > p {
+  position: absolute !important;
+  top: max(148px, calc(env(safe-area-inset-top) + 132px)) !important;
+  left: 22px !important;
+  right: 22px !important;
+  margin: 0 !important;
+  z-index: 8 !important;
+  color: rgba(255,255,255,.82) !important;
+  text-align: center !important;
+  text-shadow: 0 2px 10px rgba(0,0,0,.7) !important;
+}
+.call-invite-dialog--fullscreen > .call-invite-dialog__notice {
+  top: auto !important;
+  bottom: calc(108px + env(safe-area-inset-bottom)) !important;
+  padding: 8px 12px !important;
+  border-radius: 12px !important;
+  background: rgba(0,0,0,.65) !important;
+}
+.call-invite-dialog--fullscreen > .call-media-grid {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-height: none !important;
+  margin: 0 !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  background: #080808 !important;
+}
+.call-invite-dialog--fullscreen .call-media-grid > .call-media-tile video {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+  object-fit: cover !important;
+  border-radius: 0 !important;
+}
+.call-invite-dialog--fullscreen .call-media-grid > .call-media-tile audio { display: none !important; }
+.call-invite-dialog--fullscreen .call-media-grid .call-voice-status {
+  z-index: 2 !important;
+  gap: 14px !important;
+  flex-direction: column !important;
+  padding-top: 42px !important;
+  background: radial-gradient(circle, rgba(137,61,38,.42), transparent 58%) !important;
+  color: #fff !important;
+  font-size: 18px !important;
+  pointer-events: none !important;
+}
+.call-invite-dialog--fullscreen .call-invite-dialog__actions {
+  position: fixed !important;
+  left: 50% !important;
+  bottom: max(20px, env(safe-area-inset-bottom)) !important;
+  transform: translateX(-50%) !important;
+  z-index: 20 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+  width: min(92vw, 560px) !important;
+  padding: 12px !important;
+  gap: 10px !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+  border-radius: 24px !important;
+  background: rgba(18,15,14,.84) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,.4) !important;
+  backdrop-filter: blur(18px) !important;
+}
+.call-invite-dialog--fullscreen .call-invite-dialog__actions .call-invite-button {
+  flex: 1 1 auto !important;
+  min-width: 104px !important;
+  min-height: 48px !important;
+  color: #fff !important;
+  background: rgba(255,255,255,.1) !important;
+  border-color: rgba(255,255,255,.16) !important;
+  touch-action: manipulation !important;
+}
+.call-invite-dialog--fullscreen .call-invite-dialog__actions .call-invite-button--decline {
+  background: #c6293e !important;
+  border-color: #c6293e !important;
+}
+.call-invite-dialog--fullscreen .call-media-grid .call-media-tile--local {
+  position: fixed !important;
+  z-index: 12 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+}
+@media (max-width: 560px) {
+  .call-invite-dialog--fullscreen { padding-inline: 12px !important; }
+  .call-invite-dialog--fullscreen > h2 { font-size: 24px !important; }
+  .call-invite-dialog--fullscreen .call-invite-dialog__actions { width: calc(100vw - 24px) !important; gap: 7px !important; padding: 9px !important; border-radius: 20px !important; }
+  .call-invite-dialog--fullscreen .call-invite-dialog__actions .call-invite-button { min-width: 92px !important; min-height: 46px !important; padding-inline: 10px !important; font-size: 13px !important; }
+}
