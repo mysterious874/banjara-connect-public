@@ -2574,6 +2574,7 @@ export function ChatConversationPage() {
       try {
         for (let index = 0; index < mediaToSend.length; index += 1) {
           const created = await sendConversationMessage(conversationId, index === 0 ? textToSend : '', mediaToSend[index])
+          void supabase.functions.invoke('send-chat-push', { body: { message_id: created.id } }).then(({ error: pushError }) => { if (pushError) console.warn('Chat push could not be sent:', pushError.message) })
           setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
         }
         window.requestAnimationFrame(() => { const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
@@ -2589,6 +2590,7 @@ export function ChatConversationPage() {
     stickToLatest.current = true
     try {
       const created = await sendConversationMessage(conversationId, textToSend)
+      void supabase.functions.invoke('send-chat-push', { body: { message_id: created.id } }).then(({ error: pushError }) => { if (pushError) console.warn('Chat push could not be sent:', pushError.message) })
       setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
       window.requestAnimationFrame(() => { const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
       setMessage('')
