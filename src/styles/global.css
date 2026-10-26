@@ -4610,3 +4610,61 @@ select {
     max-height: calc(100dvh - 86px - env(safe-area-inset-bottom));
   }
 }
+
+
+/* Show group search results as a vertical list, not horizontal cards. */
+.community-discover-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  max-height: min(52dvh, 420px);
+  padding: 4px 2px 8px;
+  scroll-snap-type: none;
+}
+.community-discover-card {
+  display: flex;
+  flex: 0 0 auto !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  width: 100%;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  gap: 10px;
+  padding: 10px;
+  text-align: left !important;
+  border-radius: 12px;
+  scroll-snap-align: none;
+}
+.community-discover-card__avatar {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 12px;
+}
+.community-discover-card__copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 3px;
+}
+.community-discover-card__copy strong {
+  font-size: 13px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.community-discover-card__copy small {
+  min-height: 0;
+  font-size: 11px;
+  -webkit-line-clamp: 2;
+}
+.community-discover-card__copy > span {
+  font-size: 10px;
+}
+.community-discover-card > .button {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 68px;
+  margin-top: 0;
+  font-size: 11px;
+}
