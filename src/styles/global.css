@@ -4773,3 +4773,13 @@ select {
   font-size: 11px !important;
   border-radius: 6px !important;
 }
+
+
+/* Override legacy fixed-width carousel sizing for the search modal rows. */
+.community-discover-list > .community-discover-card {
+  flex: 0 0 auto !important;
+  flex-basis: auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
