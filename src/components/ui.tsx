@@ -166,6 +166,7 @@ export function useBodyScrollLock(locked: boolean) {
 
 export function Modal({ open, title, onClose, children, className = '' }: { open: boolean; title: string; onClose: () => void; children: ReactNode; className?: string }) {
   const dialogRef = useDialogAccessibility(open, onClose)
+  useBodyScrollLock(open)
   const titleId = useId()
   if (!open) return null
   return <div className={`modal-backdrop${className ? ` modal-backdrop--${className}` : ''}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section ref={dialogRef} className={`modal${className ? ` modal--${className}` : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><div className="modal__head"><h2 id={titleId}>{title}</h2><button className="icon-button" type="button" onClick={onClose} aria-label="Close dialog"><X size={18} /></button></div>{children}</section></div>
