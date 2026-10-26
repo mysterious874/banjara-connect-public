@@ -149,7 +149,7 @@ export function useBodyScrollLock(locked: boolean) {
       document.documentElement.style.overflow = 'hidden'
     }
     bodyScrollLockCount += 1
-    const isInsideOverlay = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest('[role="dialog"], .modal-backdrop, .sheet-backdrop, .story-fullscreen, .media-preview-backdrop, .chat-media-viewer-backdrop, .chat-forward-backdrop, .story-viewers-modal-backdrop'))
+    const isInsideOverlay = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest('.modal, .bottom-sheet, .media-preview-dialog, .story-viewers-modal, .story-fullscreen__card, .chat-media-viewer, .chat-forward-modal'))
     const preventBackgroundScroll = (event: Event) => {
       if (!isInsideOverlay(event.target)) event.preventDefault()
     }
