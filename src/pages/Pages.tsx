@@ -1076,7 +1076,7 @@ export function CommentsPage() {
 
 export function ProfilePage() {
   const [profileAvatarPreview, setProfileAvatarPreview] = useState<string | null>(null)
-  useBodyScrollLock(Boolean(profileAvatarPreview)
+  useBodyScrollLock(Boolean(profileAvatarPreview))
   const profileAvatarHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => { if (profileAvatarHoldTimer.current) clearTimeout(profileAvatarHoldTimer.current) }, [])
   const navigate = useNavigate()
@@ -2190,8 +2190,8 @@ export function ChatConversationPage() {
   const [mediaViewer, setMediaViewer] = useState<ChatMessage | null>(null)
   const [mediaViewerSize, setMediaViewerSize] = useState('Checking size…')
   const [mediaViewerFullscreen, setMediaViewerFullscreen] = useState(false)
-  useBodyScrollLock(Boolean(mediaViewer) || mediaViewerFullscreen || forwardOpen)
   const [forwardOpen, setForwardOpen] = useState(false)
+  useBodyScrollLock(Boolean(mediaViewer) || mediaViewerFullscreen || forwardOpen)
   const [forwardQuery, setForwardQuery] = useState('')
   const [forwardConversations, setForwardConversations] = useState<Awaited<ReturnType<typeof loadConversations>>>([])
   const [forwardProfiles, setForwardProfiles] = useState<ProfileRecord[]>([])
