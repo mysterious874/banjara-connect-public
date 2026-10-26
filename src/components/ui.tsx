@@ -149,7 +149,15 @@ export function useBodyScrollLock(locked: boolean) {
       document.documentElement.style.overflow = 'hidden'
     }
     bodyScrollLockCount += 1
+    const isInsideOverlay = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest('[role="dialog"], .modal-backdrop, .sheet-backdrop, .story-fullscreen, .media-preview-backdrop, .chat-media-viewer-backdrop, .chat-forward-backdrop, .story-viewers-modal-backdrop'))
+    const preventBackgroundScroll = (event: Event) => {
+      if (!isInsideOverlay(event.target)) event.preventDefault()
+    }
+    document.addEventListener('touchmove', preventBackgroundScroll, { passive: false, capture: true })
+    document.addEventListener('wheel', preventBackgroundScroll, { passive: false, capture: true })
     return () => {
+      document.removeEventListener('touchmove', preventBackgroundScroll, true)
+      document.removeEventListener('wheel', preventBackgroundScroll, true)
       bodyScrollLockCount = Math.max(0, bodyScrollLockCount - 1)
       if (bodyScrollLockCount !== 0 || !bodyScrollLockStyles) return
       const saved = bodyScrollLockStyles
@@ -174,6 +182,7 @@ export function Modal({ open, title, onClose, children, className = '' }: { open
 
 export function BottomSheet({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
   const dialogRef = useDialogAccessibility(open, onClose)
+  useBodyScrollLock(open)
   const titleId = useId()
   if (!open) return null
   return <div className="sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section ref={dialogRef} className="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><div className="bottom-sheet__handle" /><div className="modal__head"><h2 id={titleId}>{title}</h2><button className="icon-button" type="button" onClick={onClose} aria-label="Close sheet"><X size={18} /></button></div>{children}</section></div>
