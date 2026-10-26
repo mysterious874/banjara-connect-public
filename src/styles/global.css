@@ -2210,8 +2210,8 @@ html.theme-dark .pwa-status { background:var(--bc-paper); border-color:var(--bc-
 .notification-row__request-actions {
   display: flex;
   gap: 6px;
-  margin-left: 47px;
-  width: calc(100% - 47px);
+  margin-left: 57px;
+  width: calc(100% - 57px);
 }
 .notification-row__request-actions button {
   min-height: 32px;
@@ -4569,7 +4569,7 @@ select {
   .notification-row { gap: 8px; }
   .notification-row__actor { gap: 9px; }
   .notification-row:has(.notification-row__select) .notification-row__icon { left: 49px; }
-  .notification-row__request-actions { margin-left: 28px; width: calc(100% - 28px); }
+  .notification-row__request-actions { margin-left: 36px; width: calc(100% - 36px); }
 }
 
 
