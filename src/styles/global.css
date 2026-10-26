@@ -4586,3 +4586,25 @@ select {
   cursor: pointer;
 }
 .notification-row__actor { touch-action: pan-y; }
+
+
+/* Keep community creation/search dialogs above the mobile keyboard. */
+.modal-backdrop--community-keyboard {
+  align-items: start;
+  justify-items: center;
+  overflow-y: auto;
+  padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+}
+.modal--community-keyboard {
+  max-height: calc(100dvh - 20px);
+  overflow-y: auto;
+  margin-block: 0;
+}
+@media (max-width: 600px) {
+  .modal-backdrop--community-keyboard {
+    padding-top: max(8px, env(safe-area-inset-top));
+  }
+  .modal--community-keyboard {
+    width: min(100%, 430px);
+  }
+}
