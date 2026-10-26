@@ -4561,14 +4561,14 @@ select {
 }
 .notification-row__select { flex: 0 0 20px; padding-left: 2px; }
 .notification-row--selected { background: color-mix(in srgb, var(--bc-orange, #c76a20) 7%, transparent); }
-.notification-row__icon { left: 60px; }
+.notification-row:has(.notification-row__select) .notification-row__icon { left: 60px; }
 @media (max-width: 560px) {
   .notification-selection-bar { gap: 9px; }
   .notification-selection-bar__count { margin-left: auto; }
   .notification-selection-bar__delete { min-height: 32px; padding: 0 9px; }
   .notification-row { gap: 8px; }
   .notification-row__actor { gap: 9px; }
-  .notification-row__icon { left: 49px; }
+  .notification-row:has(.notification-row__select) .notification-row__icon { left: 49px; }
   .notification-row__request-actions { margin-left: 28px; width: calc(100% - 28px); }
 }
 
