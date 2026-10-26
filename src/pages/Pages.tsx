@@ -561,8 +561,8 @@ export function CommunityPage() {
     <div className="community-groups-head">
       <div><span className="eyebrow">YOUR COMMUNITIES</span><h2>Groups</h2></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Button type="button" onClick={() => { setGroupSearchOpen((open) => !open); if (groupSearchOpen) { setGroupSearch(''); setDiscoverGroups([]); setGroupSearchLoading(false) } }}><Search size={16} />Search group</Button>
         <Button onClick={() => { setGroupError(''); setGroupModalOpen(true) }}><Plus size={16} />Create community</Button>
+        <Button type="button" onClick={() => { setGroupSearchOpen((open) => !open); if (groupSearchOpen) { setGroupSearch(''); setDiscoverGroups([]); setGroupSearchLoading(false) } }}><Search size={16} />Search group</Button>
       </div>
     </div>
 
