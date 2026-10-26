@@ -4783,3 +4783,24 @@ select {
   min-width: 0 !important;
   max-width: 100% !important;
 }
+
+
+/* Keep touch/wheel momentum inside an open overlay instead of chaining to the page behind it. */
+.modal-backdrop,
+.sheet-backdrop,
+.media-preview-backdrop,
+.story-viewers-modal-backdrop,
+.story-fullscreen,
+.chat-media-viewer-backdrop,
+.chat-forward-backdrop {
+  overscroll-behavior: contain;
+}
+.modal,
+.bottom-sheet,
+.media-preview-dialog,
+.story-viewers-modal,
+.story-fullscreen__card,
+.chat-media-viewer,
+.chat-forward-modal {
+  overscroll-behavior: contain;
+}
