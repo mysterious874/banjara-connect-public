@@ -8,7 +8,7 @@ import { supabase } from '../utils/supabase'
 import { deletePostMedia, type PostMediaData } from '../utils/mediaData'
 import { userFacingError } from '../utils/userFacingError'
 import { loadConversations, sendConversationMessage, type ConversationSummary } from '../utils/chatData'
-import { Avatar, Button, ConfirmationDialog, EmptyState, Loading } from './ui'
+import { Avatar, Button, ConfirmationDialog, EmptyState, Loading, useBodyScrollLock } from './ui'
 
 export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost; onDeleted?: () => void; initialLikeState?: { count: number; liked: boolean } }) {
   const { session } = useAuth()
@@ -33,6 +33,7 @@ export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost
   const [shareError, setShareError] = useState('')
   const [shareSuccess, setShareSuccess] = useState('')
   const [previewMedia, setPreviewMedia] = useState<PostMediaData | null>(null)
+  useBodyScrollLock(Boolean(previewMedia))
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressTriggered = useRef(false)
   const isOwner = session?.user.id === post.user_id
