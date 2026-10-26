@@ -3541,6 +3541,7 @@ export function NotificationsPage() {
   const [isDeletingSelected, setIsDeletingSelected] = useState(false)
   const selectionPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isSelectionModeRef = useRef(false)
+  const didNotificationLongPressRef = useRef(false)
   const [error, setError] = useState('')
   const [realtimeError, setRealtimeError] = useState('')
   useEffect(() => {
@@ -3636,8 +3637,10 @@ export function NotificationsPage() {
 
   function startNotificationLongPress(id: string) {
     if (selectionPressTimer.current) clearTimeout(selectionPressTimer.current)
+    didNotificationLongPressRef.current = false
     selectionPressTimer.current = setTimeout(() => {
       selectionPressTimer.current = null
+      didNotificationLongPressRef.current = true
       isSelectionModeRef.current = true
       setSelectedNotificationIds((current) => current.includes(id) ? current : [...current, id])
     }, 450)
@@ -3716,7 +3719,7 @@ export function NotificationsPage() {
       const isSelected = selectedNotificationIds.includes(notification.id)
       return <article className={'notification-row' + (notification.type === 'group_join_request' ? ' notification-row--request' : '') + (isSelected ? ' notification-row--selected' : '')} key={notification.id} onPointerUp={cancelNotificationLongPress} onPointerLeave={cancelNotificationLongPress} onPointerCancel={cancelNotificationLongPress}>
         {selectedNotificationIds.length > 0 && <label className="notification-row__select"><input type="checkbox" checked={isSelected} onChange={() => toggleNotificationSelection(notification.id)} aria-label={'Select notification from ' + actorName} /></label>}
-        <Link className="notification-row__actor" to={notification.actor?.username ? '/profile/' + encodeURIComponent(notification.actor.username) : '/connect'} onPointerDown={() => startNotificationLongPress(notification.id)} onClick={(event) => { if (isSelectionModeRef.current) { event.preventDefault(); toggleNotificationSelection(notification.id) } }}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__body"><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></span></Link>
+        <Link className="notification-row__actor" to={notification.actor?.username ? '/profile/' + encodeURIComponent(notification.actor.username) : '/connect'} onPointerDown={() => startNotificationLongPress(notification.id)} onClick={(event) => { if (didNotificationLongPressRef.current) { event.preventDefault(); didNotificationLongPressRef.current = false; return } if (isSelectionModeRef.current) { event.preventDefault(); toggleNotificationSelection(notification.id) } }}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__body"><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></span></Link>
         <span className="notification-row__icon"><Icon size={15} /></span>
         {notification.type === 'group_join_request' ? <span className="notification-row__request-actions">{notification.group_join_request_status === 'approved' || notification.group_join_request_status === 'declined' ? <span className={'notification-row__request-status notification-row__request-status--' + notification.group_join_request_status}>{notification.group_join_request_status === 'approved' ? 'Approved' : 'Declined'}</span> : <><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, true)}>Approve</button><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, false)}>Decline</button></>}</span> : !notification.is_read && <button type="button" className="icon-button" aria-label={'Mark ' + actorName + "'s notification read"} disabled={pendingId === notification.id} onClick={() => void markRead(notification)}><Check size={17} /></button>}
       </article>
