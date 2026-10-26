@@ -562,35 +562,11 @@ export function CommunityPage() {
       <div><span className="eyebrow">YOUR COMMUNITIES</span><h2>Groups</h2></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <Button onClick={() => { setGroupError(''); setGroupModalOpen(true) }}><Plus size={16} />Create community</Button>
-        <Button type="button" onClick={() => { setGroupSearchOpen((open) => !open); if (groupSearchOpen) { setGroupSearch(''); setDiscoverGroups([]); setGroupSearchLoading(false) } }}><Search size={16} />Search group</Button>
+        <Button type="button" onClick={() => { setGroupSearchOpen(true); setGroupSearch(''); setDiscoverGroups([]); setGroupSearchLoading(false) }}><Search size={16} />Search group</Button>
       </div>
     </div>
 
     {groupsLoading ? <Loading label="Loading your groups" /> : groups.length ? <div className="community-groups-list">{groups.map((group) => <Link to={`/community/groups/${group.id}`} className="community-group-card" key={group.id}><span className="community-group-card__icon"><Users size={20} /></span><div><strong>{group.name}</strong><p>{group.description || 'A Banjara Connect community group.'}</p><small>{group.member_count} {group.member_count === 1 ? 'member' : 'members'}{group.unread_count > 0 ? ` • ${group.unread_count} new` : ''}</small></div><ChevronRight size={18} /></Link>)}</div> : <div className="community-groups-empty"><Users size={22} /><div><strong>No communities joined</strong><p>Join a community below to start seeing its posts.</p></div></div>}
-
-    {groupSearchOpen && <div className="community-discover" style={{ marginTop: 12 }}>
-      <form className="search-bar" role="search" onSubmit={(event) => event.preventDefault()}>
-        <Search size={18} aria-hidden="true" />
-        <input autoFocus type="search" value={groupSearch} onChange={(event) => void loadGroupSearch(event.target.value)} aria-label="Search groups" placeholder="Search for a group" />
-        <button type="button" className="button button--quiet" aria-label="Close group search" onClick={() => { setGroupSearchOpen(false); setGroupSearch(''); setDiscoverGroups([]); setGroupSearchLoading(false) }}><X size={16} /></button>
-      </form>
-      {groupSearchLoading && <Loading label="Searching groups" />}
-      {!groupSearchLoading && groupSearch.trim().length >= 2 && <div className="community-discover-list" aria-label="Community search suggestions">{discoverGroups.length ? discoverGroups.map((group) => {
-        const isMember = groups.some((item) => item.id === group.id)
-        const isPending = groupRequestIds.has(group.id)
-        return <article className="community-discover-card" key={group.id}>
-          <span className="community-discover-card__avatar"><Users size={24} /></span>
-          <div className="community-discover-card__copy">
-            <strong>{group.name}</strong>
-            <small>{group.description || 'Banjara Connect community'}</small>
-            <span>{group.member_count} {group.member_count === 1 ? 'member' : 'members'}</span>
-          </div>
-          <Button type="button" variant={isMember || isPending ? 'quiet' : 'outline'} disabled={isMember || isPending || groupRequesting === group.id} onClick={() => void requestGroupJoin(group.id)}>
-            {isMember ? 'Joined' : isPending ? 'Request sent' : groupRequesting === group.id ? 'Sending…' : 'Join'}
-          </Button>
-        </article>
-      }) : <EmptyState title="No groups found" description="Try another group name." />}</div>}
-    </div>}
 
     <div className="section-heading"><div><span className="eyebrow">COMMUNITY FEED</span><h2>Posts from your groups</h2></div><button type="button" className="button button--quiet" onClick={() => void loadCommunityPosts()} disabled={isLoading || !groups.length}>Refresh</button></div>
     {!groups.length ? <EmptyState title="No group posts to show" description="Join a community to see posts from its members." /> : isLoading ? <Loading label="Loading community posts" /> : error && !posts.length ? <ErrorState title="Could not load community" description={error} /> : posts.length ? <div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div> : <EmptyState title="No group posts yet" description="Posts shared by members of your joined groups will appear here." />}
@@ -604,6 +580,31 @@ export function CommunityPage() {
         {groupError && <p className="field__error" role="alert">{groupError}</p>}
         <div className="dialog-copy__actions"><Button type="button" variant="quiet" onClick={() => setGroupModalOpen(false)} disabled={groupSaving}>Cancel</Button><Button type="submit" disabled={groupSaving}>{groupSaving ? 'Creating…' : 'Create community'} <Plus size={16} /></Button></div>
       </form>
+    </Modal>
+
+    <Modal open={groupSearchOpen} title="Search groups" onClose={() => { setGroupSearchOpen(false); setGroupSearch(''); setDiscoverGroups([]); setGroupSearchLoading(false) }}>
+      <div className="community-discover">
+        <form className="search-bar" role="search" onSubmit={(event) => event.preventDefault()}>
+          <Search size={18} aria-hidden="true" />
+          <input autoFocus type="search" value={groupSearch} onChange={(event) => void loadGroupSearch(event.target.value)} aria-label="Search groups" placeholder="Search for a group" />
+        </form>
+        {groupSearchLoading && <Loading label="Searching groups" />}
+        {!groupSearchLoading && groupSearch.trim().length >= 2 && <div className="community-discover-list" aria-label="Community search suggestions">{discoverGroups.length ? discoverGroups.map((group) => {
+          const isMember = groups.some((item) => item.id === group.id)
+          const isPending = groupRequestIds.has(group.id)
+          return <article className="community-discover-card" key={group.id}>
+            <span className="community-discover-card__avatar"><Users size={24} /></span>
+            <div className="community-discover-card__copy">
+              <strong>{group.name}</strong>
+              <small>{group.description || 'A Banjara Connect community group.'}</small>
+              <span>{group.member_count} {group.member_count === 1 ? 'member' : 'members'}</span>
+            </div>
+            <Button type="button" variant={isMember || isPending ? 'quiet' : 'outline'} disabled={isMember || isPending || groupRequesting === group.id} onClick={() => void requestGroupJoin(group.id)}>
+              {isMember ? 'Joined' : isPending ? 'Request sent' : groupRequesting === group.id ? 'Sending…' : 'Join'}
+            </Button>
+          </article>
+        }) : <EmptyState title="No groups found" description="Try another group name." />}</div>}
+      </div>
     </Modal>
   </section>
 }
