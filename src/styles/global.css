@@ -4588,23 +4588,25 @@ select {
 .notification-row__actor { touch-action: pan-y; }
 
 
-/* Keep community creation/search dialogs above the mobile keyboard. */
+/* Keep community dialogs directly below the sticky header on mobile. */
 .modal-backdrop--community-keyboard {
   align-items: start;
   justify-items: center;
   overflow-y: auto;
-  padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+  padding: 78px 12px 10px;
+  background: linear-gradient(to bottom, transparent 0 68px, rgb(24 33 27 / 47%) 68px);
 }
 .modal--community-keyboard {
-  max-height: calc(100dvh - 20px);
+  max-height: calc(100dvh - 88px);
   overflow-y: auto;
   margin-block: 0;
 }
 @media (max-width: 600px) {
   .modal-backdrop--community-keyboard {
-    padding-top: max(8px, env(safe-area-inset-top));
+    padding-top: max(76px, calc(env(safe-area-inset-top) + 68px));
   }
   .modal--community-keyboard {
     width: min(100%, 430px);
+    max-height: calc(100dvh - 86px - env(safe-area-inset-bottom));
   }
 }
