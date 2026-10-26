@@ -573,7 +573,7 @@ export function CommunityPage() {
     {error && posts.length > 0 && <p className="field__error" role="alert">{error}</p>}
     {hasMore && <Button variant="outline" onClick={() => void loadCommunityPosts(offset, true)} disabled={isLoadingMore}>{isLoadingMore ? 'Loading more posts…' : 'Load more posts'}</Button>}
 
-    <Modal open={groupModalOpen} title="Create a community" onClose={() => !groupSaving && setGroupModalOpen(false)}>
+    <Modal className="community-keyboard" open={groupModalOpen} title="Create a community" onClose={() => !groupSaving && setGroupModalOpen(false)}>
       <form className="dialog-copy" onSubmit={createGroup}>
         <Input label="Community name" value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="e.g. Mumbai Banjara Friends" maxLength={80} autoFocus required />
         <label className="field"><span className="field__label">Description</span><textarea className="field__control" value={groupDescription} onChange={(event) => setGroupDescription(event.target.value)} placeholder="What is this group about?" maxLength={500} rows={4} /></label>
@@ -582,7 +582,7 @@ export function CommunityPage() {
       </form>
     </Modal>
 
-    <Modal open={groupSearchOpen} title="Search groups" onClose={() => { setGroupSearchOpen(false); setGroupSearch(''); setDiscoverGroups([]); setGroupSearchLoading(false) }}>
+    <Modal className="community-keyboard" open={groupSearchOpen} title="Search groups" onClose={() => { setGroupSearchOpen(false); setGroupSearch(''); setDiscoverGroups([]); setGroupSearchLoading(false) }}>
       <div className="community-discover">
         <form className="search-bar" role="search" onSubmit={(event) => event.preventDefault()}>
           <Search size={18} aria-hidden="true" />
