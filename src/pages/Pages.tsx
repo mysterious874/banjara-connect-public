@@ -3537,6 +3537,8 @@ export function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [pendingId, setPendingId] = useState('')
+  const [selectedNotificationIds, setSelectedNotificationIds] = useState<string[]>([])
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false)
   const [error, setError] = useState('')
   const [realtimeError, setRealtimeError] = useState('')
   useEffect(() => {
@@ -3625,6 +3627,34 @@ export function NotificationsPage() {
     }
   }
 
+  function toggleNotificationSelection(id: string) {
+    setSelectedNotificationIds((current) => current.includes(id) ? current.filter((selectedId) => selectedId !== id) : [...current, id])
+  }
+
+  function toggleSelectAllNotifications() {
+    setSelectedNotificationIds((current) => {
+      const allVisibleSelected = notifications.length > 0 && notifications.every((item) => current.includes(item.id))
+      return allVisibleSelected ? [] : notifications.map((item) => item.id)
+    })
+  }
+
+  async function deleteSelectedNotifications() {
+    if (!session?.user.id || !selectedNotificationIds.length || isDeletingSelected) return
+    if (!window.confirm('Delete ' + selectedNotificationIds.length + ' selected notification(s)? This cannot be undone.')) return
+    setIsDeletingSelected(true)
+    setError('')
+    try {
+      const idsToDelete = [...selectedNotificationIds]
+      const { error: deleteError } = await supabase.from('notifications').delete().eq('user_id', session.user.id).in('id', idsToDelete)
+      if (deleteError) throw deleteError
+      setNotifications((current) => current.filter((item) => !idsToDelete.includes(item.id)))
+      setSelectedNotificationIds((current) => current.filter((id) => !idsToDelete.includes(id)))
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not delete selected notifications.'))
+    } finally {
+      setIsDeletingSelected(false)
+    }
+  }
   const copyForType = (type: string) => {
     if (type === 'story_like') return 'liked your story'
     if (type === 'like' || type === 'post_like') return 'liked your post'
@@ -3640,7 +3670,29 @@ export function NotificationsPage() {
     return 'sent you a notification'
   }
 
-  return <section className="page-stack"><PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}{isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => { const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'; const Icon = notification.type.includes('like') ? Heart : notification.type.startsWith('group_') ? Users : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles; return <article className={`notification-row${notification.type === 'group_join_request' ? ' notification-row--request' : ''}`} key={notification.id}><Link className="notification-row__actor" to={notification.actor?.username ? `/profile/${encodeURIComponent(notification.actor.username)}` : '/connect'}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__body"><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></span></Link><span className="notification-row__icon"><Icon size={15} /></span>{notification.type === 'group_join_request' ? <span className="notification-row__request-actions">{notification.group_join_request_status === 'approved' || notification.group_join_request_status === 'declined' ? <span className={`notification-row__request-status notification-row__request-status--${notification.group_join_request_status}`}>{notification.group_join_request_status === 'approved' ? 'Approved' : 'Declined'}</span> : <><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, true)}>Approve</button><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, false)}>Decline</button></>}</span> : !notification.is_read && <button type="button" className="icon-button" aria-label={`Mark ${actorName}'s notification read`} disabled={pendingId === notification.id} onClick={() => markRead(notification)}><Check size={17} /></button>}</article>})}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}</section>
+  const allVisibleSelected = notifications.length > 0 && notifications.every((item) => selectedNotificationIds.includes(item.id))
+
+  return <section className="page-stack">
+    <PageHeading eyebrow="A LITTLE HELLO FROM YOUR CIRCLE" title="Notifications" description="Recent activity for your account." />
+    {realtimeError && <p className="field__error" role="status">{realtimeError}</p>}
+    {error && <p className="field__error" role="alert">{error}</p>}
+    {!isLoading && notifications.length > 0 && <div className="notification-selection-bar">
+      <label className="notification-selection-bar__select-all"><input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllNotifications} aria-label="Select all notifications" /><span>{allVisibleSelected ? 'Deselect all' : 'Select all'}</span></label>
+      <span className="notification-selection-bar__count">{selectedNotificationIds.length} selected</span>
+      <button type="button" className="notification-selection-bar__delete" disabled={!selectedNotificationIds.length || isDeletingSelected} onClick={() => void deleteSelectedNotifications()}><Trash2 size={16} /> {isDeletingSelected ? 'Deleting…' : 'Delete selected'}</button>
+    </div>}
+    {isLoading ? <Loading label="Loading notifications" /> : notifications.length ? <div className="notification-list">{notifications.map((notification) => {
+      const actorName = notification.actor?.display_name || notification.actor?.username || 'A community member'
+      const Icon = notification.type.includes('like') ? Heart : notification.type.startsWith('group_') ? Users : notification.type === 'follow' ? Users : notification.type === 'message' ? MessageCircle : Sparkles
+      const isSelected = selectedNotificationIds.includes(notification.id)
+      return <article className={'notification-row' + (notification.type === 'group_join_request' ? ' notification-row--request' : '') + (isSelected ? ' notification-row--selected' : '')} key={notification.id}>
+        <label className="notification-row__select"><input type="checkbox" checked={isSelected} onChange={() => toggleNotificationSelection(notification.id)} aria-label={'Select notification from ' + actorName} /></label>
+        <Link className="notification-row__actor" to={notification.actor?.username ? '/profile/' + encodeURIComponent(notification.actor.username) : '/connect'}><Avatar name={actorName} image={notification.actor?.avatar_url ?? undefined} /><span className="notification-row__body"><strong>{actorName}</strong> {copyForType(notification.type)}<small>{new Date(notification.created_at).toLocaleString()} · {notification.is_read ? 'Read' : 'Unread'}</small></span></Link>
+        <span className="notification-row__icon"><Icon size={15} /></span>
+        {notification.type === 'group_join_request' ? <span className="notification-row__request-actions">{notification.group_join_request_status === 'approved' || notification.group_join_request_status === 'declined' ? <span className={'notification-row__request-status notification-row__request-status--' + notification.group_join_request_status}>{notification.group_join_request_status === 'approved' ? 'Approved' : 'Declined'}</span> : <><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, true)}>Approve</button><button type="button" disabled={pendingId === notification.id} onClick={() => void respondToJoinRequest(notification, false)}>Decline</button></>}</span> : !notification.is_read && <button type="button" className="icon-button" aria-label={'Mark ' + actorName + "'s notification read"} disabled={pendingId === notification.id} onClick={() => void markRead(notification)}><Check size={17} /></button>}
+      </article>
+    })}</div> : <EmptyState title="You are all caught up" description="Notifications will appear here when available." />}
+  </section>
 }
 
 export function AssistantPage() {
