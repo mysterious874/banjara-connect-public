@@ -123,6 +123,47 @@ function useDialogAccessibility(open: boolean, onClose: () => void) {
   return dialogRef
 }
 
+
+
+let bodyScrollLockCount = 0
+let bodyScrollLockY = 0
+let bodyScrollLockStyles: { bodyPosition: string; bodyTop: string; bodyWidth: string; bodyOverflow: string; htmlOverflow: string } | null = null
+
+/** Lock the page behind an open overlay and restore its exact scroll position on close. */
+export function useBodyScrollLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked || typeof document === 'undefined') return
+    if (bodyScrollLockCount === 0) {
+      bodyScrollLockY = window.scrollY
+      bodyScrollLockStyles = {
+        bodyPosition: document.body.style.position,
+        bodyTop: document.body.style.top,
+        bodyWidth: document.body.style.width,
+        bodyOverflow: document.body.style.overflow,
+        htmlOverflow: document.documentElement.style.overflow,
+      }
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${bodyScrollLockY}px`
+      document.body.style.width = '100%'
+      document.body.style.overflow = 'hidden'
+      document.documentElement.style.overflow = 'hidden'
+    }
+    bodyScrollLockCount += 1
+    return () => {
+      bodyScrollLockCount = Math.max(0, bodyScrollLockCount - 1)
+      if (bodyScrollLockCount !== 0 || !bodyScrollLockStyles) return
+      const saved = bodyScrollLockStyles
+      bodyScrollLockStyles = null
+      document.body.style.position = saved.bodyPosition
+      document.body.style.top = saved.bodyTop
+      document.body.style.width = saved.bodyWidth
+      document.body.style.overflow = saved.bodyOverflow
+      document.documentElement.style.overflow = saved.htmlOverflow
+      window.scrollTo(0, bodyScrollLockY)
+    }
+  }, [locked])
+}
+
 export function Modal({ open, title, onClose, children, className = '' }: { open: boolean; title: string; onClose: () => void; children: ReactNode; className?: string }) {
   const dialogRef = useDialogAccessibility(open, onClose)
   const titleId = useId()
