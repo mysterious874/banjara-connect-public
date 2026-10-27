@@ -22,7 +22,7 @@ export function SplashPage() {
         </div>
         <h1 className="splash__brand-name">Connect</h1>
         <span className="splash__line" />
-        <p className="splash__quote">Where our people connect, share and grow together.</p>
+        <p className="splash__quote">अपनी संस्कृति, अपनी पहचान — अपना कनेक्ट</p>
         <span className="splash__loader" aria-hidden="true"><span /></span>
       </div>
     </main>
