@@ -25,7 +25,7 @@ export async function loadUnreadNotificationCount(): Promise<number> {
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
      .eq('is_read', false)
-    .neq('type', 'message')
+    .not('type', 'in', '(message,group_message)')
   if (error) throw error
   return count ?? 0
 }
