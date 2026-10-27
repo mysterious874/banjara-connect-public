@@ -1,0 +1,46 @@
+/* Subtle premium glow polish. Preserve the existing Connect palette and layout. */
+:root {
+  --connect-glow: rgba(220, 86, 45, 0.16);
+  --connect-glow-strong: rgba(239, 125, 48, 0.24);
+}
+.button--primary,
+button.button--primary,
+[role="button"].button--primary {
+  box-shadow: 0 5px 18px var(--connect-glow);
+  transition: box-shadow 180ms ease, transform 180ms ease, filter 180ms ease;
+}
+.button--primary:active,
+button.button--primary:active,
+[role="button"].button--primary:active {
+  transform: scale(0.985);
+  box-shadow: 0 2px 10px var(--connect-glow-strong);
+}
+.brand-mark,
+.brand-lockup .brand-mark {
+  filter: drop-shadow(0 2px 8px var(--connect-glow));
+}
+.splash__content {
+  animation: connect-intro-arrive 650ms ease-out both;
+}
+.splash-logo-animation {
+  filter: drop-shadow(0 0 18px var(--connect-glow-strong));
+}
+.splash-logo-animation__center {
+  /* Keep the small red center circle and plus mark; remove the unwanted yellow disc. */
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.splash-logo-animation__piece {
+  filter: drop-shadow(0 0 7px var(--connect-glow-strong));
+}
+.splash__loader > span {
+  box-shadow: 0 0 10px var(--connect-glow-strong);
+}
+@keyframes connect-intro-arrive {
+  from { opacity: 0; transform: translateY(7px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash__content { animation: none; }
+  .button--primary, button.button--primary { transition: none; }
+}
