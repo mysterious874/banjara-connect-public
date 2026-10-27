@@ -100,3 +100,51 @@ button.button--primary:active,
 @media (prefers-reduced-motion: reduce) {
   .splash-logo-animation__circle { animation: none; opacity: 1; }
 }
+
+
+/* Match the reference composition: four separate diagonal diamonds around the plus. */
+.splash-logo-animation__piece {
+  width: 34px;
+  height: 34px;
+  border-radius: 3px;
+  background: linear-gradient(145deg, var(--bc-orange, #d8782f), #e59a32);
+  box-shadow:
+    0 0 8px rgb(216 120 47 / 38%),
+    0 0 18px rgb(216 120 47 / 20%),
+    0 1px 0 rgb(255 240 200 / 30%) inset;
+}
+.splash-logo-animation__piece--top {
+  animation-name: connect-piece-top-left;
+}
+.splash-logo-animation__piece--right {
+  animation-name: connect-piece-top-right;
+}
+.splash-logo-animation__piece--bottom {
+  animation-name: connect-piece-bottom-right;
+}
+.splash-logo-animation__piece--left {
+  animation-name: connect-piece-bottom-left;
+}
+@keyframes connect-piece-top-left {
+  0% { opacity: 0; transform: translate(-42px, -42px) rotate(45deg) scale(.65); }
+  28% { opacity: 1; }
+  100% { opacity: 1; transform: translate(-30px, -30px) rotate(45deg) scale(.9); }
+}
+@keyframes connect-piece-top-right {
+  0% { opacity: 0; transform: translate(42px, -42px) rotate(45deg) scale(.65); }
+  28% { opacity: 1; }
+  100% { opacity: 1; transform: translate(30px, -30px) rotate(45deg) scale(.9); }
+}
+@keyframes connect-piece-bottom-right {
+  0% { opacity: 0; transform: translate(42px, 42px) rotate(45deg) scale(.65); }
+  28% { opacity: 1; }
+  100% { opacity: 1; transform: translate(30px, 30px) rotate(45deg) scale(.9); }
+}
+@keyframes connect-piece-bottom-left {
+  0% { opacity: 0; transform: translate(-42px, 42px) rotate(45deg) scale(.65); }
+  28% { opacity: 1; }
+  100% { opacity: 1; transform: translate(-30px, 30px) rotate(45deg) scale(.9); }
+}
+@media (max-width: 480px) {
+  .splash-logo-animation__piece { width: 31px; height: 31px; }
+}
