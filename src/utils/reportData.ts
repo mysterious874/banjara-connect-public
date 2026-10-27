@@ -29,5 +29,15 @@ export async function createReport(target: ReportTarget, reason: string, details
     details: details.trim() || null,
   }).select('id').single()
   if (error) throw error
+
+  // Kick off AI triage in the background. It is cost-disabled by default until
+  // AI_MODERATION_ENABLED=true is configured in Supabase; report submission
+  // still succeeds if the optional worker is unavailable.
+  void supabase.functions.invoke('ai-moderator', { body: { report_id: data.id } }).then(({ error: moderationError }) => {
+    if (moderationError) console.warn('AI moderation could not be started:', moderationError.message)
+  }).catch((moderationError) => {
+    console.warn('AI moderation could not be started:', moderationError)
+  })
+
   return data.id as string
 }
