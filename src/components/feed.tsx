@@ -7,6 +7,7 @@ import { loadPostLikes, togglePostLike } from '../utils/socialData'
 import { supabase } from '../utils/supabase'
 import { deletePostMedia, type PostMediaData } from '../utils/mediaData'
 import { userFacingError } from '../utils/userFacingError'
+import { createReport } from '../utils/reportData'
 import { loadConversations, sendConversationMessage, type ConversationSummary } from '../utils/chatData'
 import { Avatar, Button, ConfirmationDialog, EmptyState, Loading, useBodyScrollLock } from './ui'
 
@@ -24,6 +25,12 @@ export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost
   const [isDeletingPost, setIsDeletingPost] = useState(false)
   const [showPostOptions, setShowPostOptions] = useState(false)
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
+  const [showReportDialog, setShowReportDialog] = useState(false)
+  const [reportReason, setReportReason] = useState('harassment')
+  const [reportDetails, setReportDetails] = useState('')
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false)
+  const [reportError, setReportError] = useState('')
+  const [reportSuccess, setReportSuccess] = useState(false)
   const [postError, setPostError] = useState('')
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
@@ -213,7 +220,7 @@ export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost
     <article className="post-card">
       <div className="post-card__head">
         {post.author ? <Link to={`/profile/${post.author.username || post.author.id}`} className="post-card__author">{authorContent}</Link> : <div className="post-card__author">{authorContent}</div>}
-        {isOwner && <div className="post-card__options"><button type="button" className="icon-button post-card__more" aria-label={`More options for ${authorName}'s post`} aria-expanded={showPostOptions} onClick={() => setShowPostOptions((open) => !open)}><MoreHorizontal size={20} /></button>{showPostOptions && <div className="post-card__options-menu"><button type="button" onClick={() => { setEditContent(postContent); setIsEditing(true); setShowPostOptions(false) }}><Pencil size={15} />Edit post</button><button type="button" onClick={() => { setShowDeleteConfirmation(true); setShowPostOptions(false) }}><Trash2 size={15} />Delete post</button></div>}</div>}
+        {session?.user && <div className="post-card__options"><button type="button" className="icon-button post-card__more" aria-label={`More options for ${authorName}'s post`} aria-expanded={showPostOptions} onClick={() => setShowPostOptions((open) => !open)}><MoreHorizontal size={20} /></button>{showPostOptions && <div className="post-card__options-menu">{isOwner ? <><button type="button" onClick={() => { setEditContent(postContent); setIsEditing(true); setShowPostOptions(false) }}><Pencil size={15} />Edit post</button><button type="button" onClick={() => { setShowDeleteConfirmation(true); setShowPostOptions(false) }}><Trash2 size={15} />Delete post</button></> : <button type="button" onClick={() => { setShowPostOptions(false); setReportError(''); setReportSuccess(false); setShowReportDialog(true) }}><span aria-hidden="true">⚑</span>Report post</button>}</div>}</div>}
       </div>
       {isEditing ? <form className="post-edit-form" onSubmit={updatePost}><label className="visually-hidden" htmlFor={`post-edit-${post.id}`}>Edit your post</label><textarea id={`post-edit-${post.id}`} value={editContent} onChange={(event) => setEditContent(event.target.value)} maxLength={500} required /><div><Button type="button" variant="quiet" onClick={() => { setIsEditing(false); setEditContent(postContent) }} disabled={isSavingPost}><X size={15} />Cancel</Button><Button type="submit" disabled={isSavingPost || !editContent.trim()}><Check size={15} />{isSavingPost ? 'Saving…' : 'Save'}</Button></div></form> : <p className="post-card__text">{postContent}</p>}
       {((post as FeedPost & { media?: PostMediaData[] }).media ?? []).map((media) => media.signedUrl ? (
@@ -272,6 +279,41 @@ export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost
             <Button type="button" variant="quiet" onClick={() => setShowShareDialog(false)} disabled={isShareSending}>Close</Button>
             <Button type="button" onClick={() => void sharePost()} disabled={!selectedConversationIds.length || isShareSending || isShareLoading}>{isShareSending ? 'Sending…' : `Send${selectedConversationIds.length ? ` · ${selectedConversationIds.length}` : ''}`} <Send size={15} /></Button>
           </div>
+        </div>
+      </div>}
+      {showReportDialog && <div className="share-dialog-backdrop" role="presentation" onClick={() => !isSubmittingReport && setShowReportDialog(false)}>
+        <div className="share-dialog" role="dialog" aria-modal="true" aria-labelledby={`report-post-title-${post.id}`} onClick={(event) => event.stopPropagation()}>
+          <div className="share-dialog__head">
+            <div><span className="eyebrow">HELP KEEP CONNECT SAFE</span><h2 id={`report-post-title-${post.id}`}>{reportSuccess ? 'Report submitted' : 'Report post'}</h2></div>
+            <button type="button" className="icon-button" aria-label="Close report dialog" onClick={() => setShowReportDialog(false)} disabled={isSubmittingReport}><X size={19} /></button>
+          </div>
+          {reportSuccess ? <><p className="micro-note" role="status">Thanks for letting us know. Your report has been submitted for review.</p><div className="share-dialog__footer"><Button type="button" onClick={() => setShowReportDialog(false)}>Done</Button></div></> : <>
+            <div className="share-dialog__post"><strong>Reporting {authorName}'s post</strong><p>{postContent || 'Photo/video post'}</p></div>
+            <label className="field"><span className="field__label">Reason for report</span><span className="field__control-wrap"><select className="field__control" value={reportReason} onChange={(event) => setReportReason(event.target.value)} disabled={isSubmittingReport}>
+              <option value="harassment">Harassment or bullying</option>
+              <option value="hate">Hate or discrimination</option>
+              <option value="violence">Violence or dangerous content</option>
+              <option value="sexual">Sexual content</option>
+              <option value="spam">Spam or scam</option>
+              <option value="misinformation">False or misleading information</option>
+              <option value="other">Something else</option>
+            </select></span></label>
+            <label className="field"><span className="field__label">Additional details (optional)</span><textarea className="field__control" value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={1000} rows={3} placeholder="Tell us a little more…" disabled={isSubmittingReport} /></label>
+            {reportError && <p className="field__error" role="alert">{reportError}</p>}
+            <div className="share-dialog__footer">
+              <Button type="button" variant="quiet" onClick={() => setShowReportDialog(false)} disabled={isSubmittingReport}>Cancel</Button>
+              <Button type="button" variant="danger" disabled={isSubmittingReport} onClick={() => {
+                if (!session?.user || isSubmittingReport) return
+                setIsSubmittingReport(true)
+                setReportError('')
+                void createReport({ postId: post.id }, reportReason, reportDetails).then(() => {
+                  setReportSuccess(true)
+                }).catch((caught: unknown) => {
+                  setReportError(userFacingError(caught, 'Could not submit this report. Please try again.'))
+                }).finally(() => setIsSubmittingReport(false))
+              }}>{isSubmittingReport ? 'Submitting…' : 'Submit report'}</Button>
+            </div>
+          </>}
         </div>
       </div>}
       <ConfirmationDialog open={showDeleteConfirmation} title="Delete this post?" description="This removes your post from the community. This action cannot be undone." confirmLabel={isDeletingPost ? 'Deleting…' : 'Delete post'} onClose={() => { if (!isDeletingPost) setShowDeleteConfirmation(false) }} onConfirm={() => void deletePost()} />
