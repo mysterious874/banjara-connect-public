@@ -44,3 +44,59 @@ button.button--primary:active,
   .splash__content { animation: none; }
   .button--primary, button.button--primary { transition: none; }
 }
+
+
+/* Intro logo reference polish: same Connect colours, only softer neon/glow treatment. */
+.splash-logo-animation {
+  isolation: isolate;
+  filter: drop-shadow(0 0 10px rgb(122 38 58 / 18%));
+}
+.splash-logo-animation__circle {
+  z-index: 0;
+  width: 102px;
+  height: 102px;
+  border-color: var(--bc-orange, #d8782f);
+  box-shadow:
+    0 0 8px rgb(216 120 47 / 32%),
+    inset 0 0 8px rgb(216 120 47 / 10%);
+  animation:
+    splash-circle-in 520ms cubic-bezier(.2,.8,.2,1) .05s forwards,
+    connect-ring-pulse 2.4s ease-in-out 1.2s infinite;
+}
+.splash-logo-animation__piece {
+  z-index: 1;
+  border-radius: 4px;
+  filter: drop-shadow(0 0 5px rgb(216 120 47 / 35%));
+  box-shadow:
+    0 4px 12px rgb(216 120 47 / 22%),
+    0 1px 0 rgb(255 240 200 / 30%) inset;
+}
+.splash-logo-animation__center {
+  z-index: 2;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 8px rgb(122 38 58 / 45%));
+}
+.splash-logo-animation__center::before {
+  inset: 14px;
+  box-shadow: 0 0 12px rgb(122 38 58 / 38%);
+}
+.splash-logo-animation__center::after {
+  text-shadow: 0 0 7px rgb(255 240 200 / 35%);
+}
+.splash__brand-name {
+  text-shadow: 0 2px 14px rgb(216 120 47 / 12%);
+}
+.splash__loader {
+  box-shadow: 0 0 10px rgb(216 120 47 / 12%);
+}
+.splash__loader > span {
+  box-shadow: 0 0 9px rgb(216 120 47 / 28%);
+}
+@keyframes connect-ring-pulse {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 2px rgb(216 120 47 / 12%)); }
+  50% { opacity: .78; filter: drop-shadow(0 0 7px rgb(216 120 47 / 32%)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-logo-animation__circle { animation: none; opacity: 1; }
+}
