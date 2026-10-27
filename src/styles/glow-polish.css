@@ -148,3 +148,91 @@ button.button--primary:active,
 @media (max-width: 480px) {
   .splash-logo-animation__piece { width: 31px; height: 31px; }
 }
+
+
+/* Final intro composition: keep all four diamonds comfortably inside the ring. */
+.splash-logo-animation__piece {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 3px;
+  background: linear-gradient(145deg, var(--bc-orange, #d8782f), #e59a32);
+  box-shadow:
+    0 0 7px rgb(216 120 47 / 42%),
+    0 0 15px rgb(216 120 47 / 24%),
+    0 1px 0 rgb(255 240 200 / 30%) inset;
+}
+@keyframes connect-piece-top-left {
+  0% { opacity: 0; transform: translate(-38px, -38px) rotate(45deg) scale(.55); }
+  28% { opacity: 1; }
+  100% { opacity: 1; transform: translate(-20px, -20px) rotate(45deg) scale(.9); }
+}
+@keyframes connect-piece-top-right {
+  0% { opacity: 0; transform: translate(38px, -38px) rotate(45deg) scale(.55); }
+  28% { opacity: 1; }
+  100% { opacity: 1; transform: translate(20px, -20px) rotate(45deg) scale(.9); }
+}
+@keyframes connect-piece-bottom-right {
+  0% { opacity: 0; transform: translate(38px, 38px) rotate(45deg) scale(.55); }
+  28% { opacity: 1; }
+  100% { opacity: 1; transform: translate(20px, 20px) rotate(45deg) scale(.9); }
+}
+@keyframes connect-piece-bottom-left {
+  0% { opacity: 0; transform: translate(-38px, 38px) rotate(45deg) scale(.55); }
+  28% { opacity: 1; }
+  100% { opacity: 1; transform: translate(-20px, 20px) rotate(45deg) scale(.9); }
+}
+@media (max-width: 480px) {
+  .splash-logo-animation__piece { width: 26px !important; height: 26px !important; }
+}
+
+/* App-wide restrained glow polish; preserve all existing theme colours. */
+:root {
+  --connect-surface-glow: rgb(216 120 47 / 10%);
+  --connect-action-glow: rgb(216 120 47 / 22%);
+}
+button,
+.button,
+[role="button"] {
+  transition: box-shadow 180ms ease, filter 180ms ease, transform 180ms ease;
+}
+button:hover,
+.button:hover,
+[role="button"]:hover {
+  filter: brightness(1.035);
+}
+.button--primary,
+button.button--primary,
+.auth-card .button,
+.connect-button,
+.post-action,
+.chat-send-button {
+  box-shadow: 0 3px 14px var(--connect-action-glow);
+}
+.card,
+.post-card,
+.profile-card,
+.chat-list-item,
+.community-card,
+.story-ring,
+.bottom-nav,
+.app-header {
+  box-shadow: 0 4px 20px var(--connect-surface-glow);
+}
+.bottom-nav a[aria-current="page"],
+.bottom-nav button[aria-current="page"],
+.nav-item.active,
+.nav-item[aria-current="page"] {
+  filter: drop-shadow(0 0 6px var(--connect-action-glow));
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline-color: var(--bc-orange, #d8782f);
+  box-shadow: 0 0 0 3px rgb(216 120 47 / 13%);
+}
+.splash__brand-name {
+  text-shadow: 0 0 18px rgb(216 120 47 / 22%);
+}
+@media (prefers-reduced-motion: reduce) {
+  button, .button, [role="button"] { transition: none; }
+}
