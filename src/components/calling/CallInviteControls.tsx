@@ -38,6 +38,12 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
   const remoteDragStartRef = useRef<{ x: number; y: number } | null>(null)
   const localDragMovedRef = useRef(false)
   const remoteDragMovedRef = useRef(false)
+
+  useEffect(() => {
+    if (!notice) return
+    const timeoutId = window.setTimeout(() => setNotice(''), 3000)
+    return () => window.clearTimeout(timeoutId)
+  }, [notice])
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map())
   const [joinedGroupCallId, setJoinedGroupCallId] = useState<string | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
