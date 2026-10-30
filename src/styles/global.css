@@ -4804,3 +4804,35 @@ select {
 .chat-forward-modal {
   overscroll-behavior: contain;
 }
+
+
+/* Final call-screen overrides: keep the action dock in one swipeable row and make PiP drag work on touch. */
+.call-invite-dialog--fullscreen .call-invite-dialog__actions {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: max-content !important;
+  max-width: calc(100vw - 24px) !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  white-space: nowrap !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+}
+.call-invite-dialog--fullscreen .call-invite-dialog__actions::-webkit-scrollbar { display: none !important; }
+.call-invite-dialog--fullscreen .call-invite-dialog__actions .call-invite-button {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: max-content !important;
+  white-space: nowrap !important;
+}
+.call-invite-dialog--fullscreen .call-media-grid > .call-media-tile--local,
+.call-invite-dialog--fullscreen .call-media-grid > .call-media-tile {
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-user-drag: none !important;
+}
