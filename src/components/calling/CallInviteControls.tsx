@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Phone, Video, PhoneOff, Check, X, Users, Mic, MicOff, Camera, CameraOff, Volume2, VolumeX } from 'lucide-react'
+import { Phone, Video, PhoneOff, Check, X, Users, Mic, MicOff, Camera, CameraOff, SwitchCamera, Volume2, VolumeX } from 'lucide-react'
 import { useAuth } from '../../hooks/AuthProvider'
 import { supabase } from '../../utils/supabase'
 
@@ -28,6 +28,8 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({})
   const [muted, setMuted] = useState(false)
   const [cameraOff, setCameraOff] = useState(false)
+  const [cameraFacingMode, setCameraFacingMode] = useState<'user' | 'environment'>('user')
+  const [cameraSwitching, setCameraSwitching] = useState(false)
   const [speakerOn, setSpeakerOn] = useState(true)
   const [localVideoPosition, setLocalVideoPosition] = useState<{ x: number; y: number } | null>(null)
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map())
@@ -140,7 +142,8 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
       if (existing) return existing
       const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
       peers.set(id, peer)
-      local?.getTracks().forEach(track => peer.addTrack(track, local!))
+      const currentLocalStream = localStreamRef.current ?? local
+      currentLocalStream?.getTracks().forEach(track => peer.addTrack(track, currentLocalStream))
       peer.onicecandidate = event => {
         if (event.candidate) void sendSignal('ice', { to: id, candidate: event.candidate.toJSON() })
       }
@@ -215,7 +218,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
           throw new Error('This browser does not support secure calling. Open Connect over HTTPS in a current browser.')
         }
-        local = await navigator.mediaDevices.getUserMedia({ audio: true, video: activeCall.call_type === 'video' })
+        local = await navigator.mediaDevices.getUserMedia({ audio: true, video: activeCall.call_type === 'video' ? { facingMode: { ideal: 'user' } } : false })
         if (disposed) { local.getTracks().forEach(track => track.stop()); return }
         localStreamRef.current = local
         setLocalStream(local)
@@ -268,7 +271,8 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         void supabase.removeChannel(channel)
       }
       peers.forEach(peer => peer.close()); peers.clear(); pendingIce.clear()
-      local?.getTracks().forEach(track => track.stop())
+      const streamToStop = localStreamRef.current ?? local
+      streamToStop?.getTracks().forEach(track => track.stop())
       localStreamRef.current = null
       setLocalStream(null); setRemoteStreams({})
     }
@@ -335,6 +339,43 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     tracks.forEach(track => { track.enabled = !next })
     setCameraOff(next)
   }
+  const switchCamera = async () => {
+    if (cameraSwitching) return
+    const currentStream = localStreamRef.current
+    if (!currentStream?.getVideoTracks().length || !navigator.mediaDevices?.getUserMedia) {
+      setNotice('Camera is not ready yet. Please wait for the video call to connect.')
+      return
+    }
+    const nextFacingMode = cameraFacingMode === 'user' ? 'environment' : 'user'
+    setCameraSwitching(true)
+    let replacementStream: MediaStream | null = null
+    try {
+      try {
+        replacementStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { exact: nextFacingMode } } })
+      } catch {
+        replacementStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: nextFacingMode } } })
+      }
+      const nextTrack = replacementStream.getVideoTracks()[0]
+      if (!nextTrack) throw new Error('No camera track was returned.')
+      const videoSenders = [...peerConnectionsRef.current.values()]
+        .flatMap(peer => peer.getSenders())
+        .filter(sender => sender.track?.kind === 'video')
+      await Promise.all(videoSenders.map(sender => sender.replaceTrack(nextTrack)))
+      const latestStream = localStreamRef.current ?? currentStream
+      const nextStream = new MediaStream([...latestStream.getAudioTracks(), nextTrack])
+      localStreamRef.current = nextStream
+      setLocalStream(nextStream)
+      currentStream.getVideoTracks().forEach(track => track.stop())
+      setCameraFacingMode(nextFacingMode)
+      setNotice('')
+    } catch (error) {
+      replacementStream?.getTracks().forEach(track => track.stop())
+      console.warn('Could not switch video camera:', error)
+      setNotice('Could not switch camera. Check camera permissions and try again.')
+    } finally {
+      setCameraSwitching(false)
+    }
+  }
   const dismissNotice = () => setNotice('')
   const endOrLeaveCall = async () => {
     if (!activeCall) return
@@ -358,7 +399,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         {activeCall && notice && <p role="status" className="call-invite-dialog__notice" style={{ position: 'relative', zIndex: 6 }}>{notice}</p>}
         {activeCall && <div className="call-media-grid" style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: '#080808', overflow: 'hidden' }}>
           {Object.entries(remoteStreams).map(([id, stream]) => <div key={id} className="call-media-tile" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: '#080808' }}><video autoPlay playsInline muted ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', background: '#080808' }} /><audio autoPlay ref={element => { if (element) { audioElementsRef.current.set(id, element); if (element.srcObject !== stream) element.srcObject = stream } else { audioElementsRef.current.delete(id) } }} /></div>)}
-          {activeCall.call_type === 'video' && localStream && <div className="call-media-tile--local" onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); setLocalVideoPosition({ x: event.clientX - 65, y: event.clientY - 90 }) }} onPointerMove={event => { if (event.buttons === 1) setLocalVideoPosition({ x: Math.max(8, Math.min(window.innerWidth - 138, event.clientX - 65)), y: Math.max(8, Math.min(window.innerHeight - 188, event.clientY - 90)) }) }} style={{ position: 'fixed', zIndex: 5, pointerEvents: 'auto', width: 130, height: 180, left: localVideoPosition ? localVideoPosition.x : undefined, top: localVideoPosition ? localVideoPosition.y : undefined, right: localVideoPosition ? undefined : 16, bottom: localVideoPosition ? undefined : 110, borderRadius: 14, overflow: 'hidden', border: '2px solid rgba(255,255,255,.85)', boxShadow: '0 6px 24px rgba(0,0,0,.45)', touchAction: 'none', cursor: 'grab', background: '#222' }}><video className="call-media-tile call-media-tile--local" autoPlay playsInline muted ref={element => { if (element && element.srcObject !== localStream) element.srcObject = localStream }} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }} /></div>}
+          {activeCall.call_type === 'video' && localStream && <div className="call-media-tile--local" onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); setLocalVideoPosition({ x: event.clientX - 65, y: event.clientY - 90 }) }} onPointerMove={event => { if (event.buttons === 1) setLocalVideoPosition({ x: Math.max(8, Math.min(window.innerWidth - 138, event.clientX - 65)), y: Math.max(8, Math.min(window.innerHeight - 188, event.clientY - 90)) }) }} style={{ position: 'fixed', zIndex: 5, pointerEvents: 'auto', width: 130, height: 180, left: localVideoPosition ? localVideoPosition.x : undefined, top: localVideoPosition ? localVideoPosition.y : undefined, right: localVideoPosition ? undefined : 16, bottom: localVideoPosition ? undefined : 110, borderRadius: 14, overflow: 'hidden', border: '2px solid rgba(255,255,255,.85)', boxShadow: '0 6px 24px rgba(0,0,0,.45)', touchAction: 'none', cursor: 'grab', background: '#222' }}><video className="call-media-tile call-media-tile--local" autoPlay playsInline muted ref={element => { if (element && element.srcObject !== localStream) element.srcObject = localStream }} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', transform: cameraFacingMode === 'user' ? 'scaleX(-1)' : 'none' }} /></div>}
           {Object.keys(remoteStreams).length === 0 && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', textAlign: 'center', padding: 24 }}>Waiting for the other person’s video…</div>}
           {activeCall.call_type === 'voice' && <span className="call-voice-status" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><Phone size={20} /> Voice call connected</span>}
         </div>}
@@ -370,7 +411,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         {activeCall && <div className="call-invite-dialog__actions">
           <button type="button" className="call-invite-button" onClick={() => void toggleSpeaker()} title={speakerOn ? 'Speaker on' : 'Speaker off'}>{speakerOn ? <Volume2 size={17} /> : <VolumeX size={17} />}{speakerOn ? 'Speaker' : 'Earpiece'}</button>
           <button type="button" className="call-invite-button" onClick={toggleMute} title={muted ? 'Unmute microphone' : 'Mute microphone'}>{muted ? <MicOff size={17} /> : <Mic size={17} />}{muted ? 'Unmute' : 'Mute'}</button>
-          {activeCall.call_type === 'video' && <button type="button" className="call-invite-button" onClick={toggleCamera} title={cameraOff ? 'Turn camera on' : 'Turn camera off'}>{cameraOff ? <CameraOff size={17} /> : <Camera size={17} />}{cameraOff ? 'Camera on' : 'Camera off'}</button>}
+          {activeCall.call_type === 'video' && <><button type="button" className="call-invite-button" onClick={toggleCamera} title={cameraOff ? 'Turn camera on' : 'Turn camera off'}>{cameraOff ? <CameraOff size={17} /> : <Camera size={17} />}{cameraOff ? 'Camera on' : 'Camera off'}</button><button type="button" className="call-invite-button" onClick={() => void switchCamera()} disabled={cameraSwitching || cameraOff} title="Switch front/back camera"><SwitchCamera size={17} />{cameraSwitching ? 'Switching…' : 'Flip'}</button></>}
           <button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void endOrLeaveCall()}><PhoneOff size={17} />{activeCall.group_id && activeCall.caller_id !== userId ? 'Leave call' : 'End call'}</button>
         </div>}
         {ringingOutgoing && <div className="call-invite-dialog__actions"><button type="button" className="call-invite-button call-invite-button--decline" disabled={busy} onClick={() => void updateStatus(ringingOutgoing, 'ended')}><PhoneOff size={17} /> Cancel call</button></div>}
