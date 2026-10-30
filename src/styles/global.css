@@ -4890,8 +4890,8 @@ select {
   inset: auto !important;
   left: var(--pip-left, auto) !important;
   top: var(--pip-top, auto) !important;
-  right: var(--pip-left, auto) !important;
-  bottom: var(--pip-top, auto) !important;
+  right: var(--pip-right, 12px) !important;
+  bottom: var(--pip-bottom, 142px) !important;
   width: 96px !important;
   height: 136px !important;
   max-width: 30vw !important;
@@ -4910,8 +4910,8 @@ select {
   inset: auto !important;
   left: var(--pip-left, auto) !important;
   top: var(--pip-top, auto) !important;
-  right: 12px !important;
-  bottom: calc(142px + env(safe-area-inset-bottom)) !important;
+  right: var(--pip-right, 12px) !important;
+  bottom: var(--pip-bottom, calc(142px + env(safe-area-inset-bottom))) !important;
   width: 96px !important;
   height: 136px !important;
   max-width: 30vw !important;
