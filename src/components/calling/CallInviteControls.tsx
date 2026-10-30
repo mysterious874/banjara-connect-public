@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Phone, Video, PhoneOff, Check, X, Users, Mic, MicOff, Camera, CameraOff, SwitchCamera, Volume2, VolumeX } from 'lucide-react'
 import { useAuth } from '../../hooks/AuthProvider'
@@ -406,7 +406,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
         {activeCall && <div className="call-media-grid" style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: '#080808', overflow: 'hidden' }}>
           {Object.entries(remoteStreams).map(([id, stream]) => {
             const remoteIsMain = !localVideoExpanded
-            const remoteStyle = remoteIsMain
+            const remoteStyle: CSSProperties = remoteIsMain
               ? { position: 'absolute', inset: 0, width: '100%', height: '100%', background: '#080808', pointerEvents: 'auto', cursor: 'pointer' }
               : { position: 'fixed', zIndex: 7, pointerEvents: 'auto', width: 130, height: 180, left: remoteVideoPosition ? remoteVideoPosition.x : undefined, top: remoteVideoPosition ? remoteVideoPosition.y : undefined, right: remoteVideoPosition ? undefined : 16, bottom: remoteVideoPosition ? undefined : 110, borderRadius: 14, overflow: 'hidden', border: '2px solid rgba(255,255,255,.85)', boxShadow: '0 6px 24px rgba(0,0,0,.45)', touchAction: 'none', cursor: 'grab', background: '#222' }
             return <div key={id} className="call-media-tile" onClick={() => { if (remoteDragMovedRef.current) { remoteDragMovedRef.current = false; return }; setLocalVideoExpanded(false) }} onPointerDown={event => { if (remoteIsMain) return; remoteDragMovedRef.current = false; remoteDragStartRef.current = { x: event.clientX, y: event.clientY }; event.currentTarget.setPointerCapture(event.pointerId) }} onPointerMove={event => { if (!remoteIsMain && event.buttons === 1) { const origin = remoteDragStartRef.current; if (origin && (Math.abs(event.clientX - origin.x) > 5 || Math.abs(event.clientY - origin.y) > 5)) remoteDragMovedRef.current = true; if (remoteDragMovedRef.current) setRemoteVideoPosition({ x: Math.max(8, Math.min(window.innerWidth - 138, event.clientX - 65)), y: Math.max(8, Math.min(window.innerHeight - 188, event.clientY - 90)) }) } }} style={remoteStyle}>
