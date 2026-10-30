@@ -4969,3 +4969,63 @@ select {
     height: 124px !important;
   }
 }
+
+/* Refined in-call dock: hang-up action centered in a balanced floating bar. */
+.call-invite-dialog--video-focus .call-invite-dialog__actions {
+  left: 50% !important; right: auto !important;
+  bottom: max(18px, env(safe-area-inset-bottom)) !important;
+  transform: translateX(-50%) !important;
+  display: flex !important; flex-direction: row !important;
+  flex-wrap: nowrap !important; justify-content: center !important;
+  align-items: center !important; width: max-content !important;
+  max-width: calc(100vw - 20px) !important; min-height: 64px !important;
+  gap: 9px !important; padding: 8px 12px !important;
+  overflow: visible !important; border: 1px solid rgba(255,255,255,.16) !important;
+  border-radius: 22px !important; background: rgba(17,18,20,.88) !important;
+  box-shadow: 0 10px 34px rgba(0,0,0,.42) !important;
+  backdrop-filter: blur(18px) saturate(140%) !important;
+}
+.call-invite-dialog--video-focus .call-invite-dialog__actions > .call-invite-button {
+  display: inline-flex !important; flex: 0 0 48px !important;
+  align-items: center !important; justify-content: center !important;
+  width: 48px !important; min-width: 48px !important;
+  height: 48px !important; min-height: 48px !important;
+  padding: 0 !important; gap: 0 !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+  border-radius: 50% !important; background: rgba(255,255,255,.12) !important;
+  color: #fff !important; font-size: 0 !important; box-shadow: none !important;
+}
+.call-invite-dialog--video-focus .call-invite-dialog__actions > .call-invite-button svg {
+  width: 21px !important; height: 21px !important; margin: 0 !important;
+}
+.call-invite-dialog--video-focus .call-invite-dialog__actions > .call-invite-button--call-end {
+  flex: 0 0 76px !important; width: 76px !important; min-width: 76px !important;
+  height: 48px !important; min-height: 48px !important; gap: 6px !important;
+  border: 0 !important; border-radius: 16px !important;
+  background: #d94343 !important; color: #fff !important;
+  font-size: 12px !important; font-weight: 750 !important;
+}
+.call-invite-dialog--video-focus .call-invite-dialog__actions > .call-invite-button--call-end svg {
+  width: 19px !important; height: 19px !important;
+}
+.call-invite-dialog--video-focus .call-media-grid > .call-media-tile--local-expanded {
+  position: fixed !important; inset: 0 !important; width: 100vw !important;
+  height: 100dvh !important; z-index: 30 !important; display: block !important;
+  border: 0 !important; border-radius: 0 !important; pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+.call-invite-dialog--video-focus .call-media-grid > .call-media-tile--local-expanded video {
+  position: absolute !important; inset: 0 !important; width: 100% !important;
+  height: 100% !important; object-fit: cover !important; border-radius: 0 !important;
+}
+@media (max-width: 380px) {
+  .call-invite-dialog--video-focus .call-invite-dialog__actions { gap: 6px !important; padding: 7px 8px !important; }
+  .call-invite-dialog--video-focus .call-invite-dialog__actions > .call-invite-button {
+    flex-basis: 44px !important; width: 44px !important; min-width: 44px !important;
+    height: 44px !important; min-height: 44px !important;
+  }
+  .call-invite-dialog--video-focus .call-invite-dialog__actions > .call-invite-button--call-end {
+    flex-basis: 70px !important; width: 70px !important; min-width: 70px !important;
+    height: 44px !important; min-height: 44px !important;
+  }
+}
