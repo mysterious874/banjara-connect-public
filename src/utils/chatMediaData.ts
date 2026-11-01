@@ -75,7 +75,7 @@ export async function uploadChatMedia(file: File, userId: string, conversationId
   return {
     path,
     type: file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : 'document',
-    mimeType: file.type,
+    mimeType: uploadFile.type,
   }
 }
 
