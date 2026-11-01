@@ -43,10 +43,34 @@ export async function uploadGroupMedia(file: File, userId: string, groupId: stri
   return { path, type: file.type.startsWith('video/') ? 'video' : 'image', mimeType: uploadFile.type }
 }
 
-export async function createGroupMediaUrl(path: string) {
-  const { data, error } = await supabase.storage.from(BANJARA_GROUP_MEDIA_BUCKET).createSignedUrl(path, 60 * 60)
+export async function createGroupMediaUrls(paths: string[]) {
+  const uniquePaths = [...new Set(paths.filter(Boolean))]
+  if (!uniquePaths.length) return new Map<string, string>()
+  const { data, error } = await supabase.storage.from(BANJARA_GROUP_MEDIA_BUCKET).createSignedUrls(uniquePaths, 60 * 60)
   if (error) throw error
-  return data.signedUrl
+  return new Map((data ?? []).flatMap((item) =>
+    item.path && item.signedUrl ? [[item.path, item.signedUrl] as const] : [],
+  ))
+}
+
+export async function createGroupMediaUrl(path: string) {
+  const urls = await createGroupMediaUrls([path])
+  const signedUrl = urls.get(path)
+  if (!signedUrl) throw new Error('Could not create group media URL.')
+  return signedUrl
+}
+
+export async function hydrateGroupMediaUrls<T extends { media_url?: string | null; media_signed_url?: string | null }>(messages: T[]) {
+  const pending = messages.filter((message) => message.media_url && !message.media_signed_url)
+  if (!pending.length) return messages
+  const paths = [...new Set(pending.map((message) => message.media_url as string))]
+  try {
+    const signedByPath = await createGroupMediaUrls(paths)
+    for (const message of pending) message.media_signed_url = signedByPath.get(message.media_url as string) ?? null
+  } catch {
+    for (const message of pending) message.media_signed_url = null
+  }
+  return messages
 }
 
 export async function deleteGroupMedia(paths: string[]) {
