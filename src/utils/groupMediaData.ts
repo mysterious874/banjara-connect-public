@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { prepareImageForUpload } from './imageUpload'
+import { uploadStorageFile } from './storageUpload'
 
 export const BANJARA_GROUP_MEDIA_BUCKET = 'banjara-group-media'
 export const MAX_GROUP_MEDIA_SIZE = 50 * 1024 * 1024
@@ -38,10 +39,7 @@ export async function uploadGroupMedia(file: File, userId: string, groupId: stri
   validateGroupMedia(file)
   const uploadFile = await prepareImageForUpload(file)
   const path = `${userId}/${groupId}/${messageId}/${crypto.randomUUID()}.${extensionForGroupMedia(uploadFile)}`
-  const { error } = await supabase.storage.from(BANJARA_GROUP_MEDIA_BUCKET).upload(path, uploadFile, {
-    cacheControl: '3600', contentType: uploadFile.type, upsert: false,
-  })
-  if (error) throw error
+  await uploadStorageFile(BANJARA_GROUP_MEDIA_BUCKET, path, uploadFile)
   return { path, type: file.type.startsWith('video/') ? 'video' : 'image', mimeType: uploadFile.type }
 }
 
