@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './authenticatedUser'
 import { loadBlockedUserIds } from './blockData'
-import { createChatMediaUrl, deleteChatMedia, uploadChatMedia } from './chatMediaData'
+import { createChatMediaUrl, createChatMediaUrls, deleteChatMedia, uploadChatMedia } from './chatMediaData'
 import type { ProfileRecord } from '../types/app'
 import { subscribeToPostgresChanges, type RealtimeSubscriptionStatus } from './realtimeData'
 
@@ -232,15 +232,21 @@ export async function loadConversationMessages(
 }
 
 export async function hydrateConversationMediaUrls(messages: ChatMessage[]): Promise<ChatMessage[]> {
-  await Promise.all(messages.map(async (chatMessage) => {
-    if (!chatMessage.media_url || chatMessage.media_signed_url) return
-    try {
-      chatMessage.media_signed_url = await createChatMediaUrl(chatMessage.media_url)
-    } catch (mediaError) {
-      if (import.meta.env.DEV) console.error('Could not create chat media URL.', mediaError)
-      chatMessage.media_signed_url = null
+  const pendingMessages = messages.filter((message) => message.media_url && !message.media_signed_url)
+  if (!pendingMessages.length) return messages
+
+  const paths = [...new Set(pendingMessages.map((message) => message.media_url as string))]
+  try {
+    // Sign the whole visible page in one Storage request instead of one request
+    // per attachment. This is especially important on high-latency mobile data.
+    const signedByPath = await createChatMediaUrls(paths)
+    for (const message of pendingMessages) {
+      message.media_signed_url = signedByPath.get(message.media_url as string) ?? null
     }
-  }))
+  } catch (mediaError) {
+    if (import.meta.env.DEV) console.error('Could not create chat media URLs.', mediaError)
+    for (const message of pendingMessages) message.media_signed_url = null
+  }
   return messages
 }
 
