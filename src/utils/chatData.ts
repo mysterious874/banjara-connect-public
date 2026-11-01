@@ -306,7 +306,14 @@ export async function sendConversationMessage(conversationId: string, content: s
       .select(messageColumns).single()
     if (error) throw error
     const created = data as ChatMessage
-    if (media) created.media_signed_url = await createChatMediaUrl(media.path)
+    if (media) {
+      try {
+        created.media_signed_url = await createChatMediaUrl(media.path)
+      } catch (mediaUrlError) {
+        if (import.meta.env.DEV) console.error('Could not create chat media URL after sending.', mediaUrlError)
+        created.media_signed_url = null
+      }
+    }
 
     // Best-effort push runs in the background; it never blocks the UI.
     void supabase.functions.invoke('send-chat-push', { body: { message_id: created.id } }).catch(() => {})
