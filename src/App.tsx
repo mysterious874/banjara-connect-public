@@ -53,7 +53,7 @@ function useWarmRouteModules() {
       : window.setTimeout(warm, 900)
     return () => {
       cancelled = true
-      if (idleWindow.cancelIdleCallback && idleWindow.requestIdleCallback) idleWindow.cancelIdleCallback(idleId)
+      if (idleWindow.cancelIdleCallback) idleWindow.cancelIdleCallback(idleId)
       else window.clearTimeout(idleId)
     }
   }, [])
