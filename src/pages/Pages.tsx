@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Phone, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Volume2, Ban, LogOut, Download, Maximize2, Minimize2, Forward } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Volume2, Ban, LogOut, Download, Maximize2, Minimize2, Forward } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
@@ -370,7 +370,7 @@ export function HomePage() {
 }
 
 export function CommunityPage() {
-  const { profile, session } = useAuth()
+  const { session } = useAuth()
   const [posts, setPosts] = useState<FeedPost[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -1914,7 +1914,7 @@ export function StoriesPage() {
                   <button type="button" className="story-manage-row__delete" onClick={() => void removeStory(story)} aria-label="Delete story"><Trash2 size={17} /></button>
                 </div>
               })}</div> : <EmptyState title="No active stories" description="Add a photo, video, or message to share your first story." />}
-              {!showCreateStory && <Button block onClick={() => setShowCreateStory(true)}><Plus size={17} /> Add Story</Button>}
+              {!showCreateStory && <Button onClick={() => setShowCreateStory(true)}><Plus size={17} /> Add Story</Button>}
               {showCreateStory && <Button variant="quiet" onClick={() => { setShowCreateStory(false); setError(''); setSuccess('') }}>Cancel adding story</Button>}
             </div>
           ) : isDirectCreate ? null : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="story-page-thumbs"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div><div className="stories-rail__items">{grouped.map((story) => {
@@ -2443,16 +2443,6 @@ export function ChatConversationPage() {
     finally { setForwardLoading(false) }
   }
 
-  async function forwardSelectedMessagesToUser(userId: string) {
-    try {
-      const existing = forwardConversations.find((row) => row.member.id === userId)
-      const destinationId = existing?.id ?? await getOrCreateConversation(userId)
-      await forwardSelectedMessagesTo(destinationId)
-    } catch (caught) {
-      setForwardError(userFacingError(caught, 'Could not open this contact for forwarding.'))
-    }
-  }
-
   async function sendForwardedToSelectedContacts() {
     if (!selectedForwardIds.length || forwardingTo) return
     setForwardError(''); setForwardingTo('multiple')
@@ -2478,32 +2468,6 @@ export function ChatConversationPage() {
       setForwardOpen(false); setForwardQuery(''); setSelectedForwardIds([]); setSelectedMessageIds([])
     } catch (caught) { setForwardError(userFacingError(caught, 'Could not forward to all selected contacts.')) }
     finally { setForwardingTo('') }
-  }
-
-  async function forwardSelectedMessagesTo(destinationId: string) {
-    if (!selectedMessageIds.length || forwardingTo) return
-    setForwardingTo(destinationId)
-    setForwardError('')
-    try {
-      const selected = messages.filter((item) => selectedMessageIds.includes(item.id) && !item.is_deleted_for_everyone)
-      for (const item of selected) {
-        let file: File | undefined
-        if (item.media_type && !item.media_signed_url) throw new Error('This media is still loading. Try forwarding again in a moment.')
-        if (item.media_type && item.media_signed_url) {
-          const response = await fetch(item.media_signed_url)
-          if (!response.ok) throw new Error('Could not download a selected media item to forward.')
-          const blob = await response.blob()
-          const extension = item.media_type === 'image' ? 'jpg' : item.media_type === 'video' ? 'mp4' : 'bin'
-          file = new File([blob], `forwarded-${item.media_type}-${Date.now()}.${extension}`, { type: blob.type || (item.media_type === 'image' ? 'image/jpeg' : item.media_type === 'video' ? 'video/mp4' : 'application/octet-stream') })
-        }
-        if (item.content.trim() || file) await sendConversationMessage(destinationId, item.content, file)
-      }
-      setForwardOpen(false)
-      setForwardQuery('')
-      setSelectedMessageIds([])
-    } catch (caught) {
-      setForwardError(userFacingError(caught, 'Could not forward the selected messages.'))
-    } finally { setForwardingTo('') }
   }
 
   async function deleteSelectedMessages(mode: 'me' | 'everyone') {
@@ -3383,7 +3347,13 @@ export function CommunityGroupPage() {
       window.requestAnimationFrame(() => { const pane = document.querySelector('.community-group-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
     } catch (caught) {
       if (uploadedPath) await deleteGroupMedia([uploadedPath]).catch(() => undefined)
-      if (pendingMessageId) await supabase.from('community_group_messages').delete().eq('id', pendingMessageId).eq('sender_id', session.user.id).catch(() => undefined)
+      if (pendingMessageId) {
+        try {
+          await supabase.from('community_group_messages').delete().eq('id', pendingMessageId).eq('sender_id', session.user.id)
+        } catch {
+          // Best-effort cleanup; preserve the original send error.
+        }
+      }
       setError(userFacingError(caught, 'Could not send this message.'))
     } finally {
       groupSendLock.current = false
