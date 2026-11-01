@@ -19,7 +19,7 @@ import { deletePostMedia, uploadPostMedia, validatePostMedia } from '../utils/me
 import { deleteProfileAvatar, profileAvatarPathFromUrl, uploadProfileAvatar, validateProfileAvatar } from '../utils/profileMediaData'
 import { fetchCurrentLocation, searchLocationSuggestions, type LocationSuggestion } from '../utils/locationData'
 import { validateChatMedia } from '../utils/chatMediaData'
-import { createGroupMediaUrl, deleteGroupMedia, uploadGroupMedia, validateGroupMedia } from '../utils/groupMediaData'
+import { createGroupMediaUrl, deleteGroupMedia, hydrateGroupMediaUrls, uploadGroupMedia, validateGroupMedia } from '../utils/groupMediaData'
 import { createStory, deleteStory, loadActiveStories, loadStoryViewers, recordStoryView, validateStoryMedia, type StoryRecord, type StoryViewer } from '../utils/storyData'
 import { userFacingError } from '../utils/userFacingError'
 import { registerPushNotifications } from '../utils/pushNotifications'
@@ -2766,9 +2766,7 @@ export function CommunityGroupPage() {
           const profilePromise = ids.length
             ? supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
             : Promise.resolve({ data: [], error: null })
-          void Promise.all(incoming.filter((item) => item.media_url).map(async (item) => {
-            try { item.media_signed_url = await createGroupMediaUrl(item.media_url!) } catch { item.media_signed_url = null }
-          })).then(() => {
+          void hydrateGroupMediaUrls(incoming).then(() => {
             if (!active) return
             setMessages((current) => {
               const byId = new Map(current.map((item) => [item.id, item]))
@@ -2869,9 +2867,7 @@ export function CommunityGroupPage() {
           void supabase.rpc('mark_community_group_read', { p_group_id: groupId, p_message_id: latestMessage.id })
             .then(({ error: markReadError }) => { if (markReadError && import.meta.env.DEV) console.error('Could not mark community group as read.', markReadError) })
         }
-        void Promise.all(nextMessages.filter((item) => item.media_url).map(async (item) => {
-          try { item.media_signed_url = await createGroupMediaUrl(item.media_url!) } catch { item.media_signed_url = null }
-        })).then(() => {
+        void hydrateGroupMediaUrls(nextMessages).then(() => {
           if (!active) return
           setMessages((current) => {
             const byId = new Map(current.map((item) => [item.id, item]))
