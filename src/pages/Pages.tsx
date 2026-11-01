@@ -22,12 +22,12 @@ import { validateChatMedia } from '../utils/chatMediaData'
 import { createGroupMediaUrl, deleteGroupMedia, hydrateGroupMediaUrls, uploadGroupMedia, validateGroupMedia } from '../utils/groupMediaData'
 import { createStory, deleteStory, loadActiveStories, loadStoryViewers, recordStoryView, validateStoryMedia, type StoryRecord, type StoryViewer } from '../utils/storyData'
 import { userFacingError } from '../utils/userFacingError'
-import { registerPushNotifications } from '../utils/pushNotifications'
+import { getPushNotificationStatus, registerPushNotifications, unregisterPushNotifications, type PushNotificationStatus } from '../utils/pushNotifications'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
-import { deleteMessageForEveryone, deleteMessageForMe, hydrateConversationMediaUrls, invalidateConversationListCache, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
+import { deleteMessageForEveryone, deleteMessageForMe, hydrateConversationMediaUrls, invalidateConversationListCache, loadConversation, loadConversationMessages, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
 import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostLikesBatch, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 import { getCached, invalidateCache, setCached } from '../utils/performanceCache'
 import { CallInviteControls } from '../components/calling/CallInviteControls'
@@ -1498,6 +1498,7 @@ export function StoriesPage() {
   const [isPublishing, setIsPublishing] = useState(false)
   const [isReplying, setIsReplying] = useState(false)
   const [error, setError] = useState('')
+  const [storyViewError, setStoryViewError] = useState('')
   const [replyMessage, setReplyMessage] = useState('')
   const [success, setSuccess] = useState('')
   const [showCreateStory, setShowCreateStory] = useState(storyParams.get('create') === '1')
@@ -1549,7 +1550,7 @@ export function StoriesPage() {
       const requestedStoryId = storyParams.get('story')
       setSelectedStory((current) => {
         if (isManagingOwnStories || isDirectCreate) return null
-        if (requestedStoryId) return next.find((item) => item.id === requestedStoryId) ?? current ?? next[0] ?? null
+        if (requestedStoryId) return next.find((item) => item.id === requestedStoryId) ?? next[0] ?? null
         if (current) return next.find((item) => item.id === current.id) ?? next.find((item) => item.user_id === current.user_id) ?? next[0] ?? null
         return next[0] ?? null
       })
@@ -1579,9 +1580,16 @@ export function StoriesPage() {
   }, [selectedStory?.id, activeIndex, storySequence.length, isLoading, navigate])
 
   useEffect(() => {
-    if (!selectedStory || !session?.user.id || selectedStory.user_id === session.user.id) return
-    void recordStoryView(selectedStory.id, session.user.id).catch(() => undefined)
-  }, [selectedStory?.id, selectedStory?.user_id, session?.user.id])
+    let active = true
+    setStoryViewError('')
+    if (isLoading || !selectedStory || !session?.user.id || selectedStory.user_id === session.user.id) {
+      return () => { active = false }
+    }
+    void recordStoryView(selectedStory.id, session.user.id).catch((caught) => {
+      if (active) setStoryViewError(userFacingError(caught, 'Could not record this story view.'))
+    })
+    return () => { active = false }
+  }, [isLoading, selectedStory?.id, selectedStory?.user_id, session?.user.id])
 
   function closeStoryViewer() {
     if (storyTimer.current) window.clearTimeout(storyTimer.current)
@@ -1923,7 +1931,7 @@ export function StoriesPage() {
           })}</div></div>}
     </>}
       {storyViewersOpen && selectedStory?.user_id === session?.user.id && <div className="story-viewers-modal-backdrop" onClick={() => setStoryViewersOpen(false)}><div className="story-viewers-modal" role="dialog" aria-modal="true" aria-label="Story viewers" onClick={(event) => event.stopPropagation()}><div className="story-viewers-modal__head"><div><strong>Story viewers</strong><span>{storyViewers.length} {storyViewers.length === 1 ? 'view' : 'views'}</span></div><button type="button" onClick={() => setStoryViewersOpen(false)} aria-label="Close"><X size={19} /></button></div><div className="story-viewers-modal__list">{storyViewersLoading ? <Loading label="Loading viewers" /> : storyViewers.length === 0 ? <EmptyState title="No views yet" description="People who view your story will appear here." /> : storyViewers.map((viewer) => { const name = viewer.display_name || viewer.username || 'Community member'; return <div className="story-viewer-row" key={viewer.id}><Avatar name={name} image={viewer.avatar_url ?? undefined} /><div><strong>{name}</strong>{viewer.username && <span>@{viewer.username}</span>}</div></div> })}</div></div></div>}
-    {selectedStory && (grouped.length > 0 || Boolean(initialStory)) && <div className="story-fullscreen" role="dialog" aria-modal="true" aria-label="Story viewer">
+    {!isLoading && selectedStory && (grouped.length > 0 || Boolean(initialStory)) && <div className="story-fullscreen" role="dialog" aria-modal="true" aria-label="Story viewer">
       <div className="story-fullscreen__backdrop" onClick={closeStoryViewer} />
       <div className="story-fullscreen__card" onPointerDown={handleStoryPointerDown} onPointerMove={handleStoryPointerMove} onPointerUp={handleStoryPointerUp} onPointerCancel={() => { storySwipeStart.current = null }}>
         <div className="story-fullscreen__progress">{storySequence.map((story, index) => <span key={story.id} style={index === activeIndex ? ({ '--story-duration': selectedStory.media_type === 'video' ? '8s' : '5s' } as React.CSSProperties) : undefined} className={`story-fullscreen__progress-segment${index < activeIndex ? ' is-complete' : index === activeIndex ? ' is-active' : ''}`} />)}</div>
@@ -1951,6 +1959,7 @@ export function StoriesPage() {
           {!selectedStory.media_url && <div className="story-fullscreen__text">{selectedStory.content}</div>}
           {selectedStory.media_url && selectedStory.content && <div className="story-fullscreen__caption">{selectedStory.content}</div>}
         </div>
+        {storyViewError && <p className="field__error" role="alert">{storyViewError}</p>}
         <button type="button" className="story-fullscreen__next" onClick={() => activeIndex < storySequence.length - 1 && setSelectedStory(storySequence[activeIndex + 1])} aria-label="Next story"><ArrowRight size={25} /></button>
         {selectedStory.user_id !== session?.user.id && (
           <div className="story-fullscreen__reply">
@@ -1994,20 +2003,64 @@ export function ReelsPage() {
   return <section className="page-stack"><PageHeading eyebrow="SHORT COMMUNITY FILMS" title="Reels" description="A small visual preview of stories in motion." /><PreviewNotice /><div className="reel-placeholder"><img src="/loom-preview.svg" alt="Abstract, Banjara-inspired geometric threadwork" /><div className="reel-placeholder__copy"><span className="eyebrow">LOCAL ARTWORK PREVIEW</span><h2>Made by hand,<br />held in memory.</h2><p>Short videos will live here when media is connected.</p><Button to="/about" variant="outline">About the community</Button></div></div></section>
 }
 
+function readDeletedChatTimestamps(userId: string | undefined): Record<string, string> {
+  if (!userId) return {}
+  try {
+    const stored = window.localStorage.getItem(`banjara-chat-deleted-${userId}`)
+    if (!stored) return {}
+    const parsed: unknown = JSON.parse(stored)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+    }
+  } catch {
+    return {}
+  }
+  return {}
+}
+
+function readMutedChatIds(userId: string | undefined): string[] {
+  if (!userId) return []
+  try {
+    const stored = window.localStorage.getItem(`banjara-chat-muted-${userId}`)
+    if (!stored) return []
+    const parsed: unknown = JSON.parse(stored)
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function persistChatListPreference(userId: string | undefined, preference: 'deleted' | 'muted', value: unknown) {
+  if (!userId) return false
+  try {
+    window.localStorage.setItem(`banjara-chat-${preference}-${userId}`, JSON.stringify(value))
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function ChatListPage() {
   const { session, onlineUserIds, activeUserIds } = useAuth()
+  const userId = session?.user.id
   const chatListCacheKey = session?.user.id ? `chat-list:${session.user.id}` : ''
   const cachedConversations = chatListCacheKey ? getCached<Awaited<ReturnType<typeof loadConversations>>>(chatListCacheKey) : null
   const [conversations, setConversations] = useState<Awaited<ReturnType<typeof loadConversations>>>(cachedConversations ?? [])
   const [isLoading, setIsLoading] = useState(cachedConversations === null)
   const [error, setError] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [mutedIds, setMutedIds] = useState<string[]>([])
+  const [deletedAtByConversation, setDeletedAtByConversation] = useState<Record<string, string>>(() => readDeletedChatTimestamps(userId))
+  const [mutedIds, setMutedIds] = useState<string[]>(() => readMutedChatIds(userId))
   const holdTimer = useRef<number | null>(null)
   const holdPointerId = useRef<number | null>(null)
   const holdStartPoint = useRef<{ x: number; y: number } | null>(null)
   const suppressNextChatClick = useRef(false)
 
+  useEffect(() => {
+    setDeletedAtByConversation(readDeletedChatTimestamps(userId))
+    setMutedIds(readMutedChatIds(userId))
+    setSelectedIds([])
+  }, [userId])
 
   useEffect(() => {
     let active = true
@@ -2103,17 +2156,27 @@ export function ChatListPage() {
   function selectChat(id: string) {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
   }
-  function persistList(key: string, ids: string[]) {
-    try { window.localStorage.setItem(key, JSON.stringify(ids)) } catch { /* ignore */ }
-  }
   function deleteSelected() {
-    setConversations((current) => current.filter((conversation) => !selectedIds.includes(conversation.id)))
+    const deletedAt = Object.fromEntries(selectedIds.map((id) => {
+      const lastMessage = conversations.find((conversation) => conversation.id === id)?.lastMessage
+      return [id, lastMessage?.created_at ?? new Date().toISOString()]
+    }))
+    const next = { ...deletedAtByConversation, ...deletedAt }
+    if (!persistChatListPreference(userId, 'deleted', next)) {
+      setError('Could not save deleted chats on this device.')
+      return
+    }
+    setDeletedAtByConversation(next)
     setSelectedIds([])
   }
   function toggleMuteSelected() {
     const allMuted = selectedIds.every((id) => mutedIds.includes(id))
     const next = allMuted ? mutedIds.filter((id) => !selectedIds.includes(id)) : [...new Set([...mutedIds, ...selectedIds])]
-    setMutedIds(next); persistList('banjara-chat-muted', next)
+    if (!persistChatListPreference(userId, 'muted', next)) {
+      setError('Could not save muted chats on this device.')
+      return
+    }
+    setMutedIds(next)
   }
   async function blockSelected() {
     const rows = conversations.filter((item) => selectedIds.includes(item.id))
@@ -2124,7 +2187,10 @@ export function ChatListPage() {
       setError(userFacingError(caught, 'Could not block the selected users.'))
     }
   }
-  const visibleConversations = conversations
+  const visibleConversations = conversations.filter((conversation) => {
+    const deletedAt = deletedAtByConversation[conversation.id]
+    return !deletedAt || Boolean(conversation.lastMessage && Date.parse(conversation.lastMessage.created_at) > Date.parse(deletedAt))
+  })
 
   return <section className="page-stack">
     <PageHeading eyebrow="CONVERSATIONS" title="Chat" description="Your conversations." />
@@ -2306,7 +2372,7 @@ export function ChatConversationPage() {
     if (mediaInputRef.current) mediaInputRef.current.value = ''
     void (async () => {
       try {
-        const [peer, history] = await Promise.all([loadConversationPeer(conversationId), loadConversationMessages(conversationId)])
+        const { peer, history } = await loadConversation(conversationId)
         if (!active) return
         setPerson(peer as ProfileRecord)
         setMessages(history.messages)
@@ -2594,7 +2660,25 @@ export function ChatConversationPage() {
     setChatMenuOpen(false)
     try { window.localStorage.setItem(`banjara-chat-theme-${conversationId}`, themeId) } catch { /* local storage may be unavailable */ }
   }
-  return <section className={`chat-screen chat-screen--theme-${chatTheme}`}><header className="chat-screen__head"><Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button><Link to={`/profile/${encodeURIComponent(person.username)}`} className="chat-screen__profile"><Avatar name={personName} image={person.avatar_url ?? undefined} /><span className="chat-screen__identity"><strong>{personName}</strong><small>{peerOnline ? (peerInApp ? "online" : "online · not in app") : "offline"}</small></span></Link><div className="chat-screen__actions"><CallInviteControls recipientId={person.id} peerName={personName} hideIncomingPrompt /><button type="button" className="chat-screen__action" aria-label="Chat options" title="Chat options" aria-expanded={chatMenuOpen} onClick={() => { setChatMenuOpen((current) => !current); setChatThemeOpen(false) }}><MoreVertical size={20} /></button>{chatMenuOpen && <div className="chat-options-menu"><button type="button" className="chat-options-menu__item" onClick={() => { setChatThemeOpen(true); setChatMenuOpen(false) }}><Palette size={17} /><span>Chat Background</span><ChevronRight size={15} /></button></div>}</div></header>{chatThemeOpen && <Modal open={chatThemeOpen} title="Chat background" onClose={() => setChatThemeOpen(false)}><div className="chat-theme-picker">{chatThemes.map((theme) => <button type="button" key={theme.id} className={`chat-theme-option${chatTheme === theme.id ? ' chat-theme-option--active' : ''}`} onClick={() => selectChatTheme(theme.id)}><span className="chat-theme-option__swatch" style={{ background: theme.preview }} /><span><strong>{theme.label}</strong><small>{theme.id === 'classic' ? 'Banjara Connect default' : 'Apply only to this chat'}</small></span>{chatTheme === theme.id && <Check size={17} />}</button>)}</div></Modal>}
+  const peerStatus = peerInApp ? 'online now' : peerOnline ? 'online · not in app' : 'offline'
+  const peerStatusClass = peerInApp ? 'chat-screen__presence--active' : peerOnline ? 'chat-screen__presence--online' : 'chat-screen__presence--offline'
+  return <section className={`chat-screen chat-screen--theme-${chatTheme}`}>
+    <header className="chat-screen__head chat-screen__head--direct">
+      <Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button>
+      <Link to={`/profile/${encodeURIComponent(person.username)}`} className="chat-screen__profile">
+        <Avatar name={personName} image={person.avatar_url ?? undefined} />
+        <span className="chat-screen__identity">
+          <strong>{personName}</strong>
+          <small className={`chat-screen__presence ${peerStatusClass}`} aria-live="polite">{peerStatus}</small>
+        </span>
+      </Link>
+      <div className="chat-screen__actions">
+        <CallInviteControls recipientId={person.id} peerName={personName} hideIncomingPrompt />
+        <button type="button" className="chat-screen__action" aria-label="Chat options" title="Chat options" aria-expanded={chatMenuOpen} onClick={() => { setChatMenuOpen((current) => !current); setChatThemeOpen(false) }}><MoreVertical size={20} /></button>
+        {chatMenuOpen && <div className="chat-options-menu"><button type="button" className="chat-options-menu__item" onClick={() => { setChatThemeOpen(true); setChatMenuOpen(false) }}><Palette size={17} /><span>Chat Background</span><ChevronRight size={15} /></button></div>}
+      </div>
+    </header>
+    {chatThemeOpen && <Modal open={chatThemeOpen} title="Chat background" onClose={() => setChatThemeOpen(false)}><div className="chat-theme-picker">{chatThemes.map((theme) => <button type="button" key={theme.id} className={`chat-theme-option${chatTheme === theme.id ? ' chat-theme-option--active' : ''}`} onClick={() => selectChatTheme(theme.id)}><span className="chat-theme-option__swatch" style={{ background: theme.preview }} /><span><strong>{theme.label}</strong><small>{theme.id === 'classic' ? 'Banjara Connect default' : 'Apply only to this chat'}</small></span>{chatTheme === theme.id && <Check size={17} />}</button>)}</div></Modal>}
     <div className="chat-messages" onScroll={(event) => { const pane = event.currentTarget; stickToLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120 }}>{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{selectedMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelMessageSelection} aria-label="Close message selection">×</button><strong>{selectedMessageIds.length} selected</strong><button type="button" onClick={() => void copySelectedMessages()}>Copy</button><button type="button" onClick={() => void openForwardPicker()}><Forward size={14} /> Forward</button><button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('me')}>Delete for me</button>{messages.some((item) => selectedMessageIds.includes(item.id) && item.sender_id === session?.user.id && !item.is_deleted_for_everyone && (item.media_type === 'image' || item.media_type === 'video' || item.content)) && <button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('everyone')}>Delete for everyone</button>}</div>}{messages.length ? messages.map((item, index) => { const mine = item.sender_id === session?.user.id; const selected = selectedMessageIds.includes(item.id); const mediaUrl = item.media_signed_url; return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}${index === 0 ? ' chat-message-row--first' : ''}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startMessageLongPress(item.id)} onPointerUp={clearLongPressTimer} onPointerCancel={clearLongPressTimer} onPointerLeave={clearLongPressTimer} onContextMenu={(event) => handleMessageContextMenu(event, item.id)} onClick={() => {
   if (suppressNextMessageClick.current) {
     suppressNextMessageClick.current = false
@@ -3780,35 +3864,70 @@ const settingsGroups = [
 ]
 
 export function SettingsPage() {
-  const { signOut } = useAuth()
+  const { session, signOut } = useAuth()
   const [theme, setTheme] = useState(() => window.localStorage.getItem('banjara-theme') || 'light')
   const navigate = useNavigate()
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [error, setError] = useState('')
   const [pushBusy, setPushBusy] = useState(false)
-  const [pushStatus, setPushStatus] = useState(() => {
-    if (!('Notification' in window)) return 'unsupported'
-    if (Notification.permission === 'granted') return 'enabled'
-    if (Notification.permission === 'denied') return 'blocked'
-    return 'not-enabled'
-  })
+  const [pushStatus, setPushStatus] = useState<PushNotificationStatus>('checking')
+
+  useEffect(() => {
+    let active = true
+    setError('')
+    void getPushNotificationStatus().then((status) => {
+      if (active) setPushStatus(status)
+    }).catch((caught) => {
+      if (active) {
+        setPushStatus('unknown')
+        setError(userFacingError(caught, 'Could not check phone notification settings.'))
+      }
+    })
+    return () => { active = false }
+  }, [session?.user.id])
 
   async function enablePushNotifications() {
     setPushBusy(true)
     setError('')
     try {
       const enabled = await registerPushNotifications()
-      if (enabled) setPushStatus('enabled')
-      else if (!('Notification' in window)) setPushStatus('unsupported')
-      else if (Notification.permission === 'denied') setPushStatus('blocked')
-      else setPushStatus('not-enabled')
+      const nextStatus = enabled ? 'enabled' : await getPushNotificationStatus()
+      setPushStatus(nextStatus)
       if (!enabled) {
-        setError(Notification.permission === 'denied'
+        setError(nextStatus === 'blocked'
           ? 'Notifications are blocked by your browser. Open site settings and allow notifications, then try again.'
-          : 'Could not enable notifications. Install Connect to your Home Screen, allow notifications, and retry.')
+          : nextStatus === 'unsupported'
+            ? 'Notifications are not supported in this browser.'
+            : 'Could not enable notifications. Install Connect to your Home Screen, allow notifications, and retry.')
       }
     } catch (caught) {
       setError(userFacingError(caught, 'Could not enable phone notifications. Check your connection and try again.'))
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  async function disablePushNotifications() {
+    setPushBusy(true)
+    setError('')
+    try {
+      await unregisterPushNotifications()
+      setPushStatus(await getPushNotificationStatus())
+    } catch (caught) {
+      setError(userFacingError(caught, 'Could not disable phone notifications. Check your connection and try again.'))
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  async function checkPushNotificationStatus() {
+    setPushBusy(true)
+    setError('')
+    try {
+      setPushStatus(await getPushNotificationStatus())
+    } catch (caught) {
+      setPushStatus('unknown')
+      setError(userFacingError(caught, 'Could not check phone notification settings.'))
     } finally {
       setPushBusy(false)
     }
@@ -3846,7 +3965,7 @@ export function SettingsPage() {
           <button type="button" className={theme === 'system' ? 'is-active' : ''} onClick={() => changeTheme('system')}>⚙️ System</button>
         </div>
       </div>
-    </section><section className="settings-group"><h2>Phone notifications</h2><p className="micro-note">Allow Connect to show supported push notifications in your device notification bar.</p><div className="settings-row"><span className="settings-row__icon">🔔</span><span><strong>{pushStatus === 'enabled' ? 'Notifications allowed' : pushStatus === 'blocked' ? 'Notifications blocked' : pushStatus === 'unsupported' ? 'Not supported in this browser' : 'Enable phone notifications'}</strong><small>{pushStatus === 'enabled' ? 'This device has notification permission. Background delivery also depends on server push configuration.' : pushStatus === 'blocked' ? 'Allow notifications from this site in your browser settings.' : pushStatus === 'unsupported' ? 'Try installing Connect from a supported browser.' : 'Tap below and choose Allow when your browser asks.'}</small></span></div><Button variant="outline" onClick={enablePushNotifications} disabled={pushBusy || pushStatus === 'enabled' || pushStatus === 'unsupported'}>{pushBusy ? 'Enabling…' : pushStatus === 'enabled' ? 'Notifications enabled' : 'Enable notifications'}</Button></section>{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}<PwaInstallControl />{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
+    </section><section className="settings-group"><h2>Phone notifications</h2><p className="micro-note">Allow Connect to show supported push notifications in your device notification bar.</p><div className="settings-row"><span className="settings-row__icon">🔔</span><span><strong>{pushStatus === 'enabled' ? 'Notifications enabled on this device' : pushStatus === 'blocked' ? 'Notifications blocked' : pushStatus === 'unsupported' ? 'Not supported in this browser' : pushStatus === 'checking' ? 'Checking notification settings…' : pushStatus === 'unknown' ? 'Could not check notification settings' : 'Enable phone notifications'}</strong><small>{pushStatus === 'enabled' ? 'Background delivery also depends on server push configuration.' : pushStatus === 'blocked' ? 'Allow notifications from this site in your browser settings, or remove this device subscription below.' : pushStatus === 'unsupported' ? 'Try installing Connect from a supported browser.' : pushStatus === 'checking' ? 'Checking this device’s push subscription.' : pushStatus === 'unknown' ? 'Try checking again.' : 'Tap below and choose Allow when your browser asks.'}</small></span></div><Button variant="outline" onClick={pushStatus === 'enabled' || pushStatus === 'blocked' ? disablePushNotifications : pushStatus === 'unknown' ? checkPushNotificationStatus : enablePushNotifications} disabled={pushBusy || pushStatus === 'checking' || pushStatus === 'unsupported'}>{pushBusy ? (pushStatus === 'enabled' || pushStatus === 'blocked' ? 'Disabling…' : 'Checking…') : pushStatus === 'enabled' || pushStatus === 'blocked' ? 'Disable notifications' : pushStatus === 'unknown' ? 'Check status' : pushStatus === 'unsupported' ? 'Notifications unavailable' : 'Enable notifications'}</Button></section>{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}<PwaInstallControl />{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
 }
 
 export function ChangePasswordPage() {
