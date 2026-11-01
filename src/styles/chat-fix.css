@@ -993,3 +993,56 @@ body:has(.community-group-screen) {
 .chat-compose-area .chat-disabled-compose > .field .field__error {
   display: none !important;
 }
+
+
+/* Media transfer feedback lives on the media itself, never in a detached chat banner. */
+.chat-message-media-wrap {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  border-radius: 12px;
+  isolation: isolate;
+}
+.chat-message-media-wrap .chat-message-media { display: block; }
+.chat-media-progress {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: rgb(20 16 15 / 30%);
+  transition: opacity .18s ease;
+}
+.chat-message-media-wrap.is-ready .chat-media-progress { display: none; }
+.chat-media-progress__spinner {
+  width: 42px;
+  height: 42px;
+  border: 3px solid rgb(255 255 255 / 38%);
+  border-top-color: #fff;
+  border-right-color: #fff;
+  border-radius: 50%;
+  animation: chat-media-spin .8s linear infinite;
+  box-shadow: 0 1px 8px rgb(0 0 0 / 22%);
+}
+.chat-bubble--pending-media {
+  position: relative;
+  overflow: hidden;
+}
+.chat-bubble--pending-media .chat-message-media { opacity: .82; }
+.chat-bubble--pending-media .chat-media-progress { background: rgb(20 16 15 / 38%); }
+.chat-media-progress__label {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  color: #fff;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+}
+@keyframes chat-media-spin { to { transform: rotate(360deg); } }
