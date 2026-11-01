@@ -117,8 +117,25 @@ export async function createStory(userId: string, content: string, mediaFile?: F
     }
     return data.id
   } catch (error) {
-    if (uploadedPath) await deleteStoryMedia([uploadedPath]).catch(() => undefined)
-    await supabase.from('stories').delete().eq('id', data.id).eq('user_id', userId)
+    const cleanupFailures: unknown[] = []
+    if (uploadedPath) {
+      try {
+        await deleteStoryMedia([uploadedPath])
+      } catch (cleanupError) {
+        cleanupFailures.push(cleanupError)
+      }
+    }
+    try {
+      const { error: deleteError } = await supabase.from('stories').delete().eq('id', data.id).eq('user_id', userId)
+      if (deleteError) throw deleteError
+    } catch (cleanupError) {
+      cleanupFailures.push(cleanupError)
+    }
+    if (cleanupFailures.length) {
+      console.error('Could not fully roll back failed story creation:', cleanupFailures)
+      const originalMessage = error instanceof Error ? error.message : 'Story publishing failed.'
+      throw new Error(`${originalMessage} Cleanup also failed, so a partial story may remain. Please refresh before retrying.`)
+    }
     throw error
   }
 }

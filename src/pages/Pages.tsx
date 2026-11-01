@@ -2000,7 +2000,48 @@ export function StoriesPage() {
 }
 
 export function ReelsPage() {
-  return <section className="page-stack"><PageHeading eyebrow="SHORT COMMUNITY FILMS" title="Reels" description="A small visual preview of stories in motion." /><PreviewNotice /><div className="reel-placeholder"><img src="/loom-preview.svg" alt="Abstract, Banjara-inspired geometric threadwork" /><div className="reel-placeholder__copy"><span className="eyebrow">LOCAL ARTWORK PREVIEW</span><h2>Made by hand,<br />held in memory.</h2><p>Short videos will live here when media is connected.</p><Button to="/about" variant="outline">About the community</Button></div></div></section>
+  const navigate = useNavigate()
+  const { session } = useAuth()
+  const [stories, setStories] = useState<StoryRecord[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    if (!session?.user.id) {
+      setStories([])
+      setIsLoading(false)
+      return () => { active = false }
+    }
+
+    setIsLoading(true)
+    setError('')
+    void loadActiveStories().then((nextStories) => {
+      if (active) setStories(nextStories.filter((story) => story.media_type === 'video' && Boolean(story.media_url)))
+    }).catch((caught: unknown) => {
+      if (active) setError(userFacingError(caught, 'Could not load community videos.'))
+    }).finally(() => {
+      if (active) setIsLoading(false)
+    })
+    return () => { active = false }
+  }, [session?.user.id])
+
+  return <section className="page-stack reels-page">
+    <PageHeading eyebrow="SHORT COMMUNITY FILMS" title="Reels" description="Watch videos shared in active community stories." />
+    {error && <ErrorState title="Could not load videos" description={error} />}
+    {isLoading ? <Loading label="Loading community videos" /> : stories.length ? <div className="reels-grid">
+      {stories.map((story) => {
+        const name = story.author?.display_name || story.author?.username || 'Community member'
+        return <article className="reel-card" key={story.id}>
+          <video src={story.media_url ?? undefined} controls playsInline preload="none" aria-label={`${name}'s video story`} />
+          <div className="reel-card__details">
+            <div><strong>{name}</strong><p>{story.content || 'Shared a video story'}</p></div>
+            <Button variant="outline" onClick={() => navigate(`/stories?story=${encodeURIComponent(story.id)}`, { state: { story } })}>Open story</Button>
+          </div>
+        </article>
+      })}
+    </div> : !error && <EmptyState title="No active videos" description="Video stories shared by your community will appear here while they are active." action={<Button to="/stories" variant="outline">View stories</Button>} />}
+  </section>
 }
 
 function readDeletedChatTimestamps(userId: string | undefined): Record<string, string> {
@@ -2253,6 +2294,7 @@ export function ChatConversationPage() {
   const [selectedMediaFiles, setSelectedMediaFiles] = useState<File[]>([])
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false)
   const [isSendingMedia, setIsSendingMedia] = useState(false)
+  const [isSending, setIsSending] = useState(false)
   const [pendingMediaPreviews, setPendingMediaPreviews] = useState<Array<{ id: string; url: string; type: 'image' | 'video' | 'document'; name: string }>>([])
   const [readyMediaIds, setReadyMediaIds] = useState<string[]>([])
 
@@ -2276,6 +2318,7 @@ export function ChatConversationPage() {
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
   const longPressTimer = useRef<number | null>(null)
   const suppressNextMessageClick = useRef(false)
+  const sendLock = useRef(false)
   const [chatMenuOpen, setChatMenuOpen] = useState(false)
   const [chatThemeOpen, setChatThemeOpen] = useState(false)
   const [chatTheme, setChatTheme] = useState('classic')
@@ -2605,7 +2648,8 @@ export function ChatConversationPage() {
     event.preventDefault()
     const textToSend = message.trim()
     const mediaToSend = selectedMediaFiles.length ? [...selectedMediaFiles] : (selectedMedia ? [selectedMedia] : [])
-    if (!textToSend && !mediaToSend.length) return
+    if (sendLock.current || (!textToSend && !mediaToSend.length)) return
+    sendLock.current = true
     setError('')
 
     if (mediaToSend.length) {
@@ -2620,33 +2664,45 @@ export function ChatConversationPage() {
       }))
       setPendingMediaPreviews(previews)
       stickToLatest.current = true
+      let sentCount = 0
       try {
         for (let index = 0; index < mediaToSend.length; index += 1) {
           const created = await sendConversationMessage(conversationId, index === 0 ? textToSend : '', mediaToSend[index])
+          sentCount = index + 1
           setMessages((current) => current.some((item) => item.id === created.id) ? [...current.filter((item) => item.id !== created.id), created] : [...current, created])
           setPendingMediaPreviews((current) => current.filter((preview) => preview.id !== previews[index].id))
           URL.revokeObjectURL(previews[index].url)
+          if (index === 0 && textToSend && message.trim() === textToSend) setMessage('')
         }
         window.requestAnimationFrame(() => { const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
-        if (textToSend === message.trim()) setMessage('')
       } catch (caught) {
+        const remainingMedia = mediaToSend.slice(sentCount)
+        if (remainingMedia.length) {
+          setSelectedMediaFiles(remainingMedia)
+          setSelectedMedia(remainingMedia.length === 1 ? remainingMedia[0] : null)
+        }
         setError(userFacingError(caught, 'Could not send all selected photos/videos. Please try again.'))
       } finally {
         setPendingMediaPreviews([])
         previews.forEach((preview) => URL.revokeObjectURL(preview.url))
         setIsSendingMedia(false)
+        sendLock.current = false
       }
       return
     }
 
     stickToLatest.current = true
+    setIsSending(true)
     try {
       const created = await sendConversationMessage(conversationId, textToSend)
       setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
       window.requestAnimationFrame(() => { const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
-      setMessage('')
+      if (message.trim() === textToSend) setMessage('')
     } catch (caught) {
       setError(userFacingError(caught, 'Could not send this message.'))
+    } finally {
+      setIsSending(false)
+      sendLock.current = false
     }
   }
 
@@ -2662,7 +2718,7 @@ export function ChatConversationPage() {
   }
   const peerStatus = peerInApp ? 'online now' : peerOnline ? 'online · not in app' : 'offline'
   const peerStatusClass = peerInApp ? 'chat-screen__presence--active' : peerOnline ? 'chat-screen__presence--online' : 'chat-screen__presence--offline'
-  return <section className={`chat-screen chat-screen--theme-${chatTheme}`}>
+  return <section className={`chat-screen chat-screen--theme-${chatTheme}`} aria-busy={isSending || isSendingMedia}>
     <header className="chat-screen__head chat-screen__head--direct">
       <Button to="/chat" variant="quiet" iconOnly aria-label="Back to chats"><ArrowLeft size={18} /></Button>
       <Link to={`/profile/${encodeURIComponent(person.username)}`} className="chat-screen__profile">
