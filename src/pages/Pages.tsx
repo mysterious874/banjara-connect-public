@@ -2557,7 +2557,6 @@ export function ChatConversationPage() {
       try {
         for (let index = 0; index < mediaToSend.length; index += 1) {
           const created = await sendConversationMessage(conversationId, index === 0 ? textToSend : '', mediaToSend[index])
-          void supabase.functions.invoke('send-chat-push', { body: { message_id: created.id } }).then(({ error: pushError }) => { if (pushError) console.warn('Chat push could not be sent:', pushError.message) })
           setMessages((current) => current.some((item) => item.id === created.id) ? [...current.filter((item) => item.id !== created.id), created] : [...current, created])
           setPendingMediaPreviews((current) => current.filter((preview) => preview.id !== previews[index].id))
           URL.revokeObjectURL(previews[index].url)
@@ -2567,10 +2566,8 @@ export function ChatConversationPage() {
       } catch (caught) {
         setError(userFacingError(caught, 'Could not send all selected photos/videos. Please try again.'))
       } finally {
-        setPendingMediaPreviews((current) => {
-          current.forEach((preview) => URL.revokeObjectURL(preview.url))
-          return []
-        })
+        setPendingMediaPreviews([])
+        previews.forEach((preview) => URL.revokeObjectURL(preview.url))
         setIsSendingMedia(false)
       }
       return
@@ -2579,7 +2576,6 @@ export function ChatConversationPage() {
     stickToLatest.current = true
     try {
       const created = await sendConversationMessage(conversationId, textToSend)
-      void supabase.functions.invoke('send-chat-push', { body: { message_id: created.id } }).then(({ error: pushError }) => { if (pushError) console.warn('Chat push could not be sent:', pushError.message) })
       setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
       window.requestAnimationFrame(() => { const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
       setMessage('')
