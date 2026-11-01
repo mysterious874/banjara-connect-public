@@ -77,6 +77,7 @@ async function uploadResumable(bucket: string, path: string, file: File) {
 
   while (offset < file.size) {
     const chunk = file.slice(offset, Math.min(offset + TUS_CHUNK_SIZE, file.size))
+    const startingOffset = offset
     let uploaded = false
     let lastError: unknown
 
@@ -118,8 +119,9 @@ async function uploadResumable(bucket: string, path: string, file: File) {
           const serverOffset = Number(head.headers.get('Upload-Offset'))
           if (Number.isFinite(serverOffset) && serverOffset >= 0) offset = serverOffset
           if (offset >= file.size) return
-          if (offset !== Number(head.headers.get('Upload-Offset') ?? 0)) {
-            throw new Error('Storage returned an invalid resumable upload offset.')
+          if (offset > startingOffset) {
+            uploaded = true
+            break
           }
         } else if (head.status === 404 || head.status === 410) {
           throw new Error('The resumable upload expired. Please select the media and try again.')
