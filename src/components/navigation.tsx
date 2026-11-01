@@ -1,9 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Bell, Compass, Ellipsis, House, MessageCircle, Plus, Settings, UserRound, Users } from 'lucide-react'
+import { Bell, BookOpen, Compass, Ellipsis, House, Info, MessageCircle, Plus, Settings, Sparkles, UserRound, Users, Video } from 'lucide-react'
 import { BrandLockup } from './brand'
 import { Avatar } from './ui'
 import { useAuth } from '../hooks/AuthProvider'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loadUnreadNotificationCount } from '../utils/notificationData'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadUnreadChatCount } from '../utils/chatData'
@@ -24,16 +24,24 @@ const mobileItems = [
   { to: '/connect', label: 'Connect', icon: Compass },
   { to: '/create', label: 'Create', icon: Plus, emphasized: true },
   { to: '/community', label: 'Community', icon: Users },
-  { to: '/notifications', label: 'Alerts', icon: Bell },
-  { to: '/settings', label: 'More', icon: Ellipsis },
 ]
 
-function useUnreadChatCount(sessionUserId: string | undefined) {
+const moreItems = [
+  { to: '/notifications', label: 'Notifications', icon: Bell },
+  { to: '/stories', label: 'Stories', icon: BookOpen },
+  { to: '/reels', label: 'Reels', icon: Video },
+  { to: '/assistant', label: 'Assistant', icon: Sparkles },
+  { to: '/profile', label: 'Profile', icon: UserRound },
+  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/about', label: 'About Connect', icon: Info },
+]
+
+export function useUnreadChatCount(sessionUserId: string | undefined, enabled = true) {
   const [count, setCount] = useState(0)
 
   useEffect(() => {
     let active = true
-    if (!sessionUserId) {
+    if (!enabled || !sessionUserId) {
       setCount(0)
       return () => { active = false }
     }
@@ -42,8 +50,8 @@ function useUnreadChatCount(sessionUserId: string | undefined) {
       try {
         const next = await loadUnreadChatCount()
         if (active) setCount(next)
-      } catch {
-        if (active) setCount(0)
+      } catch (error) {
+        if (active) console.error('Could not refresh unread chat count:', error)
       }
     }
 
@@ -65,7 +73,7 @@ function useUnreadChatCount(sessionUserId: string | undefined) {
       unsubscribeMessages()
       unsubscribeReads()
     }
-  }, [sessionUserId])
+  }, [enabled, sessionUserId])
 
   return count
 }
@@ -85,8 +93,8 @@ export function Header() {
       try {
         const count = await loadUnreadNotificationCount()
         if (active) setUnreadCount(count)
-      } catch {
-        if (active) setUnreadCount(0)
+      } catch (error) {
+        if (active) console.error('Could not refresh unread notification count:', error)
       }
     }
 
@@ -113,22 +121,105 @@ function isActiveRoute(pathname: string, to: string) {
   return pathname === to || (to === '/chat' && pathname.startsWith('/chat/')) || (to === '/profile' && pathname.startsWith('/profile')) || (to === '/settings' && pathname.startsWith('/settings'))
 }
 
-export function DesktopNavigation() {
+export function DesktopNavigation({ unreadChatCount }: { unreadChatCount: number }) {
   const { pathname } = useLocation()
-  const { session } = useAuth()
-  const unreadChatCount = useUnreadChatCount(session?.user.id)
   return <nav className="desktop-nav" aria-label="Main navigation">{desktopItems.map(({ to, label, icon: Icon }) => {
     const active = isActiveRoute(pathname, to)
     return <NavLink key={to} to={to} aria-current={active ? 'page' : undefined} className={`desktop-nav__item${active ? ' is-active' : ''}`}><span className="nav-icon-wrap"><Icon size={16} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
   })}</nav>
 }
 
-export function BottomNavigation() {
+export function BottomNavigation({ unreadChatCount }: { unreadChatCount: number }) {
   const location = useLocation()
-  const { session } = useAuth()
-  const unreadChatCount = useUnreadChatCount(session?.user.id)
-  return <nav className="bottom-nav" aria-label="Main navigation">{mobileItems.map(({ to, label, icon: Icon, emphasized }) => {
-    const active = isActiveRoute(location.pathname, to)
-    return <NavLink key={to} to={to} aria-label={label === 'AI' ? 'AI Assistant' : label === 'More' ? 'More settings' : label} aria-current={active ? 'page' : undefined} className={`bottom-nav__item${active ? ' is-active' : ''}${emphasized ? ' bottom-nav__item--create' : ''}`}><span className="bottom-nav__icon nav-icon-wrap"><Icon size={emphasized ? 20 : 16} strokeWidth={active ? 2.4 : 1.8} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
-  })}</nav>
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
+  const moreButtonRef = useRef<HTMLButtonElement>(null)
+  const isMoreActive = ['/notifications', '/stories', '/reels', '/assistant', '/profile', '/settings', '/about', '/report']
+    .some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
+
+  useEffect(() => {
+    setMoreOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    const viewport = window.visualViewport
+    const updateKeyboardState = () => {
+      setKeyboardOpen(
+        window.matchMedia('(max-width: 759px)').matches &&
+        Boolean(viewport && window.innerHeight - viewport.height > 120),
+      )
+    }
+    updateKeyboardState()
+    viewport?.addEventListener('resize', updateKeyboardState)
+    window.addEventListener('resize', updateKeyboardState)
+    return () => {
+      viewport?.removeEventListener('resize', updateKeyboardState)
+      window.removeEventListener('resize', updateKeyboardState)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!moreOpen) return
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (event.target instanceof Node && !moreMenuRef.current?.contains(event.target)) setMoreOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      const menuItems = Array.from(moreMenuRef.current?.querySelectorAll<HTMLAnchorElement>('.bottom-nav__more-link') ?? [])
+      if (event.key === 'Escape') {
+        setMoreOpen(false)
+        moreButtonRef.current?.focus()
+        return
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !menuItems.length) return
+      const currentIndex = menuItems.indexOf(document.activeElement as HTMLAnchorElement)
+      const nextIndex = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? menuItems.length - 1
+          : event.key === 'ArrowDown'
+            ? (currentIndex + 1 + menuItems.length) % menuItems.length
+            : currentIndex <= 0 ? menuItems.length - 1 : currentIndex - 1
+      event.preventDefault()
+      menuItems[nextIndex].focus()
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [moreOpen])
+
+  useEffect(() => {
+    if (keyboardOpen) setMoreOpen(false)
+  }, [keyboardOpen])
+
+  return <nav className="bottom-nav" aria-label="Main navigation" data-keyboard-open={keyboardOpen || undefined}>
+    {mobileItems.map(({ to, label, icon: Icon, emphasized }) => {
+      const active = isActiveRoute(location.pathname, to)
+      return <NavLink key={to} to={to} aria-current={active ? 'page' : undefined} className={`bottom-nav__item${active ? ' is-active' : ''}${emphasized ? ' bottom-nav__item--create' : ''}`}><span className="bottom-nav__icon nav-icon-wrap"><Icon size={emphasized ? 20 : 16} strokeWidth={active ? 2.4 : 1.8} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
+    })}
+    <div className="bottom-nav__more-wrap" ref={moreMenuRef}>
+      <button
+        ref={moreButtonRef}
+        className={`bottom-nav__item bottom-nav__more-button${isMoreActive ? ' is-active' : ''}`}
+        type="button"
+        aria-label="More navigation options"
+        aria-haspopup="menu"
+        aria-expanded={moreOpen}
+        aria-controls="connect-more-menu"
+        aria-current={isMoreActive ? 'page' : undefined}
+        onClick={() => setMoreOpen((open) => !open)}
+      >
+        <span className="bottom-nav__icon"><Ellipsis size={18} /></span><span>More</span>
+      </button>
+      {moreOpen && <div className="bottom-nav__more-menu" id="connect-more-menu" role="menu" aria-label="More navigation">
+        {moreItems.map(({ to, label, icon: Icon }) => {
+          const active = isActiveRoute(location.pathname, to)
+          return <NavLink key={to} to={to} role="menuitem" aria-current={active ? 'page' : undefined} onClick={() => setMoreOpen(false)} className={`bottom-nav__more-link${active ? ' is-active' : ''}`}><Icon size={18} /><span>{label}</span></NavLink>
+        })}
+      </div>}
+    </div>
+  </nav>
 }

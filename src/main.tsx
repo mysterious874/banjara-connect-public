@@ -8,6 +8,7 @@ import { PwaInstallProvider } from './components/PwaInstall'
 import './styles/global.css'
 import './styles/chat-fix.css'
 import './styles/glow-polish.css'
+import './styles/connect-2.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

@@ -43,7 +43,7 @@ export function Avatar({ name, initials, tone = 'green', size = 'medium', image 
   const shortName = initials ?? name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
   return (
     <span className={`avatar avatar--${size} avatar--${tone}`} aria-label={name} role="img">
-      {image ? <img src={image} alt="" /> : shortName}
+      {image ? <img src={image} alt="" loading="lazy" decoding="async" /> : shortName}
     </span>
   )
 }
