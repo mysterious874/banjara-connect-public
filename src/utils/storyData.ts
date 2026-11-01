@@ -1,7 +1,6 @@
 import { supabase } from './supabase'
 import { prepareImageForUpload } from './imageUpload'
 import type { ProfileRecord } from '../types/app'
-import { prepareImageForUpload } from './imageUpload'
 
 export const BANJARA_STORIES_BUCKET = 'banjara-stories'
 export const MAX_STORY_MEDIA_SIZE = 50 * 1024 * 1024
