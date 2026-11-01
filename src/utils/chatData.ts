@@ -82,15 +82,9 @@ async function loadConversationSummaryMessages(conversationId: string, userId: s
   const { data: incoming, error: incomingError } = incomingResult
   if (latestError) throw latestError
   if (incomingError) throw incomingError
-  if (!incoming?.length) return { lastMessage: (latestRows?.[0] as ChatMessage | undefined) ?? null, unreadCount: 0 }
-
-  const { data: reads, error: readsError } = await supabase.from('message_reads').select('message_id')
-    .eq('user_id', userId).in('message_id', incoming.map((row) => row.id))
-  if (readsError) throw readsError
-  const readIds = new Set((reads ?? []).map((row) => row.message_id))
   return {
     lastMessage: (latestRows?.[0] as ChatMessage | undefined) ?? null,
-    unreadCount: incoming.filter((row) => !readIds.has(row.id)).length,
+    incomingMessageIds: (incoming ?? []).map((row) => row.id as string),
   }
 }
 
@@ -140,13 +134,30 @@ async function loadConversationsUncached(userId: string): Promise<ConversationSu
 
   // Conversation summaries and profile cards are independent; avoid making
   // the user wait for every summary before starting the profile query.
-  const [summaryMessages, profilesResult] = await Promise.all([
+  const [summaryRows, profilesResult] = await Promise.all([
     Promise.all(visibleConversationIds.map((id) => loadConversationSummaryMessages(id, userId))),
     supabase.from('profiles')
       .select('id,username,display_name,avatar_url').in('id', otherUserIds),
   ])
   const { data: profiles, error: profilesError } = profilesResult
   if (profilesError) throw profilesError
+  const incomingMessageIds = [...new Set(summaryRows.flatMap((summary) => summary.incomingMessageIds))]
+  let readIds = new Set<string>()
+  if (incomingMessageIds.length) {
+    const readBatches = await Promise.all(Array.from(
+      { length: Math.ceil(incomingMessageIds.length / 200) },
+      (_, index) => supabase.from('message_reads').select('message_id')
+        .eq('user_id', userId).in('message_id', incomingMessageIds.slice(index * 200, (index + 1) * 200)),
+    ))
+    for (const { data: reads, error: readsError } of readBatches) {
+      if (readsError) throw readsError
+      for (const row of reads ?? []) readIds.add(row.message_id as string)
+    }
+  }
+  const summaryMessages = summaryRows.map(({ lastMessage, incomingMessageIds: incomingIds }) => ({
+    lastMessage,
+    unreadCount: incomingIds.filter((id) => !readIds.has(id)).length,
+  }))
 
   const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
   return visibleConversationIds.flatMap((id, index) => {
@@ -157,11 +168,21 @@ async function loadConversationsUncached(userId: string): Promise<ConversationSu
   }).sort((left, right) => (right.lastMessage?.created_at ?? '').localeCompare(left.lastMessage?.created_at ?? ''))
 }
 
-export async function loadConversationMessages(
+async function loadConversationPeerId(conversationId: string, userId: string) {
+  const { data: members, error } = await supabase.from('conversation_members')
+    .select('user_id').eq('conversation_id', conversationId)
+  if (error) throw error
+  const memberIds = (members ?? []).map((member) => member.user_id as string)
+  if (!memberIds.includes(userId)) throw new Error('You are not a member of this conversation.')
+  const peerId = memberIds.find((memberId) => memberId !== userId)
+  if (!peerId) throw new Error('Conversation member could not be found.')
+  return peerId
+}
+
+async function fetchConversationMessagePage(
   conversationId: string,
   before?: Pick<ChatMessage, 'created_at' | 'id'>,
-): Promise<{ messages: ChatMessage[]; hasMore: boolean }> {
-  const userId = await requireAuthenticatedUserId()
+) {
   let query = supabase.from('messages').select(messageColumns)
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: false })
@@ -170,20 +191,13 @@ export async function loadConversationMessages(
   if (before) {
     query = query.or(`created_at.lt.${before.created_at},and(created_at.eq.${before.created_at},id.lt.${before.id})`)
   }
-  const [
-    { data: membership, error: membershipError },
-    { data, error },
-    { data: peerMember, error: peerMemberError },
-  ] = await Promise.all([
-    supabase.from('conversation_members').select('conversation_id').eq('conversation_id', conversationId).eq('user_id', userId).maybeSingle(),
-    query,
-    supabase.from('conversation_members').select('user_id').eq('conversation_id', conversationId).neq('user_id', userId).maybeSingle(),
-  ])
-  if (membershipError) throw membershipError
-  if (!membership) throw new Error('You are not a member of this conversation.')
+  const { data, error } = await query
   if (error) throw error
-  if (peerMemberError) throw peerMemberError
-  let page = (data ?? []) as ChatMessage[]
+  return (data ?? []) as ChatMessage[]
+}
+
+async function prepareConversationMessagePage(page: ChatMessage[], userId: string, peerId: string) {
+  const hasMore = page.length === conversationMessagePageSize
   if (page.length) {
     const ids = page.map((message) => message.id)
     const { data: hidden, error: hiddenError } = await supabase.from('message_deletions').select('message_id').eq('user_id', userId).in('message_id', ids)
@@ -195,11 +209,11 @@ export async function loadConversationMessages(
   // Read receipts and media URL signing should not delay the text conversation
   // from opening. Both are best-effort follow-up work and realtime refreshes will
   // reconcile read status after the chat is already visible.
-  if (peerMember?.user_id && messages.length) {
+  if (messages.length) {
     const outgoingIds = messages.filter((message) => message.sender_id === userId).map((message) => message.id)
     if (outgoingIds.length) {
       void supabase.from('message_reads').select('message_id')
-        .eq('user_id', peerMember.user_id).in('message_id', outgoingIds)
+        .eq('user_id', peerId).in('message_id', outgoingIds)
         .then(({ data: peerReads, error: peerReadError }) => {
           if (peerReadError) {
             if (import.meta.env.DEV) console.error('Could not load peer read receipts.', peerReadError)
@@ -228,7 +242,19 @@ export async function loadConversationMessages(
       }
     })()
   }
-  return { messages, hasMore: page.length === conversationMessagePageSize }
+  return { messages, hasMore }
+}
+
+export async function loadConversationMessages(
+  conversationId: string,
+  before?: Pick<ChatMessage, 'created_at' | 'id'>,
+): Promise<{ messages: ChatMessage[]; hasMore: boolean }> {
+  const userId = await requireAuthenticatedUserId()
+  const [peerId, page] = await Promise.all([
+    loadConversationPeerId(conversationId, userId),
+    fetchConversationMessagePage(conversationId, before),
+  ])
+  return prepareConversationMessagePage(page, userId, peerId)
 }
 
 export async function hydrateConversationMediaUrls(messages: ChatMessage[]): Promise<ChatMessage[]> {
@@ -250,17 +276,7 @@ export async function hydrateConversationMediaUrls(messages: ChatMessage[]): Pro
   return messages
 }
 
-export async function loadConversationPeer(conversationId: string) {
-  const userId = await requireAuthenticatedUserId()
-  const { data: ownMembership, error: ownError } = await supabase.from('conversation_members')
-    .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', userId).maybeSingle()
-  if (ownError) throw ownError
-  if (!ownMembership) throw new Error('You are not a member of this conversation.')
-  const { data: members, error: membersError } = await supabase.from('conversation_members')
-    .select('user_id').eq('conversation_id', conversationId).neq('user_id', userId)
-  if (membersError) throw membersError
-  const peerId = members?.[0]?.user_id
-  if (!peerId) throw new Error('Conversation member could not be found.')
+async function loadConversationPeerProfile(peerId: string, userId: string) {
   const [{ data: outgoingBlock, error: outgoingBlockError }, { data: incomingBlock, error: incomingBlockError }] = await Promise.all([
     supabase.from('blocks').select('blocker_id').eq('blocker_id', userId).eq('blocked_id', peerId).maybeSingle(),
     supabase.from('blocks').select('blocker_id').eq('blocker_id', peerId).eq('blocked_id', userId).maybeSingle(),
@@ -273,6 +289,19 @@ export async function loadConversationPeer(conversationId: string) {
   if (profileError) throw profileError
   if (!profile) throw new Error('Conversation profile is unavailable.')
   return profile
+}
+
+export async function loadConversation(conversationId: string) {
+  const userId = await requireAuthenticatedUserId()
+  const [peerId, page] = await Promise.all([
+    loadConversationPeerId(conversationId, userId),
+    fetchConversationMessagePage(conversationId),
+  ])
+  const [peer, history] = await Promise.all([
+    loadConversationPeerProfile(peerId, userId),
+    prepareConversationMessagePage(page, userId, peerId),
+  ])
+  return { peer, history }
 }
 
 export async function sendConversationMessage(conversationId: string, content: string, mediaFile?: File) {

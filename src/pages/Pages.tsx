@@ -27,7 +27,7 @@ import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
-import { deleteMessageForEveryone, deleteMessageForMe, hydrateConversationMediaUrls, invalidateConversationListCache, loadConversationMessages, loadConversationPeer, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
+import { deleteMessageForEveryone, deleteMessageForMe, hydrateConversationMediaUrls, invalidateConversationListCache, loadConversation, loadConversationMessages, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
 import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostLikesBatch, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 import { getCached, invalidateCache, setCached } from '../utils/performanceCache'
 import { CallInviteControls } from '../components/calling/CallInviteControls'
@@ -2372,7 +2372,7 @@ export function ChatConversationPage() {
     if (mediaInputRef.current) mediaInputRef.current.value = ''
     void (async () => {
       try {
-        const [peer, history] = await Promise.all([loadConversationPeer(conversationId), loadConversationMessages(conversationId)])
+        const { peer, history } = await loadConversation(conversationId)
         if (!active) return
         setPerson(peer as ProfileRecord)
         setMessages(history.messages)
