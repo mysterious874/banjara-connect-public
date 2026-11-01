@@ -79,10 +79,21 @@ export async function uploadChatMedia(file: File, userId: string, conversationId
   }
 }
 
-export async function createChatMediaUrl(path: string) {
-  const { data, error } = await supabase.storage.from(BANJARA_CHAT_MEDIA_BUCKET).createSignedUrl(path, 60 * 60)
+export async function createChatMediaUrls(paths: string[]) {
+  const uniquePaths = [...new Set(paths.filter(Boolean))]
+  if (!uniquePaths.length) return new Map<string, string>()
+  const { data, error } = await supabase.storage.from(BANJARA_CHAT_MEDIA_BUCKET).createSignedUrls(uniquePaths, 60 * 60)
   if (error) throw error
-  return data.signedUrl
+  return new Map((data ?? []).flatMap((item) =>
+    item.path && item.signedUrl ? [[item.path, item.signedUrl] as const] : [],
+  ))
+}
+
+export async function createChatMediaUrl(path: string) {
+  const urls = await createChatMediaUrls([path])
+  const signedUrl = urls.get(path)
+  if (!signedUrl) throw new Error('Could not create chat media URL.')
+  return signedUrl
 }
 
 export async function deleteChatMedia(paths: string[]) {
