@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Phone, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Volume2, Ban, LogOut, Download, Maximize2, Minimize2, Forward } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Volume2, Ban, LogOut, Download, Maximize2, Minimize2, Forward } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
@@ -370,7 +370,7 @@ export function HomePage() {
 }
 
 export function CommunityPage() {
-  const { profile, session } = useAuth()
+  const { session } = useAuth()
   const [posts, setPosts] = useState<FeedPost[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -1914,7 +1914,7 @@ export function StoriesPage() {
                   <button type="button" className="story-manage-row__delete" onClick={() => void removeStory(story)} aria-label="Delete story"><Trash2 size={17} /></button>
                 </div>
               })}</div> : <EmptyState title="No active stories" description="Add a photo, video, or message to share your first story." />}
-              {!showCreateStory && <Button block onClick={() => setShowCreateStory(true)}><Plus size={17} /> Add Story</Button>}
+              {!showCreateStory && <Button onClick={() => setShowCreateStory(true)}><Plus size={17} /> Add Story</Button>}
               {showCreateStory && <Button variant="quiet" onClick={() => { setShowCreateStory(false); setError(''); setSuccess('') }}>Cancel adding story</Button>}
             </div>
           ) : isDirectCreate ? null : grouped.length === 0 ? <EmptyState title="No active stories" description="Be the first to share something with the community." /> : <div className="story-page-thumbs"><div className="section-heading"><h2>Today's stories</h2><span className="local-label">{grouped.length} people</span></div><div className="stories-rail__items">{grouped.map((story) => {
@@ -2441,16 +2441,6 @@ export function ChatConversationPage() {
     try { setForwardConversations(await loadConversations()) }
     catch (caught) { setForwardError(userFacingError(caught, 'Could not load your conversations.')) }
     finally { setForwardLoading(false) }
-  }
-
-  async function forwardSelectedMessagesToUser(userId: string) {
-    try {
-      const existing = forwardConversations.find((row) => row.member.id === userId)
-      const destinationId = existing?.id ?? await getOrCreateConversation(userId)
-      await forwardSelectedMessagesTo(destinationId)
-    } catch (caught) {
-      setForwardError(userFacingError(caught, 'Could not open this contact for forwarding.'))
-    }
   }
 
   async function sendForwardedToSelectedContacts() {
@@ -3387,7 +3377,13 @@ export function CommunityGroupPage() {
       window.requestAnimationFrame(() => { const pane = document.querySelector('.community-group-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
     } catch (caught) {
       if (uploadedPath) await deleteGroupMedia([uploadedPath]).catch(() => undefined)
-      if (pendingMessageId) await supabase.from('community_group_messages').delete().eq('id', pendingMessageId).eq('sender_id', session.user.id).catch(() => undefined)
+      if (pendingMessageId) {
+        try {
+          await supabase.from('community_group_messages').delete().eq('id', pendingMessageId).eq('sender_id', session.user.id)
+        } catch {
+          // Best-effort cleanup; preserve the original send error.
+        }
+      }
       setError(userFacingError(caught, 'Could not send this message.'))
     } finally {
       groupSendLock.current = false
