@@ -1994,20 +1994,64 @@ export function ReelsPage() {
   return <section className="page-stack"><PageHeading eyebrow="SHORT COMMUNITY FILMS" title="Reels" description="A small visual preview of stories in motion." /><PreviewNotice /><div className="reel-placeholder"><img src="/loom-preview.svg" alt="Abstract, Banjara-inspired geometric threadwork" /><div className="reel-placeholder__copy"><span className="eyebrow">LOCAL ARTWORK PREVIEW</span><h2>Made by hand,<br />held in memory.</h2><p>Short videos will live here when media is connected.</p><Button to="/about" variant="outline">About the community</Button></div></div></section>
 }
 
+function readDeletedChatTimestamps(userId: string | undefined): Record<string, string> {
+  if (!userId) return {}
+  try {
+    const stored = window.localStorage.getItem(`banjara-chat-deleted-${userId}`)
+    if (!stored) return {}
+    const parsed: unknown = JSON.parse(stored)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+    }
+  } catch {
+    return {}
+  }
+  return {}
+}
+
+function readMutedChatIds(userId: string | undefined): string[] {
+  if (!userId) return []
+  try {
+    const stored = window.localStorage.getItem(`banjara-chat-muted-${userId}`)
+    if (!stored) return []
+    const parsed: unknown = JSON.parse(stored)
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function persistChatListPreference(userId: string | undefined, preference: 'deleted' | 'muted', value: unknown) {
+  if (!userId) return false
+  try {
+    window.localStorage.setItem(`banjara-chat-${preference}-${userId}`, JSON.stringify(value))
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function ChatListPage() {
   const { session, onlineUserIds, activeUserIds } = useAuth()
+  const userId = session?.user.id
   const chatListCacheKey = session?.user.id ? `chat-list:${session.user.id}` : ''
   const cachedConversations = chatListCacheKey ? getCached<Awaited<ReturnType<typeof loadConversations>>>(chatListCacheKey) : null
   const [conversations, setConversations] = useState<Awaited<ReturnType<typeof loadConversations>>>(cachedConversations ?? [])
   const [isLoading, setIsLoading] = useState(cachedConversations === null)
   const [error, setError] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [mutedIds, setMutedIds] = useState<string[]>([])
+  const [deletedAtByConversation, setDeletedAtByConversation] = useState<Record<string, string>>(() => readDeletedChatTimestamps(userId))
+  const [mutedIds, setMutedIds] = useState<string[]>(() => readMutedChatIds(userId))
   const holdTimer = useRef<number | null>(null)
   const holdPointerId = useRef<number | null>(null)
   const holdStartPoint = useRef<{ x: number; y: number } | null>(null)
   const suppressNextChatClick = useRef(false)
 
+  useEffect(() => {
+    setDeletedAtByConversation(readDeletedChatTimestamps(userId))
+    setMutedIds(readMutedChatIds(userId))
+    setSelectedIds([])
+  }, [userId])
 
   useEffect(() => {
     let active = true
@@ -2103,17 +2147,27 @@ export function ChatListPage() {
   function selectChat(id: string) {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
   }
-  function persistList(key: string, ids: string[]) {
-    try { window.localStorage.setItem(key, JSON.stringify(ids)) } catch { /* ignore */ }
-  }
   function deleteSelected() {
-    setConversations((current) => current.filter((conversation) => !selectedIds.includes(conversation.id)))
+    const deletedAt = Object.fromEntries(selectedIds.map((id) => {
+      const lastMessage = conversations.find((conversation) => conversation.id === id)?.lastMessage
+      return [id, lastMessage?.created_at ?? new Date().toISOString()]
+    }))
+    const next = { ...deletedAtByConversation, ...deletedAt }
+    if (!persistChatListPreference(userId, 'deleted', next)) {
+      setError('Could not save deleted chats on this device.')
+      return
+    }
+    setDeletedAtByConversation(next)
     setSelectedIds([])
   }
   function toggleMuteSelected() {
     const allMuted = selectedIds.every((id) => mutedIds.includes(id))
     const next = allMuted ? mutedIds.filter((id) => !selectedIds.includes(id)) : [...new Set([...mutedIds, ...selectedIds])]
-    setMutedIds(next); persistList('banjara-chat-muted', next)
+    if (!persistChatListPreference(userId, 'muted', next)) {
+      setError('Could not save muted chats on this device.')
+      return
+    }
+    setMutedIds(next)
   }
   async function blockSelected() {
     const rows = conversations.filter((item) => selectedIds.includes(item.id))
@@ -2124,7 +2178,10 @@ export function ChatListPage() {
       setError(userFacingError(caught, 'Could not block the selected users.'))
     }
   }
-  const visibleConversations = conversations
+  const visibleConversations = conversations.filter((conversation) => {
+    const deletedAt = deletedAtByConversation[conversation.id]
+    return !deletedAt || Boolean(conversation.lastMessage && Date.parse(conversation.lastMessage.created_at) > Date.parse(deletedAt))
+  })
 
   return <section className="page-stack">
     <PageHeading eyebrow="CONVERSATIONS" title="Chat" description="Your conversations." />
