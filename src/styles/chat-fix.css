@@ -945,3 +945,51 @@ body:has(.community-group-screen) {
     max-width: min(86%, 520px) !important;
   }
 }
+
+
+/* Correct composer targeting: Input renders .field__control-wrap around the input. */
+.chat-compose-area .chat-disabled-compose > .field {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 40px !important;
+  align-items: center !important;
+  gap: 0 !important;
+  margin: 0 !important;
+}
+.chat-compose-area .chat-disabled-compose > .field .field__control-wrap {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 40px !important;
+  align-items: center !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.chat-compose-area .chat-disabled-compose > .field .field__control {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 40px !important;
+  padding: 0 4px !important;
+  color: var(--bc-text) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+}
+.chat-compose-area .chat-disabled-compose > .field .field__control:focus {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+.chat-compose-area .chat-disabled-compose > .field .field__control::placeholder {
+  color: var(--bc-muted) !important;
+  opacity: .85;
+}
+.chat-compose-area .chat-disabled-compose > .field .field__label,
+.chat-compose-area .chat-disabled-compose > .field .field__error {
+  display: none !important;
+}
