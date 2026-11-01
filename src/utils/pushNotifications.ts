@@ -47,7 +47,8 @@ export async function registerPushNotifications() {
     })
   }
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError) throw userError
   if (!user) return false
 
   const payload = subscription.toJSON()
