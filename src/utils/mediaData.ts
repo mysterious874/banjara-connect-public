@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+import { prepareImageForUpload } from './imageUpload'
+import { uploadStorageFile } from './storageUpload'
 
 export const BANJARA_MEDIA_BUCKET = 'banjara-media'
 export const MAX_POST_MEDIA_SIZE = 50 * 1024 * 1024
@@ -47,18 +49,14 @@ export function validatePostMedia(file: File) {
 
 export async function uploadPostMedia(file: File, userId: string, postId: string): Promise<PostMediaData> {
   validatePostMedia(file)
-  const path = `${userId}/${postId}/${crypto.randomUUID()}.${extensionForFile(file)}`
-  const { error } = await supabase.storage.from(BANJARA_MEDIA_BUCKET).upload(path, file, {
-    cacheControl: '3600',
-    contentType: file.type,
-    upsert: false,
-  })
-  if (error) throw error
+  const uploadFile = await prepareImageForUpload(file)
+  const path = `${userId}/${postId}/${crypto.randomUUID()}.${extensionForFile(uploadFile)}`
+  await uploadStorageFile(BANJARA_MEDIA_BUCKET, path, uploadFile)
   return {
     path,
-    type: file.type.startsWith('video/') ? 'video' : 'image',
-    mimeType: file.type,
-    name: file.name,
+    type: uploadFile.type.startsWith('video/') ? 'video' : 'image',
+    mimeType: uploadFile.type,
+    name: uploadFile.name,
   }
 }
 

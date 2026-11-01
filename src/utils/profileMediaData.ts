@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+import { prepareImageForUpload } from './imageUpload'
+import { uploadStorageFile } from './storageUpload'
 
 export const BANJARA_PROFILE_AVATAR_BUCKET = 'banjara-profile-avatars'
 export const MAX_PROFILE_AVATAR_SIZE = 5 * 1024 * 1024
@@ -16,14 +18,10 @@ export function validateProfileAvatar(file: File) {
 
 export async function uploadProfileAvatar(file: File, userId: string) {
   validateProfileAvatar(file)
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const uploadFile = await prepareImageForUpload(file)
+  const extension = uploadFile.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${userId}/${crypto.randomUUID()}.${extension}`
-  const { error } = await supabase.storage.from(BANJARA_PROFILE_AVATAR_BUCKET).upload(path, file, {
-    cacheControl: '3600',
-    contentType: file.type,
-    upsert: false,
-  })
-  if (error) throw error
+  await uploadStorageFile(BANJARA_PROFILE_AVATAR_BUCKET, path, uploadFile)
   const { data } = supabase.storage.from(BANJARA_PROFILE_AVATAR_BUCKET).getPublicUrl(path)
   return { path, publicUrl: data.publicUrl }
 }

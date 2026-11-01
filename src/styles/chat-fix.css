@@ -844,3 +844,104 @@ body:has(.community-group-screen) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+/* WhatsApp-inspired chat composer and tighter message rhythm.
+   Keep Connect's existing palette and preserve the current controls/actions. */
+.chat-messages {
+  gap: 5px !important;
+}
+
+.chat-message-row {
+  margin-block: 0 !important;
+}
+
+.chat-compose-area {
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom)) !important;
+  background: var(--bc-cream) !important;
+  border-top: 1px solid var(--bc-line) !important;
+  box-shadow: 0 -5px 18px rgb(36 28 25 / 7%) !important;
+}
+
+.chat-compose-area .chat-disabled-compose {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  min-height: 52px !important;
+  padding: 4px 6px 4px 13px !important;
+  border: 1px solid var(--bc-line) !important;
+  border-radius: 999px !important;
+  background: var(--bc-paper) !important;
+  box-shadow: 0 2px 8px rgb(36 28 25 / 5%) !important;
+}
+
+.chat-compose-area .chat-disabled-compose > .field {
+  min-width: 0 !important;
+  min-height: 40px !important;
+  flex: 1 1 auto !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.chat-compose-area .chat-disabled-compose > .field input {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 40px !important;
+  padding: 0 4px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 15px !important;
+}
+
+.chat-compose-area .chat-disabled-compose .button {
+  width: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+}
+
+.chat-compose-area .chat-disabled-compose .button--quiet {
+  color: var(--bc-muted) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.chat-compose-area .chat-disabled-compose button[type="submit"] {
+  color: #fff !important;
+  background: var(--bc-maroon) !important;
+  border-color: var(--bc-maroon) !important;
+}
+
+.chat-compose-area .chat-disabled-compose button[type="submit"]:disabled {
+  opacity: .45 !important;
+}
+
+.chat-compose-area .chat-attachment-wrap {
+  flex: none !important;
+}
+
+@media (max-width: 560px) {
+  .chat-compose-area {
+    padding-right: 9px !important;
+    padding-left: 9px !important;
+  }
+
+  .chat-messages {
+    gap: 5px !important;
+    padding-bottom: 82px !important;
+  }
+
+  .chat-message-row {
+    max-width: 100% !important;
+  }
+
+  .chat-bubble {
+    max-width: min(86%, 520px) !important;
+  }
+}

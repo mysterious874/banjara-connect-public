@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+import { prepareImageForUpload } from './imageUpload'
+import { uploadStorageFile } from './storageUpload'
 
 export const BANJARA_CHAT_MEDIA_BUCKET = 'banjara-chat-media'
 export const MAX_CHAT_MEDIA_SIZE = 50 * 1024 * 1024
@@ -63,24 +65,31 @@ export function validateChatMedia(file: File) {
 
 export async function uploadChatMedia(file: File, userId: string, conversationId: string, messageId: string): Promise<ChatMediaData> {
   validateChatMedia(file)
-  const path = `${userId}/${conversationId}/${messageId}/${crypto.randomUUID()}.${extensionForChatMedia(file)}`
-  const { error } = await supabase.storage.from(BANJARA_CHAT_MEDIA_BUCKET).upload(path, file, {
-    cacheControl: '3600',
-    contentType: file.type,
-    upsert: false,
-  })
-  if (error) throw error
+  const uploadFile = await prepareImageForUpload(file)
+  const path = `${userId}/${conversationId}/${messageId}/${crypto.randomUUID()}.${extensionForChatMedia(uploadFile)}`
+  await uploadStorageFile(BANJARA_CHAT_MEDIA_BUCKET, path, uploadFile)
   return {
     path,
     type: file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : 'document',
-    mimeType: file.type,
+    mimeType: uploadFile.type,
   }
 }
 
-export async function createChatMediaUrl(path: string) {
-  const { data, error } = await supabase.storage.from(BANJARA_CHAT_MEDIA_BUCKET).createSignedUrl(path, 60 * 60)
+export async function createChatMediaUrls(paths: string[]) {
+  const uniquePaths = [...new Set(paths.filter(Boolean))]
+  if (!uniquePaths.length) return new Map<string, string>()
+  const { data, error } = await supabase.storage.from(BANJARA_CHAT_MEDIA_BUCKET).createSignedUrls(uniquePaths, 60 * 60)
   if (error) throw error
-  return data.signedUrl
+  return new Map((data ?? []).flatMap((item) =>
+    item.path && item.signedUrl ? [[item.path, item.signedUrl] as const] : [],
+  ))
+}
+
+export async function createChatMediaUrl(path: string) {
+  const urls = await createChatMediaUrls([path])
+  const signedUrl = urls.get(path)
+  if (!signedUrl) throw new Error('Could not create chat media URL.')
+  return signedUrl
 }
 
 export async function deleteChatMedia(paths: string[]) {

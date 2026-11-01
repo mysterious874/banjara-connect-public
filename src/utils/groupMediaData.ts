@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+import { prepareImageForUpload } from './imageUpload'
+import { uploadStorageFile } from './storageUpload'
 
 export const BANJARA_GROUP_MEDIA_BUCKET = 'banjara-group-media'
 export const MAX_GROUP_MEDIA_SIZE = 50 * 1024 * 1024
@@ -35,18 +37,40 @@ export function validateGroupMedia(file: File) {
 
 export async function uploadGroupMedia(file: File, userId: string, groupId: string, messageId: string): Promise<GroupMediaData> {
   validateGroupMedia(file)
-  const path = `${userId}/${groupId}/${messageId}/${crypto.randomUUID()}.${extensionForGroupMedia(file)}`
-  const { error } = await supabase.storage.from(BANJARA_GROUP_MEDIA_BUCKET).upload(path, file, {
-    cacheControl: '3600', contentType: file.type, upsert: false,
-  })
+  const uploadFile = await prepareImageForUpload(file)
+  const path = `${userId}/${groupId}/${messageId}/${crypto.randomUUID()}.${extensionForGroupMedia(uploadFile)}`
+  await uploadStorageFile(BANJARA_GROUP_MEDIA_BUCKET, path, uploadFile)
+  return { path, type: file.type.startsWith('video/') ? 'video' : 'image', mimeType: uploadFile.type }
+}
+
+export async function createGroupMediaUrls(paths: string[]) {
+  const uniquePaths = [...new Set(paths.filter(Boolean))]
+  if (!uniquePaths.length) return new Map<string, string>()
+  const { data, error } = await supabase.storage.from(BANJARA_GROUP_MEDIA_BUCKET).createSignedUrls(uniquePaths, 60 * 60)
   if (error) throw error
-  return { path, type: file.type.startsWith('video/') ? 'video' : 'image', mimeType: file.type }
+  return new Map((data ?? []).flatMap((item) =>
+    item.path && item.signedUrl ? [[item.path, item.signedUrl] as const] : [],
+  ))
 }
 
 export async function createGroupMediaUrl(path: string) {
-  const { data, error } = await supabase.storage.from(BANJARA_GROUP_MEDIA_BUCKET).createSignedUrl(path, 60 * 60)
-  if (error) throw error
-  return data.signedUrl
+  const urls = await createGroupMediaUrls([path])
+  const signedUrl = urls.get(path)
+  if (!signedUrl) throw new Error('Could not create group media URL.')
+  return signedUrl
+}
+
+export async function hydrateGroupMediaUrls<T extends { media_url?: string | null; media_signed_url?: string | null }>(messages: T[]) {
+  const pending = messages.filter((message) => message.media_url && !message.media_signed_url)
+  if (!pending.length) return messages
+  const paths = [...new Set(pending.map((message) => message.media_url as string))]
+  try {
+    const signedByPath = await createGroupMediaUrls(paths)
+    for (const message of pending) message.media_signed_url = signedByPath.get(message.media_url as string) ?? null
+  } catch {
+    for (const message of pending) message.media_signed_url = null
+  }
+  return messages
 }
 
 export async function deleteGroupMedia(paths: string[]) {
