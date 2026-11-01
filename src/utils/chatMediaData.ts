@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { prepareImageForUpload } from './imageUpload'
+import { uploadStorageFile } from './storageUpload'
 
 export const BANJARA_CHAT_MEDIA_BUCKET = 'banjara-chat-media'
 export const MAX_CHAT_MEDIA_SIZE = 50 * 1024 * 1024
@@ -66,12 +67,7 @@ export async function uploadChatMedia(file: File, userId: string, conversationId
   validateChatMedia(file)
   const uploadFile = await prepareImageForUpload(file)
   const path = `${userId}/${conversationId}/${messageId}/${crypto.randomUUID()}.${extensionForChatMedia(uploadFile)}`
-  const { error } = await supabase.storage.from(BANJARA_CHAT_MEDIA_BUCKET).upload(path, uploadFile, {
-    cacheControl: '3600',
-    contentType: uploadFile.type,
-    upsert: false,
-  })
-  if (error) throw error
+  await uploadStorageFile(BANJARA_CHAT_MEDIA_BUCKET, path, uploadFile)
   return {
     path,
     type: file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : 'document',
