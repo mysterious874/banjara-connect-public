@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { prepareImageForUpload } from './imageUpload'
+import { uploadStorageFile } from './storageUpload'
 import type { ProfileRecord } from '../types/app'
 
 export const BANJARA_STORIES_BUCKET = 'banjara-stories'
@@ -32,33 +33,8 @@ export async function uploadStoryMedia(file: File, userId: string, storyId: stri
   const uploadFile = await prepareImageForUpload(file)
   const extension = uploadFile.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${userId}/${storyId}/${crypto.randomUUID()}.${extension}`
-  // Mobile connections can briefly drop between the browser's CORS preflight
-  // and the actual upload request. Retry only transient network failures; never
-  // retry permission, validation, or other server errors.
-  let lastError: unknown
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const { error } = await supabase.storage.from(BANJARA_STORIES_BUCKET).upload(path, uploadFile, {
-        cacheControl: '3600',
-        contentType: uploadFile.type,
-        upsert: false,
-      })
-      if (error) throw error
-      return { path }
-    } catch (error) {
-      lastError = error
-      const message = error instanceof Error
-        ? error.message
-        : error && typeof error === 'object' && 'message' in error
-          ? String(error.message)
-          : ''
-      const transientNetworkError = error instanceof TypeError ||
-        /failed to fetch|network|timeout|connection reset|load failed/i.test(message)
-      if (!transientNetworkError || attempt === 2) throw error
-      await new Promise((resolve) => window.setTimeout(resolve, 700 * (attempt + 1)))
-    }
-  }
-  throw lastError
+  await uploadStorageFile(BANJARA_STORIES_BUCKET, path, uploadFile)
+  return { path }
 }
 
 export async function deleteStoryMedia(paths: string[]) {
