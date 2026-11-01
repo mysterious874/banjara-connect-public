@@ -4,7 +4,7 @@ import { supabase } from '../utils/supabase'
 import { userFacingError } from '../utils/userFacingError'
 import type { ProfileRecord, ProfileUpdate } from '../types/app'
 import { getCached, setCached } from '../utils/performanceCache'
-import { registerPushNotifications } from '../utils/pushNotifications'
+import { unregisterPushNotifications } from '../utils/pushNotifications'
 
 const profileColumns = 'id,username,display_name,avatar_url,bio,location,is_verified'
 
@@ -105,20 +105,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const user = session?.user
-
-  useEffect(() => {
-    if (!user?.id) return
-    let cancelled = false
-    const enablePush = async () => {
-      try {
-        if (!cancelled) await registerPushNotifications()
-      } catch (error) {
-        if (import.meta.env.DEV) console.warn('Push notifications could not be enabled.', error)
-      }
-    }
-    void enablePush()
-    return () => { cancelled = true }
-  }, [user?.id])
 
   // App-wide presence: internet ON keeps the user online even when the app is backgrounded.
   // The presence payload separately tells us whether the app is currently visible.
@@ -269,7 +255,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <AuthContext.Provider value={{ session, isLoading, initializationError, profile, isProfileLoading, profileError, onlineUserIds, activeUserIds, refreshProfile, updateProfile, signOut: () => supabase.auth.signOut() }}>{children}</AuthContext.Provider>
+  async function signOut() {
+    await unregisterPushNotifications()
+    return supabase.auth.signOut()
+  }
+
+  return <AuthContext.Provider value={{ session, isLoading, initializationError, profile, isProfileLoading, profileError, onlineUserIds, activeUserIds, refreshProfile, updateProfile, signOut }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
