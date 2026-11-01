@@ -1,5 +1,7 @@
 import { supabase } from './supabase'
+import { prepareImageForUpload } from './imageUpload'
 import type { ProfileRecord } from '../types/app'
+import { prepareImageForUpload } from './imageUpload'
 
 export const BANJARA_STORIES_BUCKET = 'banjara-stories'
 export const MAX_STORY_MEDIA_SIZE = 50 * 1024 * 1024
@@ -28,7 +30,8 @@ export function validateStoryMedia(file: File) {
 
 export async function uploadStoryMedia(file: File, userId: string, storyId: string) {
   validateStoryMedia(file)
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const uploadFile = await prepareImageForUpload(file)
+  const extension = uploadFile.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${userId}/${storyId}/${crypto.randomUUID()}.${extension}`
   // Mobile connections can briefly drop between the browser's CORS preflight
   // and the actual upload request. Retry only transient network failures; never
@@ -36,9 +39,9 @@ export async function uploadStoryMedia(file: File, userId: string, storyId: stri
   let lastError: unknown
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const { error } = await supabase.storage.from(BANJARA_STORIES_BUCKET).upload(path, file, {
+      const { error } = await supabase.storage.from(BANJARA_STORIES_BUCKET).upload(path, uploadFile, {
         cacheControl: '3600',
-        contentType: file.type,
+        contentType: uploadFile.type,
         upsert: false,
       })
       if (error) throw error
