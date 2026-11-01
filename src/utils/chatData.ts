@@ -279,40 +279,38 @@ export async function sendConversationMessage(conversationId: string, content: s
   const normalized = content.trim()
   if (!normalized && !mediaFile) throw new Error('Message cannot be empty.')
   const senderId = await requireAuthenticatedUserId()
-  const { data: membership, error: membershipError } = await supabase.from('conversation_members')
-    .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', senderId).maybeSingle()
-  if (membershipError) throw membershipError
-  if (!membership) throw new Error('You are not a member of this conversation.')
 
-  const { data, error } = await supabase.from('messages').insert({
-    conversation_id: conversationId,
-    sender_id: senderId,
-    content: normalized,
-  }).select(messageColumns).single()
-  if (error) throw error
-  const created = data as ChatMessage
-
-  // Fire-and-forget server push. The Edge Function authenticates the sender,
-  // finds the other conversation member, and sends to their registered devices.
-  void supabase.functions.invoke('send-chat-push', {
-    body: { message_id: created.id },
-  }).catch(() => {})
-
-  if (!mediaFile) return created
-
+  // Upload before inserting the message so realtime never displays an empty
+  // placeholder row that later changes into a media bubble.
+  const messageId = crypto.randomUUID()
   let uploadedPath = ''
   try {
-    const media = await uploadChatMedia(mediaFile, senderId, conversationId, created.id)
-    uploadedPath = media.path
-    const { error: updateError, data: updated } = await supabase.from('messages').update({
-      media_url: media.path,
-      media_type: media.type,
-      updated_at: new Date().toISOString(),
-    }).eq('id', created.id).eq('sender_id', senderId).select(messageColumns).single()
-    if (updateError) throw updateError
-    const result = updated as ChatMessage
-    result.media_signed_url = await createChatMediaUrl(media.path)
-    return result
+    let media: Awaited<ReturnType<typeof uploadChatMedia>> | null = null
+    if (mediaFile) {
+      media = await uploadChatMedia(mediaFile, senderId, conversationId, messageId)
+      uploadedPath = media.path
+    }
+
+    const payload: Record<string, unknown> = {
+      id: messageId,
+      conversation_id: conversationId,
+      sender_id: senderId,
+      content: normalized,
+    }
+    if (media) {
+      payload.media_url = media.path
+      payload.media_type = media.type
+    }
+
+    const { data, error } = await supabase.from('messages').insert(payload)
+      .select(messageColumns).single()
+    if (error) throw error
+    const created = data as ChatMessage
+    if (media) created.media_signed_url = await createChatMediaUrl(media.path)
+
+    // Best-effort push runs in the background; it never blocks the UI.
+    void supabase.functions.invoke('send-chat-push', { body: { message_id: created.id } }).catch(() => {})
+    return created
   } catch (caught) {
     if (uploadedPath) {
       try {
@@ -321,15 +319,9 @@ export async function sendConversationMessage(conversationId: string, content: s
         if (import.meta.env.DEV) console.error('Could not clean up failed chat media upload.', cleanupError)
       }
     }
-    try {
-      await supabase.from('messages').delete().eq('id', created.id).eq('sender_id', senderId)
-    } catch (cleanupError) {
-      if (import.meta.env.DEV) console.error('Could not clean up failed chat media message.', cleanupError)
-    }
     throw caught
   }
 }
-
 export async function deleteMessageForMe(messageId: string) {
   const userId = await requireAuthenticatedUserId()
   const { data: membership, error: membershipError } = await supabase.from('messages').select('id,conversation_id').eq('id', messageId).maybeSingle()
