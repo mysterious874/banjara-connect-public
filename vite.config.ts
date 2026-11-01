@@ -3,6 +3,19 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const moduleId = id.replace(/\\/g, '/')
+          if (moduleId.includes('/node_modules/react/') || moduleId.includes('/node_modules/react-dom/') || moduleId.includes('/node_modules/scheduler/')) return 'react-vendor'
+          if (moduleId.includes('/node_modules/react-router') || moduleId.includes('/node_modules/@remix-run/router/')) return 'router-vendor'
+          if (moduleId.includes('/node_modules/@supabase/')) return 'supabase-vendor'
+          if (moduleId.includes('/node_modules/lucide-react/')) return 'icons-vendor'
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

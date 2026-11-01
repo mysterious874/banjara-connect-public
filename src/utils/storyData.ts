@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { loadBlockedUserIds } from './blockData'
 import { prepareImageForUpload } from './imageUpload'
 import { uploadStorageFile } from './storageUpload'
 import type { ProfileRecord } from '../types/app'
@@ -45,13 +46,17 @@ export async function deleteStoryMedia(paths: string[]) {
 }
 
 export async function loadActiveStories() {
-  const { data, error } = await supabase.from('stories')
-    .select('id,user_id,content,media_url,media_type,created_at,expires_at')
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false })
-    .limit(100)
+  const [{ data, error }, blockedIds] = await Promise.all([
+    supabase.from('stories')
+      .select('id,user_id,content,media_url,media_type,created_at,expires_at')
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(100),
+    loadBlockedUserIds(),
+  ])
   if (error) throw error
-  const rows = data ?? []
+  const blocked = new Set(blockedIds)
+  const rows = (data ?? []).filter((row) => !blocked.has(row.user_id))
   const userIds = [...new Set(rows.map((item) => item.user_id))]
   if (!userIds.length) return [] as StoryRecord[]
   const { data: profiles, error: profileError } = await supabase.from('profiles')
@@ -112,8 +117,25 @@ export async function createStory(userId: string, content: string, mediaFile?: F
     }
     return data.id
   } catch (error) {
-    if (uploadedPath) await deleteStoryMedia([uploadedPath]).catch(() => undefined)
-    await supabase.from('stories').delete().eq('id', data.id).eq('user_id', userId)
+    const cleanupFailures: unknown[] = []
+    if (uploadedPath) {
+      try {
+        await deleteStoryMedia([uploadedPath])
+      } catch (cleanupError) {
+        cleanupFailures.push(cleanupError)
+      }
+    }
+    try {
+      const { error: deleteError } = await supabase.from('stories').delete().eq('id', data.id).eq('user_id', userId)
+      if (deleteError) throw deleteError
+    } catch (cleanupError) {
+      cleanupFailures.push(cleanupError)
+    }
+    if (cleanupFailures.length) {
+      console.error('Could not fully roll back failed story creation:', cleanupFailures)
+      const originalMessage = error instanceof Error ? error.message : 'Story publishing failed.'
+      throw new Error(`${originalMessage} Cleanup also failed, so a partial story may remain. Please refresh before retrying.`)
+    }
     throw error
   }
 }
@@ -136,7 +158,11 @@ export type StoryViewer = Pick<ProfileRecord, 'id' | 'username' | 'display_name'
 
 export async function recordStoryView(storyId: string, viewerId: string) {
   if (!storyId || !viewerId) return
-  await supabase.from('story_views').upsert({ story_id: storyId, viewer_id: viewerId, viewed_at: new Date().toISOString() }, { onConflict: 'story_id,viewer_id' })
+  const { error } = await supabase.from('story_views').upsert(
+    { story_id: storyId, viewer_id: viewerId, viewed_at: new Date().toISOString() },
+    { onConflict: 'story_id,viewer_id' },
+  )
+  if (error) throw error
 }
 
 export async function loadStoryViewers(storyId: string, ownerId: string) {

@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react'
 import { Avatar } from './ui'
 import { useAuth } from '../hooks/AuthProvider'
 import { loadActiveStories, type StoryRecord } from '../utils/storyData'
+import { userFacingError } from '../utils/userFacingError'
 
 function preloadStoryMedia(story?: StoryRecord) {
   if (!story?.media_url) return
@@ -52,6 +53,7 @@ export function StoryCard({ story, own = false, muted = false }: { story?: Story
 export function StoriesRail() {
   const { session } = useAuth()
   const [stories, setStories] = useState<StoryRecord[]>([])
+  const [storiesError, setStoriesError] = useState('')
   const [mutedUserIds, setMutedUserIds] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('banjara_connect_muted_stories_v1') || '[]') as string[] } catch { return [] }
   })
@@ -67,9 +69,15 @@ export function StoriesRail() {
     let active = true
     if (!session?.user.id) {
       setStories([])
+      setStoriesError('')
       return () => { active = false }
     }
-    loadActiveStories().then((next) => { if (active) setStories(next) }).catch(() => { if (active) setStories([]) })
+    setStoriesError('')
+    loadActiveStories().then((next) => {
+      if (active) setStories(next)
+    }).catch((caught: unknown) => {
+      if (active) setStoriesError(userFacingError(caught, 'Could not load stories right now.'))
+    })
     return () => { active = false }
   }, [session?.user.id])
   const grouped = Array.from(stories.reduce((map, story) => {
@@ -86,5 +94,5 @@ export function StoriesRail() {
   const otherStories = railStories.filter((story) => story.user_id !== session?.user.id)
     .sort((a, b) => Number(mutedUserIds.includes(a.user_id)) - Number(mutedUserIds.includes(b.user_id)))
 
-  return <section className="stories-rail" aria-labelledby="stories-heading"><div className="section-heading"><div><span className="eyebrow">A LITTLE WINDOW INTO TODAY</span><h2 id="stories-heading">Stories</h2></div><Link to="/stories" className="text-link">See all</Link></div><div className="stories-rail__items"><StoryCard story={ownStory} own />{otherStories.map((story) => <StoryCard key={story.user_id} story={story} muted={mutedUserIds.includes(story.user_id)} />)}</div></section>
+  return <section className="stories-rail" aria-labelledby="stories-heading"><div className="section-heading"><div><span className="eyebrow">A LITTLE WINDOW INTO TODAY</span><h2 id="stories-heading">Stories</h2></div><Link to="/stories" className="text-link">See all</Link></div>{storiesError ? <p className="field__error" role="alert">{storiesError}</p> : <div className="stories-rail__items"><StoryCard story={ownStory} own />{otherStories.map((story) => <StoryCard key={story.user_id} story={story} muted={mutedUserIds.includes(story.user_id)} />)}</div>}</section>
 }
