@@ -2107,6 +2107,14 @@ export function ChatListPage() {
     let active = true
     let requestPending = false
     let refreshQueued = false
+    let realtimeRefreshTimer: number | null = null
+    const scheduleRealtimeRefresh = () => {
+      if (realtimeRefreshTimer !== null) window.clearTimeout(realtimeRefreshTimer)
+      realtimeRefreshTimer = window.setTimeout(() => {
+        realtimeRefreshTimer = null
+        void refresh()
+      }, 250)
+    }
     setError('')
     const cached = session?.user.id ? getCached<Awaited<ReturnType<typeof loadConversations>>>(`chat-list:${session.user.id}`) : null
     if (cached !== null) {
@@ -2146,7 +2154,7 @@ export function ChatListPage() {
     }, () => {
       invalidateConversationListCache()
       if (session?.user.id) invalidateCache(`chat-list:${session.user.id}`)
-      void refresh()
+      scheduleRealtimeRefresh()
     })
     const unsubscribeReads = subscribeToPostgresChanges({
       topic: `chat-list-reads:${session?.user.id}`,
@@ -2156,12 +2164,13 @@ export function ChatListPage() {
     }, () => {
       invalidateConversationListCache()
       if (session?.user.id) invalidateCache(`chat-list:${session.user.id}`)
-      void refresh()
+      scheduleRealtimeRefresh()
     })
     window.addEventListener('focus', refreshWhenVisible)
     document.addEventListener('visibilitychange', refreshWhenVisible)
     return () => {
       active = false
+      if (realtimeRefreshTimer !== null) window.clearTimeout(realtimeRefreshTimer)
       window.removeEventListener('focus', refreshWhenVisible)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
       unsubscribeMessages()
