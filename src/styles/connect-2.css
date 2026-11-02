@@ -464,3 +464,72 @@ html.theme-dark .bottom-nav__more-link.is-active {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Keep dark-mode controls consistent with the shared Banjara palette. */
+html.theme-dark .field__control,
+html.theme-dark .search-bar input,
+html.theme-dark textarea,
+html.theme-dark select {
+  color: var(--bc-text);
+  background: var(--bc-white);
+  border-color: var(--bc-line);
+}
+
+html.theme-dark .field__control::placeholder,
+html.theme-dark .search-bar input::placeholder,
+html.theme-dark textarea::placeholder {
+  color: var(--bc-muted);
+}
+
+html.theme-dark .field__control:focus,
+html.theme-dark .search-bar:focus-within,
+html.theme-dark .connect-search:focus-within {
+  border-color: var(--bc-teal);
+  box-shadow: var(--connect-focus);
+}
+
+html.theme-dark .tabs {
+  background: var(--bc-soft);
+}
+
+html.theme-dark .tabs__item {
+  color: var(--bc-muted);
+}
+
+html.theme-dark .tabs__item.is-active {
+  color: var(--bc-text);
+  background: var(--bc-paper);
+  box-shadow: 0 2px 9px rgb(0 0 0 / 18%);
+}
+
+html.theme-dark .composer__prompt {
+  color: var(--bc-muted);
+  background: var(--bc-white);
+}
+
+html.theme-dark .icon-button:hover,
+html.theme-dark .post-action:hover,
+html.theme-dark .settings-row:hover,
+html.theme-dark .bottom-nav__more-link:hover,
+html.theme-dark .bottom-nav__more-link.is-active {
+  color: var(--bc-text);
+  background: var(--bc-soft);
+}
+
+html.theme-dark .settings-row__icon {
+  color: var(--bc-teal);
+  background: var(--bc-soft);
+}
+
+html.theme-dark .theme-control__choices button {
+  color: var(--bc-muted);
+  background: var(--bc-white);
+  border-color: var(--bc-line);
+}
+
+html.theme-dark .theme-control__choices button.is-active {
+  color: #fff;
+  background: var(--bc-maroon);
+  border-color: var(--bc-maroon);
+}
