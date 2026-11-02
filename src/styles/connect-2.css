@@ -1,35 +1,36 @@
 :root {
   color-scheme: light;
-  --bc-maroon: #742238;
-  --bc-maroon-dark: #511526;
-  --bc-red: #A63C4B;
-  --bc-orange: #B94F2E;
-  --bc-saffron: #C58A24;
-  --bc-gold: #B88B30;
-  --bc-teal: #167775;
-  --bc-green: #426B4D;
-  --bc-cream: #FBF6EB;
-  --bc-paper: #FFFDF7;
+  --bc-maroon: #B21E3B;
+  --bc-maroon-dark: #86132D;
+  --bc-red: #C62848;
+  --bc-orange: #A84310;
+  --bc-saffron: #E7A321;
+  --bc-gold: #B88A28;
+  --bc-teal: #087F83;
+  --bc-green: #326B43;
+  --bc-green-dark: #245333;
+  --bc-cream: #FFF7E9;
+  --bc-paper: #FFFCF5;
   --bc-white: #FFFFFF;
-  --bc-text: #2D211D;
-  --bc-muted: #695A50;
-  --bc-line: #E3D4BD;
-  --bc-soft: #F3E8D8;
-  --bc-shadow: 0 12px 34px rgb(75 30 39 / 10%);
+  --bc-text: #30211C;
+  --bc-muted: #65544A;
+  --bc-line: #E6D0A7;
+  --bc-soft: #FBE8C7;
+  --bc-shadow: 0 12px 34px rgb(105 50 31 / 12%);
   --ink: var(--bc-text);
   --muted: var(--bc-muted);
   --line: var(--bc-line);
   --paper: var(--bc-cream);
   --white: var(--bc-paper);
-  --green: var(--bc-maroon);
-  --green-dark: var(--bc-maroon-dark);
-  --green-soft: var(--bc-soft);
+  --green: var(--bc-green);
+  --green-dark: var(--bc-green-dark);
+  --green-soft: #E4F1E3;
   --red: var(--bc-red);
-  --red-soft: #F6E5E3;
+  --red-soft: #FCE3E8;
   --orange: var(--bc-orange);
-  --orange-soft: #F6E8D8;
+  --orange-soft: #FBE6D5;
   --blue: var(--bc-teal);
-  --blue-soft: #E4F0EC;
+  --blue-soft: #DDF3F0;
   --connect-font-body: 'DM Sans', 'Inter', system-ui, sans-serif;
   --connect-font-display: 'DM Sans', 'Inter', system-ui, sans-serif;
   --connect-space-1: 4px;
@@ -41,36 +42,38 @@
   --connect-card-radius: 18px;
   --connect-control-radius: 12px;
   --connect-surface: var(--bc-paper);
-  --connect-focus: 0 0 0 3px rgb(22 119 117 / 19%);
+  --connect-focus: 0 0 0 3px rgb(8 127 131 / 22%);
 }
 
 html.theme-dark {
   color-scheme: dark;
-  --bc-maroon: #D47A87;
-  --bc-maroon-dark: #EEA0A7;
-  --bc-red: #F07A82;
-  --bc-orange: #E78A56;
-  --bc-saffron: #E6B84D;
-  --bc-gold: #E0BA63;
-  --bc-teal: #67C2B8;
-  --bc-green: #8FBF8C;
-  --bc-cream: #111918;
-  --bc-paper: #19221F;
-  --bc-white: #222D28;
-  --bc-text: #F5EEE2;
-  --bc-muted: #C3B9A8;
-  --bc-line: #3B4940;
-  --bc-soft: #26332D;
-  --bc-shadow: 0 12px 34px rgb(0 0 0 / 34%);
-  --green: var(--bc-maroon);
-  --green-dark: #EEA0A7;
+  --bc-maroon: #F06B7D;
+  --bc-maroon-dark: #FFA0A8;
+  --bc-red: #F16076;
+  --bc-orange: #F08B4C;
+  --bc-saffron: #F3C45C;
+  --bc-gold: #E7C77B;
+  --bc-teal: #62CDC3;
+  --bc-green: #80C78B;
+  --bc-green-dark: #A1D9A5;
+  --bc-cream: #151B18;
+  --bc-paper: #202923;
+  --bc-white: #2C352F;
+  --bc-text: #F8F1E5;
+  --bc-muted: #C8BBA6;
+  --bc-line: #495044;
+  --bc-soft: #313A31;
+  --bc-shadow: 0 12px 34px rgb(0 0 0 / 36%);
+  --green: var(--bc-green);
+  --green-dark: var(--bc-green-dark);
+  --green-soft: #263D2D;
   --red: var(--bc-red);
-  --red-soft: #3A2528;
+  --red-soft: #492930;
   --orange: var(--bc-orange);
-  --orange-soft: #3C2D23;
+  --orange-soft: #443023;
   --blue: var(--bc-teal);
-  --blue-soft: #203532;
-  --connect-focus: 0 0 0 3px rgb(103 194 184 / 24%);
+  --blue-soft: #203B37;
+  --connect-focus: 0 0 0 3px rgb(98 205 195 / 28%);
 }
 
 html,
@@ -87,8 +90,8 @@ html {
 body {
   min-height: 100dvh;
   background:
-    radial-gradient(circle at 8% 0%, rgb(197 138 36 / 7%), transparent 27%),
-    radial-gradient(circle at 94% 8%, rgb(22 119 117 / 5%), transparent 25%),
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--bc-saffron) 9%, transparent), transparent 27%),
+    radial-gradient(circle at 94% 8%, color-mix(in srgb, var(--bc-teal) 7%, transparent), transparent 25%),
     var(--bc-cream);
   color: var(--bc-text);
   text-rendering: optimizeLegibility;
@@ -103,8 +106,8 @@ select {
 
 html.theme-dark body {
   background:
-    radial-gradient(circle at 8% 0%, rgb(230 184 77 / 6%), transparent 27%),
-    radial-gradient(circle at 94% 8%, rgb(103 194 184 / 5%), transparent 25%),
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--bc-saffron) 7%, transparent), transparent 27%),
+    radial-gradient(circle at 94% 8%, color-mix(in srgb, var(--bc-teal) 6%, transparent), transparent 25%),
     var(--bc-cream);
   color: var(--bc-text);
 }
@@ -244,8 +247,12 @@ select:focus-visible {
   outline-offset: 3px;
 }
 
+.brand-mark,
+.brand-lockup__name span {
+  color: var(--bc-maroon);
+}
+
 /* Keep navigation on its existing palette while app surfaces use the new theme. */
-.desktop-nav,
 .bottom-nav {
   --bc-maroon: #7A263A;
   --bc-maroon-dark: #5E1B2C;
@@ -267,7 +274,6 @@ select:focus-visible {
   --blue: #7A263A;
 }
 
-.desktop-nav :focus-visible,
 .bottom-nav :focus-visible {
   outline: 3px solid #d8782f;
   outline-offset: 3px;
@@ -442,7 +448,7 @@ select:focus-visible {
 }
 
 .connect-feature {
-  background: linear-gradient(135deg, #F5E9D8 0%, #F8F1E5 68%, #E6F0E9 100%);
+  background: linear-gradient(135deg, var(--bc-orange-soft) 0%, var(--bc-soft) 68%, var(--green-soft) 100%);
   border-color: var(--bc-line);
 }
 
@@ -453,8 +459,8 @@ select:focus-visible {
 
 .preview-notice {
   color: var(--bc-green);
-  background: #E8F0E7;
-  border-color: #D1E0D0;
+  background: var(--green-soft);
+  border-color: color-mix(in srgb, var(--bc-green) 24%, var(--bc-line));
 }
 
 .preview-notice__dot {
@@ -468,14 +474,14 @@ select:focus-visible {
 }
 
 html.theme-dark .connect-feature {
-  background: linear-gradient(135deg, #302923 0%, #272824 68%, #20302C 100%);
+  background: linear-gradient(135deg, var(--bc-orange-soft) 0%, var(--bc-soft) 68%, var(--green-soft) 100%);
   border-color: var(--bc-line);
 }
 
 html.theme-dark .preview-notice {
-  color: #B9D2B6;
-  background: #26372D;
-  border-color: #405647;
+  color: var(--bc-green);
+  background: var(--green-soft);
+  border-color: color-mix(in srgb, var(--bc-green) 24%, var(--bc-line));
 }
 
 html.theme-dark .theme-control__choices button.is-active {
