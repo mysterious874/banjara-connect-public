@@ -1,9 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Bell, BookOpen, Compass, House, Info, MessageCircle, Plus, Settings, Sparkles, UserRound, Users, Video } from 'lucide-react'
+import { Bell, Compass, House, MessageCircle, Plus, Settings, UserRound, Users } from 'lucide-react'
 import { BrandLockup } from './brand'
 import { Avatar } from './ui'
 import { useAuth } from '../hooks/AuthProvider'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { loadUnreadNotificationCount } from '../utils/notificationData'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadUnreadChatCount } from '../utils/chatData'
@@ -24,16 +24,6 @@ const mobileItems = [
   { to: '/connect', label: 'Connect', icon: Compass },
   { to: '/create', label: 'Create', icon: Plus, emphasized: true },
   { to: '/community', label: 'Community', icon: Users },
-]
-
-const moreItems = [
-  { to: '/notifications', label: 'Notifications', icon: Bell },
-  { to: '/stories', label: 'Stories', icon: BookOpen },
-  { to: '/reels', label: 'Reels', icon: Video },
-  { to: '/assistant', label: 'Assistant', icon: Sparkles },
-  { to: '/profile', label: 'Profile', icon: UserRound },
-  { to: '/settings', label: 'Settings', icon: Settings },
-  { to: '/about', label: 'About Connect', icon: Info },
 ]
 
 export function useUnreadChatCount(sessionUserId: string | undefined, enabled = true) {

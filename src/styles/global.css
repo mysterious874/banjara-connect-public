@@ -1930,7 +1930,39 @@ body { padding-bottom: calc(var(--bc-nav-height) + 24px + env(safe-area-inset-bo
 
 
 /* Banjara Connect — unified light Banjara theme */
-:root{font-family:'DM Sans',system-ui,sans-serif;color-scheme:light;--bc-maroon:#7A263A;--bc-maroon-dark:#5E1B2C;--bc-orange:#C65A32;--bc-gold:#C99A32;--bc-cream:#FAF5EA;--bc-paper:#FFF9EF;--bc-white:#FFF;--bc-text:#2D211D;--bc-muted:#76665D;--bc-line:#DCCDB8;--bc-soft:#F2E7D8;--bc-shadow:0 12px 34px rgb(45 33 29 / 10%);--ink:var(--bc-text);--muted:var(--bc-muted);--line:var(--bc-line);--paper:var(--bc-cream);--white:var(--bc-paper);--green:var(--bc-maroon);--green-dark:var(--bc-maroon-dark);--green-soft:var(--bc-soft);--red:var(--bc-maroon);--red-soft:#F5E2E6;--orange:var(--bc-orange);--orange-soft:#F6E6DA;--blue:var(--bc-maroon);--blue-soft:#F0E4DD}
+:root {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color-scheme: light;
+  --bc-maroon: #c4163a;
+  --bc-maroon-dark: #8f102d;
+  --bc-orange: #a84a00;
+  --bc-saffron: #f3af23;
+  --bc-teal: #00717a;
+  --bc-green: #2d6d3e;
+  --bc-gold: #aa761c;
+  --bc-cream: #fff7e8;
+  --bc-paper: #fffdf7;
+  --bc-white: #fff;
+  --bc-text: #38231e;
+  --bc-muted: #68544d;
+  --bc-line: #e5cfac;
+  --bc-soft: #f8e8d2;
+  --bc-shadow: 0 12px 34px rgb(73 25 35 / 12%);
+  --ink: var(--bc-text);
+  --muted: var(--bc-muted);
+  --line: var(--bc-line);
+  --paper: var(--bc-cream);
+  --white: var(--bc-paper);
+  --green: var(--bc-maroon);
+  --green-dark: var(--bc-maroon-dark);
+  --green-soft: var(--bc-soft);
+  --red: var(--bc-maroon);
+  --red-soft: #f9e3e7;
+  --orange: var(--bc-orange);
+  --orange-soft: #fff0cc;
+  --blue: var(--bc-teal);
+  --blue-soft: #ddf2ef;
+}
 html{background:var(--bc-cream)}body{min-height:100dvh;background:radial-gradient(circle at 7% 0%,rgb(198 90 50 / 7%),transparent 27%),radial-gradient(circle at 94% 8%,rgb(122 38 58 / 6%),transparent 25%),var(--bc-cream);color:var(--bc-text)}
 body::before{position:fixed;z-index:-1;inset:0;pointer-events:none;content:'';opacity:.22;background-image:linear-gradient(45deg,transparent 46%,rgb(201 154 50 / 8%) 47%,rgb(201 154 50 / 8%) 53%,transparent 54%),linear-gradient(-45deg,transparent 46%,rgb(198 90 50 / 6%) 47%,rgb(198 90 50 / 6%) 53%,transparent 54%);background-size:38px 38px}
 a{color:inherit}:focus-visible{outline-color:var(--bc-gold)}
@@ -2038,23 +2070,35 @@ button, input, textarea, select { font-size: 16px; }
 /* Banjara Connect — app-wide dark mode */
 html.theme-dark {
   color-scheme: dark;
-  --bc-cream:#0d1117;
-  --bc-paper:#151b23;
-  --bc-white:#1b232d;
-  --bc-text:#f1f5f9;
-  --bc-muted:#a8b3bf;
-  --bc-line:#2b3642;
-  --bc-soft:#202b36;
-  --bc-shadow:0 12px 34px rgb(0 0 0 / 35%);
-  --ink:var(--bc-text);
-  --muted:var(--bc-muted);
-  --line:var(--bc-line);
-  --paper:var(--bc-cream);
-  --white:var(--bc-paper);
-  --green-soft:var(--bc-soft);
-  --red-soft:var(--bc-soft);
-  --orange-soft:#33281d;
-  --blue-soft:#222b36;
+  --bc-maroon: #c7344f;
+  --bc-maroon-dark: #ef667e;
+  --bc-orange: #f4a51c;
+  --bc-saffron: #ffc34d;
+  --bc-teal: #62cbc4;
+  --bc-green: #86c98b;
+  --bc-gold: #d9b34f;
+  --bc-cream: #171316;
+  --bc-paper: #221a1e;
+  --bc-white: #2c2226;
+  --bc-text: #f8eff1;
+  --bc-muted: #c4adb4;
+  --bc-line: #523842;
+  --bc-soft: #36252d;
+  --bc-shadow: 0 12px 34px rgb(0 0 0 / 35%);
+  --ink: var(--bc-text);
+  --muted: var(--bc-muted);
+  --line: var(--bc-line);
+  --paper: var(--bc-cream);
+  --white: var(--bc-paper);
+  --green: var(--bc-maroon);
+  --green-dark: var(--bc-maroon-dark);
+  --green-soft: var(--bc-soft);
+  --red: var(--bc-maroon);
+  --red-soft: var(--bc-soft);
+  --orange: var(--bc-orange);
+  --orange-soft: #44351f;
+  --blue: var(--bc-teal);
+  --blue-soft: #203d3b;
 }
 html.theme-dark body {
   background:radial-gradient(circle at 8% 0%,rgb(216 120 47 / 7%),transparent 28%),var(--bc-cream);
