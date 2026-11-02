@@ -4075,24 +4075,21 @@ export function ChangePasswordPage() {
 
 export function PrivacyPage() {
   const [privateProfile, setPrivateProfile] = useState(false)
-  const { profile, isProfileLoading, profileError, updateProfile } = useAuth()
+  const { profile, isProfileLoading, profileError, hideActivityStatus, activityStatusError, updateActivityStatusPrivacy } = useAuth()
   const [isSavingActivityStatus, setIsSavingActivityStatus] = useState(false)
-  const [activityStatusError, setActivityStatusError] = useState('')
-  const activityStatusEnabled = profile ? !profile.hide_activity_status : false
+  const activityStatusEnabled = hideActivityStatus === false
 
   async function toggleActivityStatus() {
-    if (!profile || isSavingActivityStatus) return
+    if (!profile || hideActivityStatus === null || isSavingActivityStatus) return
     setIsSavingActivityStatus(true)
-    setActivityStatusError('')
     try {
-      const { error } = await updateProfile({ hide_activity_status: activityStatusEnabled })
-      if (error) setActivityStatusError(error)
+      await updateActivityStatusPrivacy(activityStatusEnabled)
     } finally {
       setIsSavingActivityStatus(false)
     }
   }
 
-  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="YOUR SPACE, YOUR CHOICE" title="Privacy & security" description="Choose whether people can see when you are online or using the app." /><PreviewNotice>PROFILE VISIBILITY IS A PREVIEW; ACTIVITY STATUS IS SAVED</PreviewNotice><div className="settings-group"><h2>Profile visibility</h2><div className="preference-row"><span><strong>Private profile</strong><small>Preview only; this does not limit who can see your profile or posts.</small></span><button type="button" className={`toggle${privateProfile ? ' is-on' : ''}`} role="switch" aria-checked={privateProfile} aria-label="Private profile preview" onClick={() => setPrivateProfile(!privateProfile)}><span /></button></div><div className="preference-row"><span><strong>Show activity status</strong><small>When off, other people cannot see your online or active presence.</small></span><button type="button" className={`toggle${activityStatusEnabled ? ' is-on' : ''}`} role="switch" aria-checked={activityStatusEnabled} aria-label="Show activity status" disabled={!profile || isProfileLoading || isSavingActivityStatus} onClick={() => void toggleActivityStatus()}><span /></button></div>{(activityStatusError || profileError) && <p className="field__error" role="alert">{activityStatusError || profileError}</p>}{isProfileLoading && <p className="micro-note" role="status">Loading privacy settings…</p>}</div><div className="settings-group"><h2>Safety</h2><Link className="settings-row" to="/settings/blocked"><span className="settings-row__icon"><LockKeyhole size={18} /></span><span><strong>Blocked users</strong><small>Review profiles you have blocked</small></span><ChevronRight size={18} /></Link><Link className="settings-row" to="/report"><span className="settings-row__icon"><CircleHelp size={18} /></span><span><strong>Report a concern</strong><small>Let the team know what feels wrong</small></span></Link></div></section>
+  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="YOUR SPACE, YOUR CHOICE" title="Privacy & security" description="Choose whether people can see when you are online or using the app." /><PreviewNotice>PROFILE VISIBILITY IS A PREVIEW; ACTIVITY STATUS IS SAVED</PreviewNotice><div className="settings-group"><h2>Profile visibility</h2><div className="preference-row"><span><strong>Private profile</strong><small>Preview only; this does not limit who can see your profile or posts.</small></span><button type="button" className={`toggle${privateProfile ? ' is-on' : ''}`} role="switch" aria-checked={privateProfile} aria-label="Private profile preview" onClick={() => setPrivateProfile(!privateProfile)}><span /></button></div><div className="preference-row"><span><strong>Show activity status</strong><small>When off, other people cannot see your online or active presence.</small></span><button type="button" className={`toggle${activityStatusEnabled ? ' is-on' : ''}`} role="switch" aria-checked={activityStatusEnabled} aria-label="Show activity status" disabled={!profile || isProfileLoading || hideActivityStatus === null || isSavingActivityStatus} onClick={() => void toggleActivityStatus()}><span /></button></div>{(activityStatusError || profileError) && <p className="field__error" role="alert">{activityStatusError || profileError}</p>}{(isProfileLoading || (hideActivityStatus === null && !activityStatusError)) && <p className="micro-note" role="status">Loading privacy settings…</p>}</div><div className="settings-group"><h2>Safety</h2><Link className="settings-row" to="/settings/blocked"><span className="settings-row__icon"><LockKeyhole size={18} /></span><span><strong>Blocked users</strong><small>Review profiles you have blocked</small></span><ChevronRight size={18} /></Link><Link className="settings-row" to="/report"><span className="settings-row__icon"><CircleHelp size={18} /></span><span><strong>Report a concern</strong><small>Let the team know what feels wrong</small></span></Link></div></section>
 }
 
 export function BlockedUsersPage() {
