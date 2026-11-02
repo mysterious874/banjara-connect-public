@@ -33,8 +33,8 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        theme_color: '#7A263A',
-        background_color: '#FAF5EA',
+        theme_color: '#C4163A',
+        background_color: '#FFF7E8',
         icons: [
           { src: '/banjara-mark.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           { src: '/banjara-mark-maskable.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },

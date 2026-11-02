@@ -535,47 +535,16 @@ html.theme-dark .theme-control__choices button.is-active {
 }
 
 
-/* Banjara palette refresh — visible app-wide colour system, layout untouched. */
-:root {
-  --bc-maroon: #741d35;
-  --bc-maroon-dark: #4f1428;
-  --bc-orange: #e58a27;
-  --bc-teal: #147d78;
-  --bc-green: #285943;
-  --bc-cream: #fff8ec;
-  --bc-paper: #fffdf7;
-  --bc-white: #ffffff;
-  --bc-text: #2b2020;
-  --bc-muted: #766a66;
-  --bc-line: #ead9c7;
-  --bc-soft: #f5e8dc;
-  --bc-shadow: 0 12px 34px rgb(79 20 40 / 12%);
-  --ink: var(--bc-text);
-  --muted: var(--bc-muted);
-  --line: var(--bc-line);
-  --paper: var(--bc-cream);
-  --white: var(--bc-paper);
-  --green: var(--bc-maroon);
-  --green-dark: var(--bc-maroon-dark);
-  --green-soft: var(--bc-soft);
-  --red: var(--bc-maroon);
-  --red-soft: var(--bc-soft);
-  --orange: var(--bc-orange);
-  --orange-soft: #f9ead5;
-  --blue: var(--bc-teal);
-  --blue-soft: #e2f1ed;
-  --shadow: var(--bc-shadow);
-}
-
+/* High-visibility Banjara accents; the shared palette is defined in global.css. */
 body {
   background:
-    radial-gradient(circle at 8% 0%, rgb(229 138 39 / 12%), transparent 30%),
-    radial-gradient(circle at 96% 14%, rgb(20 125 120 / 6%), transparent 26%),
+    radial-gradient(circle at 8% 0%, rgb(243 175 35 / 18%), transparent 30%),
+    radial-gradient(circle at 96% 14%, rgb(0 113 122 / 10%), transparent 26%),
     var(--bc-cream);
   color: var(--bc-text);
 }
 .topbar {
-  background: rgb(255 248 236 / 94%);
+  background: color-mix(in srgb, var(--bc-paper) 94%, transparent);
   border-bottom-color: var(--bc-line);
 }
 .icon-button { color: var(--bc-maroon); }
@@ -597,80 +566,72 @@ body {
 .text-link, .eyebrow, .brand-lockup__name span { color: var(--bc-maroon); }
 .field__control:focus, .search-bar:focus-within, .connect-search:focus-within {
   border-color: var(--bc-teal);
-  box-shadow: 0 0 0 3px rgb(20 125 120 / 14%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bc-teal) 18%, transparent);
 }
-.tabs { background: #f2e5d8; }
+.tabs { background: var(--bc-soft); }
 .tabs__item.is-active {
-  color: var(--bc-maroon-dark);
-  background: var(--bc-paper);
-  box-shadow: 0 2px 8px rgb(116 29 53 / 12%);
+  color: #fff;
+  background: var(--bc-maroon);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--bc-maroon) 22%, transparent);
 }
 .composer, .post-card, .stories-rail, .settings-group, .settings-row,
 .community-card, .community-group-card, .notification-card, .user-card {
   border-color: var(--bc-line);
 }
-.composer__prompt { background: #f4ece2; color: var(--bc-muted); }
+.composer__prompt { background: var(--bc-soft); color: var(--bc-muted); }
 .post-action:hover, .settings-row:hover { color: var(--bc-maroon); background: var(--bc-soft); }
 .bottom-nav {
-  background: rgb(255 253 247 / 97%);
+  background: color-mix(in srgb, var(--bc-paper) 97%, transparent);
   border-top-color: var(--bc-line);
 }
-.bottom-nav__item { color: #84736e; }
-.bottom-nav__item.is-active { color: var(--bc-maroon); }
+.bottom-nav__item { color: var(--bc-muted); }
+.bottom-nav__item.is-active {
+  color: var(--bc-maroon);
+  background: color-mix(in srgb, var(--bc-maroon) 10%, transparent);
+}
 .bottom-nav__item--create .bottom-nav__icon {
-  color: #fff;
-  background: var(--bc-orange);
+  color: #38231e;
+  background: var(--bc-saffron);
   border-color: var(--bc-paper);
-  box-shadow: 0 3px 12px rgb(229 138 39 / 28%);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--bc-saffron) 38%, transparent);
 }
 .bottom-nav__item--create { color: var(--bc-maroon); }
 .avatar--blue { background: var(--bc-teal); }
-:focus-visible { outline-color: var(--bc-orange); }
+.story-card__ring { border-color: var(--bc-saffron); }
+.story-card--unread .story-card__ring { border-color: var(--bc-maroon); }
+:focus-visible { outline-color: var(--bc-saffron); }
 
-html.theme-dark {
-  --bc-maroon: #e5a0ad;
-  --bc-maroon-dark: #f1c1c9;
-  --bc-orange: #f0a64d;
-  --bc-teal: #63c5bd;
-  --bc-green: #78ad8c;
-  --bc-cream: #171316;
-  --bc-paper: #211a1e;
-  --bc-white: #292126;
-  --bc-text: #f6edf0;
-  --bc-muted: #c0afb5;
-  --bc-line: #49343d;
-  --bc-soft: #34252c;
-  --bc-shadow: 0 12px 34px rgb(0 0 0 / 28%);
-  --ink: var(--bc-text);
-  --muted: var(--bc-muted);
-  --line: var(--bc-line);
-  --paper: var(--bc-cream);
-  --white: var(--bc-paper);
-  --green: var(--bc-maroon);
-  --green-dark: var(--bc-maroon-dark);
-  --green-soft: var(--bc-soft);
-  --red: var(--bc-maroon);
-  --red-soft: var(--bc-soft);
-  --orange: var(--bc-orange);
-  --orange-soft: #443126;
-  --blue: var(--bc-teal);
-  --blue-soft: #203b39;
+html.theme-dark .topbar,
+html.theme-dark .bottom-nav {
+  background: color-mix(in srgb, var(--bc-paper) 96%, transparent);
 }
 html.theme-dark body {
   background:
-    radial-gradient(circle at 8% 0%, rgb(229 138 39 / 9%), transparent 30%),
-    radial-gradient(circle at 96% 14%, rgb(99 197 189 / 7%), transparent 26%),
+    radial-gradient(circle at 8% 0%, rgb(255 195 77 / 11%), transparent 30%),
+    radial-gradient(circle at 96% 14%, rgb(98 203 196 / 9%), transparent 26%),
     var(--bc-cream);
   color: var(--bc-text);
 }
-html.theme-dark .topbar { background: rgb(33 26 30 / 94%); border-bottom-color: var(--bc-line); }
-html.theme-dark .bottom-nav { background: rgb(33 26 30 / 97%); border-top-color: var(--bc-line); }
+html.theme-dark .topbar { border-bottom-color: var(--bc-line); }
+html.theme-dark .bottom-nav { border-top-color: var(--bc-line); }
 html.theme-dark .bottom-nav__item { color: var(--bc-muted); }
-html.theme-dark .bottom-nav__item.is-active { color: var(--bc-maroon); }
-html.theme-dark .bottom-nav__item--create .bottom-nav__icon { background: var(--bc-orange); border-color: var(--bc-paper); }
+html.theme-dark .bottom-nav__item.is-active {
+  color: var(--bc-maroon-dark);
+  background: color-mix(in srgb, var(--bc-maroon) 18%, transparent);
+}
+html.theme-dark .bottom-nav__item--create .bottom-nav__icon {
+  color: #38231e;
+  background: var(--bc-saffron);
+  border-color: var(--bc-paper);
+}
 html.theme-dark .button:not(.button--outline):not(.button--quiet):not(.button--danger) {
-  color: #2b2020; background: var(--bc-orange); border-color: var(--bc-orange);
+  color: #38231e; background: var(--bc-saffron); border-color: var(--bc-saffron);
 }
 html.theme-dark .button:not(.button--outline):not(.button--quiet):not(.button--danger):hover:not(:disabled) {
-  background: #f5b969; border-color: #f5b969;
+  background: #ffd16b; border-color: #ffd16b;
+}
+html.theme-dark .button--quiet { color: var(--bc-teal); }
+html.theme-dark .tabs__item.is-active {
+  color: #fff;
+  background: var(--bc-maroon);
 }
