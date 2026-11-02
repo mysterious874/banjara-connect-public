@@ -1,0 +1,3 @@
+-- Superseded by 20261102100000_move_activity_status_to_private_settings.sql.
+-- Keep this migration version because some preview databases may have applied
+-- the original profile-column implementation.

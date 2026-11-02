@@ -8,6 +8,24 @@ import { unregisterPushNotifications } from '../utils/pushNotifications'
 
 const profileColumns = 'id,username,display_name,avatar_url,bio,location,is_verified'
 
+async function loadOrCreateActivityPrivacy(userId: string): Promise<boolean> {
+  const load = () => supabase.from('user_privacy_settings')
+    .select('hide_activity_status').eq('user_id', userId).maybeSingle()
+  const { data, error } = await load()
+  if (error) throw error
+  if (data) return data.hide_activity_status
+
+  const { data: created, error: createError } = await supabase.from('user_privacy_settings')
+    .insert({ user_id: userId }).select('hide_activity_status').single()
+  if (!createError && created) return created.hide_activity_status
+  if (createError?.code === '23505') {
+    const retry = await load()
+    if (retry.data && !retry.error) return retry.data.hide_activity_status
+    if (retry.error) throw retry.error
+  }
+  throw createError ?? new Error('Could not create your privacy settings.')
+}
+
 async function loadOrCreateProfile(user: User): Promise<ProfileRecord> {
   const { data, error } = await supabase.from('profiles').select(profileColumns).eq('id', user.id).maybeSingle()
   if (error) throw error
@@ -48,10 +66,13 @@ type AuthContextValue = {
   profile: ProfileRecord | null
   isProfileLoading: boolean
   profileError: string | null
+  hideActivityStatus: boolean | null
+  activityStatusError: string | null
   onlineUserIds: Set<string>
   activeUserIds: Set<string>
   refreshProfile: () => Promise<ProfileRecord | null>
   updateProfile: (updates: ProfileUpdate) => Promise<{ data: ProfileRecord | null; error: string | null }>
+  updateActivityStatusPrivacy: (hide: boolean) => Promise<{ error: string | null }>
   signOut: () => Promise<{ error: AuthError | null }>
 }
 
@@ -64,6 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<ProfileRecord | null>(null)
   const [isProfileLoading, setIsProfileLoading] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [hideActivityStatus, setHideActivityStatus] = useState<boolean | null>(null)
+  const [activityStatusError, setActivityStatusError] = useState<string | null>(null)
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set())
   const [activeUserIds, setActiveUserIds] = useState<Set<string>>(new Set())
 
@@ -106,10 +129,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const user = session?.user
 
+  useEffect(() => {
+    let active = true
+    let changeVersion = 0
+    if (!user?.id) {
+      setHideActivityStatus(null)
+      setActivityStatusError(null)
+      return () => { active = false }
+    }
+
+    setHideActivityStatus(null)
+    setActivityStatusError(null)
+    const channel = supabase.channel(`privacy-settings:${user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'user_privacy_settings',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        if (payload.eventType === 'DELETE') return
+        const hideActivityStatus = payload.new.hide_activity_status
+        if (typeof hideActivityStatus !== 'boolean') return
+        changeVersion += 1
+        setHideActivityStatus(hideActivityStatus)
+        setActivityStatusError(null)
+      })
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          if (active) {
+            setHideActivityStatus(null)
+            setActivityStatusError('Live privacy updates are unavailable. Presence sharing is paused until privacy can be verified.')
+          }
+          return
+        }
+        const requestVersion = changeVersion
+        void loadOrCreateActivityPrivacy(user.id).then((hide) => {
+          if (!active || changeVersion !== requestVersion) return
+          setHideActivityStatus(hide)
+          setActivityStatusError(null)
+        }).catch((error: unknown) => {
+          if (!active || changeVersion !== requestVersion) return
+          setHideActivityStatus(null)
+          setActivityStatusError(userFacingError(error, 'Could not load your activity privacy setting.'))
+        })
+      })
+    return () => {
+      active = false
+      void supabase.removeChannel(channel).catch((error: unknown) => {
+        console.error('Could not remove privacy settings channel.', error)
+      })
+    }
+  }, [user?.id])
+
   // App-wide presence: internet ON keeps the user online even when the app is backgrounded.
   // The presence payload separately tells us whether the app is currently visible.
   useEffect(() => {
-    if (!user?.id) {
+    if (!user?.id || profile?.id !== user.id || hideActivityStatus !== false) {
       setOnlineUserIds(new Set())
       setActiveUserIds(new Set())
       return
@@ -143,12 +218,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
       try {
+        const hide = await loadOrCreateActivityPrivacy(user.id)
+        if (!active) {
+          await channel.untrack()
+          return
+        }
+        setHideActivityStatus(hide)
+        if (hide) {
+          await channel.untrack()
+          return
+        }
         await channel.track({
           userId: user.id,
           inApp: document.visibilityState === 'visible',
           online_at: new Date().toISOString(),
         })
-      } catch { /* realtime reconnect handles this */ }
+      } catch (error) {
+        try { await channel.untrack() } catch { /* already disconnected */ }
+        setHideActivityStatus(null)
+        setActivityStatusError(userFacingError(error, 'Could not verify your activity privacy setting.'))
+        console.error('Could not verify activity privacy before sharing presence.', error)
+      }
     }
     const handleVisibility = () => { void track() }
     const handleOnline = () => { void track() }
@@ -186,7 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setOnlineUserIds(new Set())
       setActiveUserIds(new Set())
     }
-  }, [user?.id])
+  }, [hideActivityStatus, profile?.id, user?.id])
 
   useEffect(() => {
     let active = true
@@ -245,6 +335,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const nextProfile = data as ProfileRecord
       setProfile(nextProfile)
+      setCached(`current-profile:${user.id}`, nextProfile, 120_000)
+      setCached('current-profile', nextProfile, 120_000)
       return { data: nextProfile, error: null }
     } catch (error) {
       const message = userFacingError(error, 'Could not update your profile.')
@@ -255,12 +347,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function updateActivityStatusPrivacy(hide: boolean) {
+    if (!user) return { error: 'You must be signed in to update privacy settings.' }
+    setActivityStatusError(null)
+    try {
+      await loadOrCreateActivityPrivacy(user.id)
+      const { data, error } = await supabase.from('user_privacy_settings')
+        .update({ hide_activity_status: hide, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id).select('hide_activity_status').single()
+      if (error) throw error
+      setHideActivityStatus(data.hide_activity_status)
+      return { error: null }
+    } catch (error) {
+      const message = userFacingError(error, 'Could not update your activity privacy setting.')
+      setActivityStatusError(message)
+      return { error: message }
+    }
+  }
+
   async function signOut() {
     await unregisterPushNotifications()
     return supabase.auth.signOut()
   }
 
-  return <AuthContext.Provider value={{ session, isLoading, initializationError, profile, isProfileLoading, profileError, onlineUserIds, activeUserIds, refreshProfile, updateProfile, signOut }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ session, isLoading, initializationError, profile, isProfileLoading, profileError, hideActivityStatus, activityStatusError, onlineUserIds, activeUserIds, refreshProfile, updateProfile, updateActivityStatusPrivacy, signOut }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
