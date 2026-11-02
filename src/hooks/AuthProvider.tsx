@@ -6,7 +6,7 @@ import type { ProfileRecord, ProfileUpdate } from '../types/app'
 import { getCached, setCached } from '../utils/performanceCache'
 import { unregisterPushNotifications } from '../utils/pushNotifications'
 
-const profileColumns = 'id,username,display_name,avatar_url,bio,location,is_verified'
+const profileColumns = 'id,username,display_name,avatar_url,bio,location,is_verified,hide_activity_status'
 
 async function loadOrCreateProfile(user: User): Promise<ProfileRecord> {
   const { data, error } = await supabase.from('profiles').select(profileColumns).eq('id', user.id).maybeSingle()
@@ -106,10 +106,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const user = session?.user
 
+  useEffect(() => {
+    if (!user?.id) return
+    const channel = supabase.channel(`activity-status:${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${user.id}`,
+      }, (payload) => {
+        const hideActivityStatus = payload.new.hide_activity_status
+        if (typeof hideActivityStatus !== 'boolean') return
+        setProfile((current) => current?.id === user.id
+          ? { ...current, hide_activity_status: hideActivityStatus }
+          : current)
+      })
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel).catch((error: unknown) => {
+        console.error('Could not remove activity privacy channel.', error)
+      })
+    }
+  }, [user?.id])
+
   // App-wide presence: internet ON keeps the user online even when the app is backgrounded.
   // The presence payload separately tells us whether the app is currently visible.
   useEffect(() => {
-    if (!user?.id) {
+    if (!user?.id || profile?.id !== user.id || profile.hide_activity_status) {
       setOnlineUserIds(new Set())
       setActiveUserIds(new Set())
       return
@@ -143,12 +166,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
       try {
+        const { data, error } = await supabase.from('profiles')
+          .select('hide_activity_status').eq('id', user.id).maybeSingle()
+        if (error) throw error
+        if (!data) throw new Error('Could not verify your activity privacy setting.')
+        if (!active) {
+          await channel.untrack()
+          return
+        }
+        setProfile((current) => current?.id === user.id
+          ? { ...current, hide_activity_status: data.hide_activity_status }
+          : current)
+        if (data.hide_activity_status) {
+          await channel.untrack()
+          return
+        }
         await channel.track({
           userId: user.id,
           inApp: document.visibilityState === 'visible',
           online_at: new Date().toISOString(),
         })
-      } catch { /* realtime reconnect handles this */ }
+      } catch (error) {
+        try { await channel.untrack() } catch { /* already disconnected */ }
+        console.error('Could not verify activity privacy before sharing presence.', error)
+      }
     }
     const handleVisibility = () => { void track() }
     const handleOnline = () => { void track() }
@@ -186,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setOnlineUserIds(new Set())
       setActiveUserIds(new Set())
     }
-  }, [user?.id])
+  }, [profile?.hide_activity_status, profile?.id, user?.id])
 
   useEffect(() => {
     let active = true
@@ -245,6 +286,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const nextProfile = data as ProfileRecord
       setProfile(nextProfile)
+      setCached(`current-profile:${user.id}`, nextProfile, 120_000)
+      setCached('current-profile', nextProfile, 120_000)
       return { data: nextProfile, error: null }
     } catch (error) {
       const message = userFacingError(error, 'Could not update your profile.')

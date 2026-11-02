@@ -9,7 +9,6 @@ import { StoriesRail, markStoryViewed } from '../components/stories'
 import { Avatar, Button, ConfirmationDialog, EmptyState, ErrorState, Input, Loading, Modal, useBodyScrollLock } from '../components/ui'
 import { UserCard } from '../components/users'
 import { useAuth } from '../hooks/AuthProvider'
-import { usePreviewToast } from '../hooks/usePreviewToast'
 import { loadBlockState, loadBlockedUserIds, toggleBlock } from '../utils/blockData'
 import { loadPost, loadPostsPage } from '../utils/postData'
 import { filterProfiles, loadProfiles, loadProfilesPage, searchProfilesByUsername } from '../utils/profileData'
@@ -24,7 +23,7 @@ import { createStory, deleteStory, loadActiveStories, loadStoryViewers, recordSt
 import { userFacingError } from '../utils/userFacingError'
 import { getPushNotificationStatus, registerPushNotifications, unregisterPushNotifications, type PushNotificationStatus } from '../utils/pushNotifications'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
-import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
+import { loadNotifications, markNotificationRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
 import { deleteMessageForEveryone, deleteMessageForMe, hydrateConversationMediaUrls, invalidateConversationListCache, loadConversation, loadConversationMessages, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
@@ -3700,12 +3699,6 @@ export function NotificationsPage() {
             setNotifications(rows)
             setError('')
           }
-          if (rows.some((row) => !row.is_read)) {
-            await markAllNotificationsRead()
-            if (active) {
-              setNotifications((current) => current.map((item) => ({ ...item, is_read: true })))
-            }
-          }
         } catch (caught) {
           if (active) setError(userFacingError(caught, 'Could not load notifications.'))
         } finally {
@@ -4082,8 +4075,24 @@ export function ChangePasswordPage() {
 
 export function PrivacyPage() {
   const [privateProfile, setPrivateProfile] = useState(false)
-  const [activityStatus, setActivityStatus] = useState(true)
-  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="YOUR SPACE, YOUR CHOICE" title="Privacy & security" description="These preference switches are visual previews and do not change account privacy." /><PreviewNotice>LOCAL UI STATE · NO ACCOUNT SETTINGS ARE SAVED</PreviewNotice><div className="settings-group"><h2>Profile visibility</h2><div className="preference-row"><span><strong>Private profile</strong><small>Preview only; this does not limit who can see your profile or posts.</small></span><button type="button" className={`toggle${privateProfile ? ' is-on' : ''}`} role="switch" aria-checked={privateProfile} aria-label="Private profile preview" onClick={() => setPrivateProfile(!privateProfile)}><span /></button></div><div className="preference-row"><span><strong>Show activity status</strong><small>Preview only; activity status is not shared or saved.</small></span><button type="button" className={`toggle${activityStatus ? ' is-on' : ''}`} role="switch" aria-checked={activityStatus} aria-label="Show activity status preview" onClick={() => setActivityStatus(!activityStatus)}><span /></button></div></div><div className="settings-group"><h2>Safety</h2><Link className="settings-row" to="/settings/blocked"><span className="settings-row__icon"><LockKeyhole size={18} /></span><span><strong>Blocked users</strong><small>Review profiles you have blocked</small></span><ChevronRight size={18} /></Link><Link className="settings-row" to="/report"><span className="settings-row__icon"><CircleHelp size={18} /></span><span><strong>Report a concern</strong><small>Let the team know what feels wrong</small></span><ChevronRight size={18} /></Link></div></section>
+  const { profile, isProfileLoading, profileError, updateProfile } = useAuth()
+  const [isSavingActivityStatus, setIsSavingActivityStatus] = useState(false)
+  const [activityStatusError, setActivityStatusError] = useState('')
+  const activityStatusEnabled = profile ? !profile.hide_activity_status : false
+
+  async function toggleActivityStatus() {
+    if (!profile || isSavingActivityStatus) return
+    setIsSavingActivityStatus(true)
+    setActivityStatusError('')
+    try {
+      const { error } = await updateProfile({ hide_activity_status: activityStatusEnabled })
+      if (error) setActivityStatusError(error)
+    } finally {
+      setIsSavingActivityStatus(false)
+    }
+  }
+
+  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="YOUR SPACE, YOUR CHOICE" title="Privacy & security" description="Choose whether people can see when you are online or using the app." /><PreviewNotice>PROFILE VISIBILITY IS A PREVIEW; ACTIVITY STATUS IS SAVED</PreviewNotice><div className="settings-group"><h2>Profile visibility</h2><div className="preference-row"><span><strong>Private profile</strong><small>Preview only; this does not limit who can see your profile or posts.</small></span><button type="button" className={`toggle${privateProfile ? ' is-on' : ''}`} role="switch" aria-checked={privateProfile} aria-label="Private profile preview" onClick={() => setPrivateProfile(!privateProfile)}><span /></button></div><div className="preference-row"><span><strong>Show activity status</strong><small>When off, other people cannot see your online or active presence.</small></span><button type="button" className={`toggle${activityStatusEnabled ? ' is-on' : ''}`} role="switch" aria-checked={activityStatusEnabled} aria-label="Show activity status" disabled={!profile || isProfileLoading || isSavingActivityStatus} onClick={() => void toggleActivityStatus()}><span /></button></div>{(activityStatusError || profileError) && <p className="field__error" role="alert">{activityStatusError || profileError}</p>}{isProfileLoading && <p className="micro-note" role="status">Loading privacy settings…</p>}</div><div className="settings-group"><h2>Safety</h2><Link className="settings-row" to="/settings/blocked"><span className="settings-row__icon"><LockKeyhole size={18} /></span><span><strong>Blocked users</strong><small>Review profiles you have blocked</small></span><ChevronRight size={18} /></Link><Link className="settings-row" to="/report"><span className="settings-row__icon"><CircleHelp size={18} /></span><span><strong>Report a concern</strong><small>Let the team know what feels wrong</small></span></Link></div></section>
 }
 
 export function BlockedUsersPage() {
@@ -4170,9 +4179,7 @@ export function ReportPage() {
 }
 
 export function DeleteAccountPage() {
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const { notify } = usePreviewToast()
-  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="ACCOUNT OPTIONS" title="Account deletion" description="Account deletion is not connected to a verified backend flow." /><PreviewNotice>ACCOUNT DELETION IS NOT AVAILABLE</PreviewNotice><div className="warning-panel"><LockKeyhole size={20} /><div><strong>Nothing will be deleted</strong><p>This app uses authenticated accounts, but no verified account-deletion backend is available. This confirmation is visual only.</p></div></div><Button variant="danger" onClick={() => setConfirmOpen(true)}>Preview deletion confirmation</Button><ConfirmationDialog open={confirmOpen} title="Delete preview account?" description="This is only a UI preview. No account or data will be deleted." confirmLabel="Close preview" onClose={() => setConfirmOpen(false)} onConfirm={() => { setConfirmOpen(false); notify('No account was deleted. This is a frontend preview.') }} /></section>
+  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="ACCOUNT OPTIONS" title="Account deletion" description="Account deletion is not available in this app yet." /><PreviewNotice>NO ACCOUNT OR DATA WILL BE DELETED</PreviewNotice><div className="warning-panel"><LockKeyhole size={20} /><div><strong>A secure deletion service is required</strong><p>This repository has no verified account-deletion backend. Before deletion can be offered, a server-side function must verify the signed-in user and derive the account ID from that session, remove or retain the user's records and uploaded media according to a documented policy, and delete the Supabase Auth account with retryable handling for partial failures. No deletion action is available here.</p></div></div></section>
 }
 
 export function AboutPage() {

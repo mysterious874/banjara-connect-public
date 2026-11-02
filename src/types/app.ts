@@ -29,9 +29,10 @@ export type ProfileRecord = {
   bio: string | null
   location: string | null
   is_verified: boolean
+  hide_activity_status?: boolean
 }
 
-export type ProfileUpdate = Partial<Pick<ProfileRecord, 'username' | 'display_name' | 'avatar_url' | 'bio' | 'location'>>
+export type ProfileUpdate = Partial<Pick<ProfileRecord, 'username' | 'display_name' | 'avatar_url' | 'bio' | 'location' | 'hide_activity_status'>>
 
 export type PostRecord = {
   id: string
