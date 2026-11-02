@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Bell, Compass, Ellipsis, House, MessageCircle, Plus, Settings, UserRound, Users } from 'lucide-react'
+import { Bell, Compass, House, MessageCircle, Plus, Settings, UserRound, Users } from 'lucide-react'
 import { BrandLockup } from './brand'
 import { Avatar } from './ui'
 import { useAuth } from '../hooks/AuthProvider'
@@ -25,7 +25,7 @@ const mobileItems = [
   { to: '/create', label: 'Create', icon: Plus, emphasized: true },
   { to: '/community', label: 'Community', icon: Users },
   { to: '/notifications', label: 'Alerts', icon: Bell },
-  { to: '/settings', label: 'More', icon: Ellipsis },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 function useUnreadChatCount(sessionUserId: string | undefined) {
@@ -129,6 +129,6 @@ export function BottomNavigation() {
   const unreadChatCount = useUnreadChatCount(session?.user.id)
   return <nav className="bottom-nav" aria-label="Main navigation">{mobileItems.map(({ to, label, icon: Icon, emphasized }) => {
     const active = isActiveRoute(location.pathname, to)
-    return <NavLink key={to} to={to} aria-label={label === 'AI' ? 'AI Assistant' : label === 'More' ? 'More settings' : label} aria-current={active ? 'page' : undefined} className={`bottom-nav__item${active ? ' is-active' : ''}${emphasized ? ' bottom-nav__item--create' : ''}`}><span className="bottom-nav__icon nav-icon-wrap"><Icon size={emphasized ? 20 : 16} strokeWidth={active ? 2.4 : 1.8} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
+    return <NavLink key={to} to={to} aria-label={label === 'AI' ? 'AI Assistant' : label} aria-current={active ? 'page' : undefined} className={`bottom-nav__item${active ? ' is-active' : ''}${emphasized ? ' bottom-nav__item--create' : ''}`}><span className="bottom-nav__icon nav-icon-wrap"><Icon size={emphasized ? 20 : 16} strokeWidth={active ? 2.4 : 1.8} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
   })}</nav>
 }

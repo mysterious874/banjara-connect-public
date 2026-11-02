@@ -125,9 +125,20 @@ html.theme-dark .pwa-status {
   border-color: var(--bc-line);
 }
 
+html.theme-dark .icon-button {
+  color: var(--bc-muted);
+}
+
+html.theme-dark .icon-button:hover {
+  background: var(--bc-soft);
+}
+
 html.theme-dark .field__control,
 html.theme-dark .search-bar,
+html.theme-dark .search-bar input,
 html.theme-dark .connect-search,
+html.theme-dark textarea,
+html.theme-dark select,
 html.theme-dark .theme-control__choices button {
   color: var(--bc-text);
   background: var(--bc-white);
@@ -135,8 +146,31 @@ html.theme-dark .theme-control__choices button {
 }
 
 html.theme-dark .field__control::placeholder,
-html.theme-dark .search-bar input::placeholder {
+html.theme-dark .search-bar input::placeholder,
+html.theme-dark textarea::placeholder {
   color: var(--bc-muted);
+}
+
+html.theme-dark .composer__prompt {
+  color: var(--bc-muted);
+  background: var(--bc-white);
+}
+
+html.theme-dark .tabs {
+  background: var(--bc-soft);
+}
+
+html.theme-dark .tabs__item {
+  color: var(--bc-muted);
+}
+
+html.theme-dark .tabs__item.is-active {
+  color: var(--bc-text);
+  background: var(--bc-paper);
+}
+
+html.theme-dark .post-action:hover {
+  background: var(--bc-soft);
 }
 
 html.theme-dark .button--outline {
