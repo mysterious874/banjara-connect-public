@@ -85,3 +85,16 @@ The advisor reports 19 callable signatures, including group administration, grou
 - READY FOR PRODUCTION REVIEW: NO
 - READY FOR GOOGLE PLAY INTERNAL TESTING: NO
 - READY FOR GOOGLE PLAY PRODUCTION RELEASE: NO
+
+
+## Additional frontend verification (repository `main`)
+
+A direct source inspection of `src/pages/Pages.tsx` and `src/pages/AuthPages.tsx` confirmed the following release blockers:
+
+- `DeleteAccountPage` is explicitly a visual preview. It states that no verified account-deletion backend is available and confirms that nothing will be deleted.
+- `PrivacyPage` uses local React state only; its private-profile and activity-status switches do not save or enforce account privacy.
+- The password-change UI explicitly says password recovery is unavailable for mobile-only accounts. The inspected login UI has no recovery action.
+- The profile-report page explicitly says profile reports are unsupported because no user-target reporting schema is verified.
+- The login/signup flows invoke the deployed `username-auth` Edge Function. Its implementation and secret dependencies must be inspected before modifying authentication.
+
+These are source-confirmed UI limitations, not inferred from missing database objects. They must be implemented and tested before a public Play release.
