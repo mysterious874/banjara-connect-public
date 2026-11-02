@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Bell, BookOpen, Compass, Ellipsis, House, Info, MessageCircle, Plus, Settings, Sparkles, UserRound, Users, Video } from 'lucide-react'
+import { Bell, BookOpen, Compass, House, Info, MessageCircle, Plus, Settings, Sparkles, UserRound, Users, Video } from 'lucide-react'
 import { BrandLockup } from './brand'
 import { Avatar } from './ui'
 import { useAuth } from '../hooks/AuthProvider'
@@ -131,95 +131,26 @@ export function DesktopNavigation({ unreadChatCount }: { unreadChatCount: number
 
 export function BottomNavigation({ unreadChatCount }: { unreadChatCount: number }) {
   const location = useLocation()
-  const [moreOpen, setMoreOpen] = useState(false)
-  const [keyboardOpen, setKeyboardOpen] = useState(false)
-  const moreMenuRef = useRef<HTMLDivElement>(null)
-  const moreButtonRef = useRef<HTMLButtonElement>(null)
-  const isMoreActive = ['/notifications', '/stories', '/reels', '/assistant', '/profile', '/settings', '/about', '/report']
-    .some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
-
+  const { session } = useAuth()
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
   useEffect(() => {
-    setMoreOpen(false)
-  }, [location.pathname])
-
-  useEffect(() => {
-    const viewport = window.visualViewport
-    const updateKeyboardState = () => {
-      setKeyboardOpen(
-        window.matchMedia('(max-width: 759px)').matches &&
-        Boolean(viewport && window.innerHeight - viewport.height > 120),
-      )
+    let active = true
+    if (!session?.user.id) { setUnreadNotificationCount(0); return () => { active = false } }
+    const refresh = async () => {
+      try { const count = await loadUnreadNotificationCount(); if (active) setUnreadNotificationCount(count) }
+      catch (error) { if (active) console.error('Could not refresh unread notification count:', error) }
     }
-    updateKeyboardState()
-    viewport?.addEventListener('resize', updateKeyboardState)
-    window.addEventListener('resize', updateKeyboardState)
-    return () => {
-      viewport?.removeEventListener('resize', updateKeyboardState)
-      window.removeEventListener('resize', updateKeyboardState)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!moreOpen) return
-    const closeOnOutsideClick = (event: PointerEvent) => {
-      if (event.target instanceof Node && !moreMenuRef.current?.contains(event.target)) setMoreOpen(false)
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      const menuItems = Array.from(moreMenuRef.current?.querySelectorAll<HTMLAnchorElement>('.bottom-nav__more-link') ?? [])
-      if (event.key === 'Escape') {
-        setMoreOpen(false)
-        moreButtonRef.current?.focus()
-        return
-      }
-      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !menuItems.length) return
-      const currentIndex = menuItems.indexOf(document.activeElement as HTMLAnchorElement)
-      const nextIndex = event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? menuItems.length - 1
-          : event.key === 'ArrowDown'
-            ? (currentIndex + 1 + menuItems.length) % menuItems.length
-            : currentIndex <= 0 ? menuItems.length - 1 : currentIndex - 1
-      event.preventDefault()
-      menuItems[nextIndex].focus()
-    }
-    document.addEventListener('pointerdown', closeOnOutsideClick)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsideClick)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [moreOpen])
-
-  useEffect(() => {
-    if (keyboardOpen) setMoreOpen(false)
-  }, [keyboardOpen])
-
-  return <nav className="bottom-nav" aria-label="Main navigation" data-keyboard-open={keyboardOpen || undefined}>
+    void refresh()
+    const unsubscribe = subscribeToPostgresChanges({ topic: 'bottom-nav-notifications:' + session.user.id, event: '*', table: 'notifications', filter: 'user_id=eq.' + session.user.id }, () => { void refresh() })
+    return () => { active = false; unsubscribe() }
+  }, [session?.user.id])
+  const notificationBadge = unreadNotificationCount > 99 ? '99+' : String(unreadNotificationCount)
+  return <nav className="bottom-nav" aria-label="Main navigation">
     {mobileItems.map(({ to, label, icon: Icon, emphasized }) => {
       const active = isActiveRoute(location.pathname, to)
-      return <NavLink key={to} to={to} aria-current={active ? 'page' : undefined} className={`bottom-nav__item${active ? ' is-active' : ''}${emphasized ? ' bottom-nav__item--create' : ''}`}><span className="bottom-nav__icon nav-icon-wrap"><Icon size={emphasized ? 20 : 16} strokeWidth={active ? 2.4 : 1.8} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
+      return <NavLink key={to} to={to} aria-current={active ? 'page' : undefined} className={'bottom-nav__item' + (active ? ' is-active' : '') + (emphasized ? ' bottom-nav__item--create' : '')}><span className="bottom-nav__icon nav-icon-wrap"><Icon size={emphasized ? 20 : 16} strokeWidth={active ? 2.4 : 1.8} />{to === '/chat' && unreadChatCount > 0 && <span className="nav-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>}</span><span>{label}</span></NavLink>
     })}
-    <div className="bottom-nav__more-wrap" ref={moreMenuRef}>
-      <button
-        ref={moreButtonRef}
-        className={`bottom-nav__item bottom-nav__more-button${isMoreActive ? ' is-active' : ''}`}
-        type="button"
-        aria-label="More navigation options"
-        aria-haspopup="menu"
-        aria-expanded={moreOpen}
-        aria-controls="connect-more-menu"
-        aria-current={isMoreActive ? 'page' : undefined}
-        onClick={() => setMoreOpen((open) => !open)}
-      >
-        <span className="bottom-nav__icon"><Ellipsis size={18} /></span><span>More</span>
-      </button>
-      {moreOpen && <div className="bottom-nav__more-menu" id="connect-more-menu" role="menu" aria-label="More navigation">
-        {moreItems.map(({ to, label, icon: Icon }) => {
-          const active = isActiveRoute(location.pathname, to)
-          return <NavLink key={to} to={to} role="menuitem" aria-current={active ? 'page' : undefined} onClick={() => setMoreOpen(false)} className={`bottom-nav__more-link${active ? ' is-active' : ''}`}><Icon size={18} /><span>{label}</span></NavLink>
-        })}
-      </div>}
-    </div>
+    <NavLink to="/notifications" aria-label={unreadNotificationCount ? 'Notifications, ' + unreadNotificationCount + ' unread' : 'Notifications'} aria-current={isActiveRoute(location.pathname, '/notifications') ? 'page' : undefined} className={'bottom-nav__item bottom-nav__utility' + (isActiveRoute(location.pathname, '/notifications') ? ' is-active' : '')}><span className="bottom-nav__icon nav-icon-wrap"><Bell size={18} />{unreadNotificationCount > 0 && <span className="nav-badge">{notificationBadge}</span>}</span><span>Alerts</span></NavLink>
+    <NavLink to="/settings" aria-label="Settings" aria-current={isActiveRoute(location.pathname, '/settings') ? 'page' : undefined} className={'bottom-nav__item bottom-nav__utility' + (isActiveRoute(location.pathname, '/settings') ? ' is-active' : '')}><span className="bottom-nav__icon"><Settings size={18} /></span><span>Settings</span></NavLink>
   </nav>
 }
