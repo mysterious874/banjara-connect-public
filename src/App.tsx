@@ -92,9 +92,8 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
 export default function App() {
   useWarmRouteModules()
   const navigate = useNavigate()
-  const [showStartupIntro, setShowStartupIntro] = useState(() => {
-    return window.sessionStorage.getItem('connect-startup-intro-seen') !== '1'
-  })
+  // Show the complete intro on every fresh app load; session storage must not skip it.
+  const [showStartupIntro, setShowStartupIntro] = useState(true)
 
   // Warm the main app route bundle during the intro so the first navigation
   // does not have to wait for the large shared Pages module to download.
@@ -124,7 +123,6 @@ export default function App() {
   useEffect(() => {
     if (!showStartupIntro) return
     const timer = window.setTimeout(() => {
-      window.sessionStorage.setItem('connect-startup-intro-seen', '1')
       setShowStartupIntro(false)
       navigate('/home', { replace: true })
     }, 4000)
