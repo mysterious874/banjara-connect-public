@@ -103,7 +103,7 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   if (cached && cached.expiresAt > now) return cached.value
   const pending = conversationListRequests.get(userId)
   if (pending) return pending
-  const request = loadConversationsUncached(userId).then((value) => {
+  const request = loadConversationsUncached().then((value) => {
     conversationListCache.set(userId, { expiresAt: Date.now() + CONVERSATION_LIST_CACHE_TTL_MS, value })
     return value
   }).finally(() => conversationListRequests.delete(userId))
@@ -111,67 +111,44 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   return request
 }
 
-async function loadConversationsUncached(userId: string): Promise<ConversationSummary[]> {
-  const { data: ownMemberships, error: membershipError } = await supabase.from('conversation_members')
-    .select('conversation_id').eq('user_id', userId)
-  if (membershipError) throw membershipError
-  const conversationIds = [...new Set((ownMemberships ?? []).map((row) => row.conversation_id as string))]
-  if (!conversationIds.length) return []
-
-  const { data: members, error: membersError } = await supabase.from('conversation_members')
-    .select('conversation_id,user_id').in('conversation_id', conversationIds)
-  if (membersError) throw membersError
-
-  const otherUsers = new Map<string, string>()
-  for (const member of members ?? []) {
-    if (member.user_id !== userId && conversationIds.includes(member.conversation_id)) otherUsers.set(member.conversation_id, member.user_id)
-  }
-  const blockedIds = new Set(await loadBlockedUserIds())
-  for (const [conversationId, peerId] of otherUsers) {
-    if (blockedIds.has(peerId)) otherUsers.delete(conversationId)
-  }
-  const visibleConversationIds = conversationIds.filter((id) => otherUsers.has(id))
-  if (!visibleConversationIds.length) return []
-  const otherUserIds = [...new Set(otherUsers.values())]
-  if (!otherUserIds.length) return []
-
-  // Conversation summaries and profile cards are independent; avoid making
-  // the user wait for every summary before starting the profile query.
-  const [summaryRows, profilesResult] = await Promise.all([
-    Promise.all(visibleConversationIds.map((id) => loadConversationSummaryMessages(id, userId))),
-    supabase.from('profiles')
-      .select('id,username,display_name,avatar_url').in('id', otherUserIds),
+async async function loadConversationsUncached(): Promise<ConversationSummary[]> {
+  // The database RPC returns one summary row per direct conversation, including
+  // the latest message and the exact unread count. This avoids two message
+  // queries per conversation, which previously created an N+1 request pattern
+  // and made first-time chat loading especially slow on mobile networks.
+  const [{ data: summaries, error: summariesError }, blockedIds] = await Promise.all([
+    supabase.rpc('get_direct_conversation_summaries'),
+    loadBlockedUserIds(),
   ])
-  const { data: profiles, error: profilesError } = profilesResult
+  if (summariesError) throw summariesError
+
+  const blocked = new Set(blockedIds)
+  const visibleSummaries = (summaries ?? []).filter((summary) =>
+    Boolean(summary.peer_id) && !blocked.has(summary.peer_id as string),
+  )
+  if (!visibleSummaries.length) return []
+
+  const peerIds = [...new Set(visibleSummaries.map((summary) => summary.peer_id as string))]
+  const { data: profiles, error: profilesError } = await supabase.from('profiles')
+    .select('id,username,display_name,avatar_url')
+    .in('id', peerIds)
   if (profilesError) throw profilesError
-  const incomingMessageIds = [...new Set(summaryRows.flatMap((summary) => summary.incomingMessageIds))]
-  let readIds = new Set<string>()
-  if (incomingMessageIds.length) {
-    const readBatches = await Promise.all(Array.from(
-      { length: Math.ceil(incomingMessageIds.length / 200) },
-      (_, index) => supabase.from('message_reads').select('message_id')
-        .eq('user_id', userId).in('message_id', incomingMessageIds.slice(index * 200, (index + 1) * 200)),
-    ))
-    for (const { data: reads, error: readsError } of readBatches) {
-      if (readsError) throw readsError
-      for (const row of reads ?? []) readIds.add(row.message_id as string)
-    }
-  }
-  const summaryMessages = summaryRows.map(({ lastMessage, incomingMessageIds: incomingIds }) => ({
-    lastMessage,
-    unreadCount: incomingIds.filter((id) => !readIds.has(id)).length,
-  }))
 
   const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
-  return visibleConversationIds.flatMap((id, index) => {
-    const memberId = otherUsers.get(id)
-    const member = memberId ? profileMap.get(memberId) : undefined
+  return visibleSummaries.flatMap((summary) => {
+    const member = profileMap.get(summary.peer_id as string)
     if (!member) return []
-    return [{ id, member, ...summaryMessages[index] }]
-  }).sort((left, right) => (right.lastMessage?.created_at ?? '').localeCompare(left.lastMessage?.created_at ?? ''))
+    return [{
+      id: summary.conversation_id as string,
+      member,
+      lastMessage: (summary.last_message as ChatMessage | null) ?? null,
+      unreadCount: Number(summary.unread_count) || 0,
+    }]
+  }).sort((left, right) =>
+    (right.lastMessage?.created_at ?? '').localeCompare(left.lastMessage?.created_at ?? ''),
+  )
 }
-
-async function loadConversationPeerId(conversationId: string, userId: string) {
+ function loadConversationPeerId(conversationId: string, userId: string) {
   const { data: members, error } = await supabase.from('conversation_members')
     .select('user_id').eq('conversation_id', conversationId)
   if (error) throw error
