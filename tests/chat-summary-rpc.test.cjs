@@ -6,7 +6,7 @@ const ts = require('typescript')
 
 function loadChatData({ summaries, profiles, blockedIds }) {
   const filename = path.resolve(__dirname, '..', 'src/utils/chatData.ts')
-  const source = fs.readFileSync(filename, 'utf8')
+  const source = fs.readFileSync(filename, 'utf8').replace(/import\\.meta\\.env\\.DEV/g, 'false')
   const output = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText
