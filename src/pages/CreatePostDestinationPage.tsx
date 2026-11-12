@@ -148,7 +148,7 @@ export default function CreatePostPage() {
       </div>
 
       <div className="destination-options" style={{ display: 'grid', gap: 10, margin: '16px 0' }}>
-        <label className="destination-option destination-option--festival" style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid var(--border, #ddd)', borderRadius: 14, padding: 14, cursor: 'pointer' }}>
+        <label className="destination-option destination-option--instagram" style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid var(--border, #ddd)', borderRadius: 14, padding: 14, cursor: 'pointer' }}>
           <input type="checkbox" checked={sharePublic} onChange={(event) => setSharePublic(event.target.checked)} />
           <Globe size={20} />
           <span style={{ flex: 1 }}><strong>Share to Public</strong><span style={{ display: 'block', opacity: .72, fontSize: 13 }}>Make this post available in the public feed.</span></span>
