@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
   actions: read
 
 concurrency:
@@ -17,7 +18,11 @@ concurrency:
 jobs:
   ai-auto-fix:
     if: >-
-      ${{ github.event.workflow_run.conclusion == 'failure' && !contains(github.event.workflow_run.head_commit.message, '[ai-auto-fix]') }}
+      ${{ github.event.workflow_run.conclusion == 'failure' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          github.event.workflow_run.head_branch == 'main' &&
+          !contains(github.event.workflow_run.head_commit.message, '[ai-auto-fix]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -27,6 +32,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 20
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -126,13 +132,26 @@ jobs:
           done <<< "$changed"
           rm -rf node_modules
           npm ci
+          npm test
           npm run build
 
-      - name: Commit verified repair
+      - name: Open a draft repair pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
+          gh auth setup-git
           git config user.name "Banjara Connect AI Fixer"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src public index.html 'vite.config.*' 2>/dev/null || true
           git diff --cached --quiet && { echo "Nothing to commit."; exit 1; }
-          git commit -m "[ai-auto-fix] safe verified frontend repair"
-          git push origin HEAD:main
+          branch="ai-repair/workflow-${RUN_ID}"
+          git switch -c "$branch"
+          git commit -m "fix: propose verified frontend repair"
+          git push origin "$branch"
+          gh pr create \
+            --draft \
+            --base main \
+            --head "$branch" \
+            --title "Proposed frontend repair for failed workflow ${RUN_ID}" \
+            --body "Automated repair proposal from failed workflow run ${RUN_ID}. Tests and production build passed in the repair workflow. Review the diff and CI results before merging."

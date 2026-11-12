@@ -4,7 +4,7 @@ import { supabase } from '../utils/supabase'
 import { userFacingError } from '../utils/userFacingError'
 import type { ProfileRecord, ProfileUpdate } from '../types/app'
 import { getCached, setCached } from '../utils/performanceCache'
-import { unregisterPushNotifications } from '../utils/pushNotifications'
+import { registerPushNotifications, unregisterPushNotifications } from '../utils/pushNotifications'
 
 const profileColumns = 'id,username,display_name,avatar_url,bio,location,is_verified'
 
@@ -128,6 +128,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const user = session?.user
+
+  useEffect(() => {
+    if (!user?.id || !('Notification' in window) || Notification.permission !== 'granted') return
+    let active = true
+    void registerPushNotifications().catch((error: unknown) => {
+      if (active) {
+        console.warn('Could not automatically sync this device push subscription.', {
+          errorType: error instanceof Error ? error.name : 'UnknownError',
+        })
+      }
+    })
+    return () => { active = false }
+  }, [user?.id])
 
   useEffect(() => {
     let active = true
@@ -366,7 +379,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
-    await unregisterPushNotifications()
+    try {
+      await unregisterPushNotifications()
+    } catch (error) {
+      console.error('Could not fully remove this device push subscription during sign out.', {
+        errorType: error instanceof Error ? error.name : 'UnknownError',
+      })
+    }
     return supabase.auth.signOut()
   }
 

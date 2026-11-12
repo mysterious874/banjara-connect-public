@@ -13,6 +13,12 @@ const ALLOWED_CHAT_MEDIA_TYPES = new Set([
   'video/mp4',
   'video/webm',
   'video/quicktime',
+  'audio/aac',
+  'audio/mp4',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/wav',
+  'audio/webm',
   'application/pdf',
   'text/plain',
   'application/zip',
@@ -30,6 +36,12 @@ export type ChatMediaData = {
   mimeType: string
 }
 
+function normalizeChatMediaFile(file: File) {
+  const mimeType = file.type.split(';', 1)[0].trim().toLowerCase()
+  if (mimeType === file.type) return file
+  return new File([file], file.name, { type: mimeType, lastModified: file.lastModified })
+}
+
 function extensionForChatMedia(file: File) {
   const extension = file.name.split('.').pop()?.toLowerCase()
   if (extension && /^[a-z0-9]{1,8}$/.test(extension)) return extension
@@ -41,6 +53,12 @@ function extensionForChatMedia(file: File) {
     'video/mp4': 'mp4',
     'video/webm': 'webm',
     'video/quicktime': 'mov',
+    'audio/aac': 'aac',
+    'audio/mp4': 'm4a',
+    'audio/mpeg': 'mp3',
+    'audio/ogg': 'ogg',
+    'audio/wav': 'wav',
+    'audio/webm': 'webm',
     'application/pdf': 'pdf',
     'text/plain': 'txt',
     'application/zip': 'zip',
@@ -55,22 +73,23 @@ function extensionForChatMedia(file: File) {
 }
 
 export function validateChatMedia(file: File) {
-  if (!ALLOWED_CHAT_MEDIA_TYPES.has(file.type)) {
-    throw new Error('Photos, videos, PDF and common document files are supported.')
+  if (!ALLOWED_CHAT_MEDIA_TYPES.has(file.type.split(';', 1)[0].trim().toLowerCase())) {
+    throw new Error('Photos, videos, voice notes, PDF and common document files are supported.')
   }
   if (file.size > MAX_CHAT_MEDIA_SIZE) {
-    throw new Error('Photo and video files must be 50 MB or smaller.')
+    throw new Error('Files must be 50 MB or smaller.')
   }
 }
 
 export async function uploadChatMedia(file: File, userId: string, conversationId: string, messageId: string): Promise<ChatMediaData> {
   validateChatMedia(file)
-  const uploadFile = await prepareImageForUpload(file)
+  const normalizedFile = normalizeChatMediaFile(file)
+  const uploadFile = await prepareImageForUpload(normalizedFile)
   const path = `${userId}/${conversationId}/${messageId}/${crypto.randomUUID()}.${extensionForChatMedia(uploadFile)}`
   await uploadStorageFile(BANJARA_CHAT_MEDIA_BUCKET, path, uploadFile)
   return {
     path,
-    type: file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : 'document',
+    type: normalizedFile.type.startsWith('video/') ? 'video' : normalizedFile.type.startsWith('image/') ? 'image' : 'document',
     mimeType: uploadFile.type,
   }
 }

@@ -24,7 +24,14 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.ts',
       injectRegister: 'auto',
-      includeAssets: ['banjara-mark.svg', 'banjara-mark-maskable.svg'],
+      includeAssets: [
+        'banjara-mark.svg',
+        'banjara-mark-maskable.svg',
+        'pwa-192x192.png',
+        'pwa-512x512.png',
+        'pwa-192x192-maskable.png',
+        'pwa-512x512-maskable.png',
+      ],
       manifest: {
         id: '/',
         name: 'Connect',
@@ -36,6 +43,10 @@ export default defineConfig({
         theme_color: '#C4163A',
         background_color: '#FFF7E8',
         icons: [
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-192x192-maskable.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/pwa-512x512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           { src: '/banjara-mark.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           { src: '/banjara-mark-maskable.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
         ],

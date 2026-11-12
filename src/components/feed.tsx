@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Bookmark, Check, Heart, MapPin, MessageCircle, MoreHorizontal, Pencil, Send, Trash2, X } from 'lucide-react'
 import type { FeedPost } from '../types/app'
 import { useAuth } from '../hooks/AuthProvider'
-import { loadPostLikes, togglePostLike } from '../utils/socialData'
+import { loadPostCommentCounts, loadPostLikes, loadPostShareCounts, recordPostShare, togglePostLike } from '../utils/socialData'
 import { supabase } from '../utils/supabase'
 import { deletePostMedia, type PostMediaData } from '../utils/mediaData'
 import { userFacingError } from '../utils/userFacingError'
@@ -11,13 +11,16 @@ import { createReport } from '../utils/reportData'
 import { loadConversations, sendConversationMessage, type ConversationSummary } from '../utils/chatData'
 import { Avatar, Button, ConfirmationDialog, EmptyState, Loading, useBodyScrollLock } from './ui'
 
-export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost; onDeleted?: () => void; initialLikeState?: { count: number; liked: boolean } }) {
+export function PostCard({ post, onDeleted, initialLikeState, engagementPending = false }: { post: FeedPost; onDeleted?: () => void; initialLikeState?: { count: number; liked: boolean; commentCount?: number | null; shareCount?: number | null }; engagementPending?: boolean }) {
   const { session } = useAuth()
   const [likeCount, setLikeCount] = useState(0)
+  const [commentCount, setCommentCount] = useState<number | null>(null)
+  const [shareCount, setShareCount] = useState<number | null>(null)
   const [liked, setLiked] = useState(false)
   const [isLikeLoading, setIsLikeLoading] = useState(true)
   const [isLikePending, setIsLikePending] = useState(false)
   const [likeError, setLikeError] = useState('')
+  const [engagementError, setEngagementError] = useState('')
   const [postContent, setPostContent] = useState(post.content)
   const [editContent, setEditContent] = useState(post.content)
   const [isEditing, setIsEditing] = useState(false)
@@ -50,30 +53,63 @@ export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost
   useEffect(() => {
     let active = true
     setLikeCount(0)
+    setCommentCount(null)
+    setShareCount(null)
     setLiked(false)
+    setEngagementError('')
     if (!session?.user) {
       setIsLikeLoading(false)
       return () => { active = false }
     }
-    if (initialLikeState) {
+    if (engagementPending) {
+      setIsLikeLoading(true)
+      return () => { active = false }
+    }
+    if (initialLikeState && initialLikeState.commentCount !== undefined && initialLikeState.shareCount !== undefined) {
       setLikeCount(initialLikeState.count)
+      setCommentCount(initialLikeState.commentCount ?? null)
+      setShareCount(initialLikeState.shareCount ?? null)
       setLiked(initialLikeState.liked)
       setIsLikeLoading(false)
       return () => { active = false }
     }
     setIsLikeLoading(true)
     setLikeError('')
-    loadPostLikes(post.id).then((state) => {
+    Promise.allSettled([
+      initialLikeState ? Promise.resolve(initialLikeState) : loadPostLikes(post.id),
+      initialLikeState?.commentCount !== undefined
+        ? Promise.resolve(new Map([[post.id, initialLikeState.commentCount]]))
+        : loadPostCommentCounts([post.id]),
+      initialLikeState?.shareCount !== undefined
+        ? Promise.resolve(new Map([[post.id, initialLikeState.shareCount]]))
+        : loadPostShareCounts([post.id]),
+    ]).then(([likeResult, commentResult, shareResult]) => {
       if (!active) return
-      setLikeCount(state.count)
-      setLiked(state.liked)
-    }).catch((error: unknown) => {
-      if (active) setLikeError(userFacingError(error, 'Could not load post likes.'))
+      const failures = []
+      if (likeResult.status === 'fulfilled') {
+        setLikeCount(likeResult.value.count)
+        setLiked(likeResult.value.liked)
+      } else {
+        failures.push(likeResult.reason)
+      }
+      if (commentResult.status === 'fulfilled') {
+        const count = commentResult.value.get(post.id)
+        setCommentCount(count === undefined ? 0 : count)
+      } else {
+        failures.push(commentResult.reason)
+      }
+      if (shareResult.status === 'fulfilled') {
+        const count = shareResult.value.get(post.id)
+        setShareCount(count === undefined ? 0 : count)
+      } else {
+        failures.push(shareResult.reason)
+      }
+      if (failures.length) setEngagementError(userFacingError(failures[0], 'Some post counts could not be loaded.'))
     }).finally(() => {
       if (active) setIsLikeLoading(false)
     })
     return () => { active = false }
-  }, [initialLikeState, post.id, session?.user.id])
+  }, [engagementPending, initialLikeState, post.id, session?.user.id])
 
   async function handleLike() {
     if (!session?.user || isLikeLoading || isLikePending) return
@@ -148,6 +184,9 @@ export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost
     setIsShareSending(true)
     setShareError('')
     setShareSuccess('')
+    let sent = 0
+    let recordedShares = 0
+    let shareCountErrors = 0
     try {
       const message = [
         `📌 Shared post from ${authorName}`,
@@ -156,16 +195,25 @@ export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost
         '',
         `/posts/${post.id}`,
       ].join('\n')
-      let sent = 0
       for (const conversationId of selectedConversationIds) {
         await sendConversationMessage(conversationId, message)
         sent += 1
+        try {
+          await recordPostShare(post.id)
+          recordedShares += 1
+        } catch (error) {
+          console.error('Post was sent, but its share count could not be recorded.', error)
+          shareCountErrors += 1
+        }
       }
       setShareSuccess(`Post shared to ${sent} conversation${sent === 1 ? '' : 's'}.`)
+      if (shareCountErrors) setShareError('The post was sent, but its share count could not be updated.')
       setSelectedConversationIds([])
     } catch (caught) {
+      if (sent) setShareSuccess(`Post shared to ${sent} conversation${sent === 1 ? '' : 's'} before another send failed.`)
       setShareError(userFacingError(caught, 'Could not share this post.'))
     } finally {
+      setShareCount((current) => current === null ? null : current + recordedShares)
       setIsShareSending(false)
     }
   }
@@ -246,7 +294,13 @@ export function PostCard({ post, onDeleted, initialLikeState }: { post: FeedPost
             : <img className="media-preview-content" src={previewMedia.signedUrl} alt="Post media preview" />}
         </div>
       </div>}
-      <div className="post-card__meta"><span>{post.visibility ?? 'Community post'} · {new Date(post.created_at).toLocaleString()}</span><span>{isLikeLoading ? 'Loading likes…' : `${likeCount} likes`}</span></div>
+      <div className="post-card__meta"><span>{post.visibility ?? 'Community post'} · {new Date(post.created_at).toLocaleString()}</span></div>
+      <div className="post-card__engagement" aria-label="Post engagement">
+        <span><Heart size={15} aria-hidden="true" />{isLikeLoading ? '…' : likeError ? '— likes' : `${likeCount} ${likeCount === 1 ? 'like' : 'likes'}`}</span>
+        <Link to={`/posts/${post.id}/comments`} aria-label={`${commentCount ?? 0} comments`}><MessageCircle size={15} aria-hidden="true" />{isLikeLoading ? '…' : commentCount === null ? '— comments' : `${commentCount} ${commentCount === 1 ? 'comment' : 'comments'}`}</Link>
+        <span><Send size={14} aria-hidden="true" />{isLikeLoading ? '…' : shareCount === null ? '— shares' : `${shareCount} ${shareCount === 1 ? 'share' : 'shares'}`}</span>
+      </div>
+      {engagementError && <p className="field__error" role="status">{engagementError}</p>}
       <div className="post-card__actions">
         <button type="button" className={`post-action${liked ? ' is-liked' : ''}`} disabled={isLikeLoading || isLikePending || !session} onClick={handleLike} aria-pressed={liked}>
           <Heart size={19} fill={liked ? 'currentColor' : 'none'} /><span>{isLikePending ? 'Saving…' : liked ? 'Liked' : 'Like'}</span>

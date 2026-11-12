@@ -1,5 +1,5 @@
-import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
-import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Component, lazy, Suspense, useEffect, type ErrorInfo, type ReactNode } from 'react'
+import { Route, Routes, useNavigate } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
 import { Loading } from './components/ui'
 
@@ -33,30 +33,15 @@ const AboutPage = lazy(() => import('./pages/Pages').then(({ AboutPage }) => ({ 
 const DeveloperPage = lazy(() => import('./pages/DeveloperPage').then(({ DeveloperPage }) => ({ default: DeveloperPage })))
 const NotFoundPage = lazy(() => import('./pages/Pages').then(({ NotFoundPage }) => ({ default: NotFoundPage })))
 
-// Warm route modules after the first screen paints so tab changes do not
-// trigger a fresh Suspense/loading screen. Network work runs in the background.
-function useWarmRouteModules() {
+function StartupIntro() {
+  const navigate = useNavigate()
+
   useEffect(() => {
-    let cancelled = false
-    const warm = () => {
-      if (cancelled) return
-      void Promise.all([
-        import('./pages/Pages'),
-        import('./pages/BanjaraHistoryPage'),
-        import('./pages/DeveloperPage'),
-        import('./pages/AuthPages'),
-      ]).catch(() => undefined)
-    }
-    const idleWindow = window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
-    const idleId = idleWindow.requestIdleCallback
-      ? idleWindow.requestIdleCallback(warm, { timeout: 1800 })
-      : window.setTimeout(warm, 900)
-    return () => {
-      cancelled = true
-      if (idleWindow.cancelIdleCallback) idleWindow.cancelIdleCallback(idleId)
-      else window.clearTimeout(idleId)
-    }
-  }, [])
+    const timer = window.setTimeout(() => navigate('/home', { replace: true }), 4500)
+    return () => window.clearTimeout(timer)
+  }, [navigate])
+
+  return <SplashPage />
 }
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -90,50 +75,6 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
 }
 
 export default function App() {
-  useWarmRouteModules()
-  const location = useLocation()
-  const navigate = useNavigate()
-  const [showStartupIntro, setShowStartupIntro] = useState(() => {
-    return window.sessionStorage.getItem('connect-startup-intro-seen') !== '1'
-  })
-
-  // Warm the main app route bundle during the intro so the first navigation
-  // does not have to wait for the large shared Pages module to download.
-  useEffect(() => {
-    let timeoutId: number | undefined
-    let idleId: number | undefined
-    let cancelled = false
-    const win = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
-      cancelIdleCallback?: (handle: number) => void
-    }
-    const preload = () => {
-      if (!cancelled) void import('./pages/Pages').catch(() => {})
-    }
-    if (win.requestIdleCallback) {
-      idleId = win.requestIdleCallback(preload, { timeout: 1200 })
-    } else {
-      timeoutId = window.setTimeout(preload, 800)
-    }
-    return () => {
-      cancelled = true
-      if (idleId !== undefined) win.cancelIdleCallback?.(idleId)
-      if (timeoutId !== undefined) window.clearTimeout(timeoutId)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!showStartupIntro) return
-    const timer = window.setTimeout(() => {
-      window.sessionStorage.setItem('connect-startup-intro-seen', '1')
-      setShowStartupIntro(false)
-      if (location.pathname === '/' || location.pathname === '/splash') {
-        navigate('/home', { replace: true })
-      }
-    }, 4000)
-    return () => window.clearTimeout(timer)
-  }, [location.pathname, navigate, showStartupIntro])
-
   useEffect(() => {
     const applyTheme = () => {
       const saved = window.localStorage.getItem('banjara-theme') || 'light'
@@ -152,22 +93,12 @@ export default function App() {
   }, [])
 
 
-  if (showStartupIntro) {
-    return (
-      <AppErrorBoundary>
-        <Suspense fallback={<Loading label="Loading intro…" />}>
-          <SplashPage />
-        </Suspense>
-      </AppErrorBoundary>
-    )
-  }
-
   return (
     <AppErrorBoundary>
       <Suspense fallback={<Loading label="Loading page…" />}>
         <Routes>
-          <Route path="/" element={<SplashPage />} />
-          <Route path="/splash" element={<SplashPage />} />
+          <Route path="/" element={<StartupIntro />} />
+          <Route path="/splash" element={<StartupIntro />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route element={<AppLayout />}>

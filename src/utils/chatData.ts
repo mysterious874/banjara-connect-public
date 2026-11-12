@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './authenticatedUser'
 import { loadBlockedUserIds } from './blockData'
 import { createChatMediaUrl, createChatMediaUrls, deleteChatMedia, uploadChatMedia } from './chatMediaData'
+import { sendChatPushNotification } from './pushNotifications'
 import type { ProfileRecord } from '../types/app'
 import { subscribeToPostgresChanges, type RealtimeSubscriptionStatus } from './realtimeData'
 
@@ -16,6 +17,8 @@ export type ChatMessage = {
   is_deleted_for_everyone: boolean
   created_at: string
   updated_at: string
+  reply_to_message_id?: string | null
+  edited_at?: string | null
   readByPeer?: boolean
 }
 
@@ -196,7 +199,7 @@ async function fetchConversationMessagePage(
   return (data ?? []) as ChatMessage[]
 }
 
-async function prepareConversationMessagePage(page: ChatMessage[], userId: string, peerId: string) {
+async function prepareConversationMessagePage(page: ChatMessage[], userId: string) {
   const hasMore = page.length === conversationMessagePageSize
   if (page.length) {
     const ids = page.map((message) => message.id)
@@ -206,24 +209,6 @@ async function prepareConversationMessagePage(page: ChatMessage[], userId: strin
     page = page.filter((message) => !hiddenIds.has(message.id))
   }
   const messages = page.reverse()
-  // Read receipts and media URL signing should not delay the text conversation
-  // from opening. Both are best-effort follow-up work and realtime refreshes will
-  // reconcile read status after the chat is already visible.
-  if (messages.length) {
-    const outgoingIds = messages.filter((message) => message.sender_id === userId).map((message) => message.id)
-    if (outgoingIds.length) {
-      void supabase.from('message_reads').select('message_id')
-        .eq('user_id', peerId).in('message_id', outgoingIds)
-        .then(({ data: peerReads, error: peerReadError }) => {
-          if (peerReadError) {
-            if (import.meta.env.DEV) console.error('Could not load peer read receipts.', peerReadError)
-            return
-          }
-          const readSet = new Set((peerReads ?? []).map((row) => row.message_id as string))
-          for (const message of messages) message.readByPeer = readSet.has(message.id)
-        })
-    }
-  }
   const unreadIds = messages.filter((message) => message.sender_id !== userId).map((message) => message.id)
   if (unreadIds.length) {
     void (async () => {
@@ -245,16 +230,29 @@ async function prepareConversationMessagePage(page: ChatMessage[], userId: strin
   return { messages, hasMore }
 }
 
+export async function loadPeerReadReceipts(messages: ChatMessage[], peerId: string) {
+  const userId = await requireAuthenticatedUserId()
+  const outgoingIds = messages.filter((message) => message.sender_id === userId).map((message) => message.id)
+  const readIds = new Set<string>()
+  for (let index = 0; index < outgoingIds.length; index += 200) {
+    const { data, error } = await supabase.from('message_reads').select('message_id')
+      .eq('user_id', peerId).in('message_id', outgoingIds.slice(index, index + 200))
+    if (error) throw error
+    for (const row of data ?? []) readIds.add(row.message_id as string)
+  }
+  return readIds
+}
+
 export async function loadConversationMessages(
   conversationId: string,
   before?: Pick<ChatMessage, 'created_at' | 'id'>,
 ): Promise<{ messages: ChatMessage[]; hasMore: boolean }> {
   const userId = await requireAuthenticatedUserId()
-  const [peerId, page] = await Promise.all([
+  const [, page] = await Promise.all([
     loadConversationPeerId(conversationId, userId),
     fetchConversationMessagePage(conversationId, before),
   ])
-  return prepareConversationMessagePage(page, userId, peerId)
+  return prepareConversationMessagePage(page, userId)
 }
 
 export async function hydrateConversationMediaUrls(messages: ChatMessage[]): Promise<ChatMessage[]> {
@@ -299,12 +297,12 @@ export async function loadConversation(conversationId: string) {
   ])
   const [peer, history] = await Promise.all([
     loadConversationPeerProfile(peerId, userId),
-    prepareConversationMessagePage(page, userId, peerId),
+    prepareConversationMessagePage(page, userId),
   ])
   return { peer, history }
 }
 
-export async function sendConversationMessage(conversationId: string, content: string, mediaFile?: File) {
+export async function sendConversationMessage(conversationId: string, content: string, mediaFile?: File, replyToMessageId?: string | null) {
   const normalized = content.trim()
   if (!normalized && !mediaFile) throw new Error('Message cannot be empty.')
   const senderId = await requireAuthenticatedUserId()
@@ -326,6 +324,7 @@ export async function sendConversationMessage(conversationId: string, content: s
       sender_id: senderId,
       content: normalized,
     }
+    if (replyToMessageId) payload.reply_to_message_id = replyToMessageId
     if (media) {
       payload.media_url = media.path
       payload.media_type = media.type
@@ -335,6 +334,7 @@ export async function sendConversationMessage(conversationId: string, content: s
       .select(messageColumns).single()
     if (error) throw error
     const created = data as ChatMessage
+    if (replyToMessageId) created.reply_to_message_id = replyToMessageId
     if (media) {
       try {
         created.media_signed_url = await createChatMediaUrl(media.path)
@@ -344,8 +344,7 @@ export async function sendConversationMessage(conversationId: string, content: s
       }
     }
 
-    // Best-effort push runs in the background; it never blocks the UI.
-    void supabase.functions.invoke('send-chat-push', { body: { message_id: created.id } }).catch(() => {})
+    void sendChatPushNotification(created.id)
     return created
   } catch (caught) {
     if (uploadedPath) {
@@ -358,6 +357,77 @@ export async function sendConversationMessage(conversationId: string, content: s
     throw caught
   }
 }
+
+export async function editConversationMessage(messageId: string, content: string) {
+  const normalized = content.trim()
+  if (!normalized) throw new Error('Message cannot be empty.')
+  const editedAt = new Date().toISOString()
+  const { data, error } = await supabase.rpc('edit_direct_message', { p_message_id: messageId, p_content: normalized })
+  if (error) throw error
+  if (!data) throw new Error('This message can no longer be edited.')
+  return { ...data, edited_at: editedAt } as ChatMessage
+}
+
+export const chatReactionOptions = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const
+export type ChatReaction = typeof chatReactionOptions[number]
+
+export async function loadConversationReactions(messageIds: string[]) {
+  const uniqueIds = [...new Set(messageIds)]
+  const results = new Map<string, Array<{ emoji: ChatReaction; user_id: string }>>()
+  for (let index = 0; index < uniqueIds.length; index += 200) {
+    const { data, error } = await supabase.from('connect_direct_message_reactions')
+      .select('message_id,emoji,user_id').in('message_id', uniqueIds.slice(index, index + 200))
+    if (error) throw error
+    for (const row of data ?? []) {
+      const current = results.get(row.message_id as string) ?? []
+      current.push({ emoji: row.emoji as ChatReaction, user_id: row.user_id as string })
+      results.set(row.message_id as string, current)
+    }
+  }
+  return results
+}
+
+export async function toggleConversationReaction(messageId: string, emoji: ChatReaction) {
+  const userId = await requireAuthenticatedUserId()
+  const table = supabase.from('connect_direct_message_reactions')
+  const { data: existing, error: lookupError } = await table.select('id')
+    .eq('message_id', messageId).eq('user_id', userId).eq('emoji', emoji).maybeSingle()
+  if (lookupError) throw lookupError
+  if (existing) {
+    const { error } = await table.delete().eq('id', existing.id)
+    if (error) throw error
+    return false
+  }
+  const { error } = await table.insert({ message_id: messageId, user_id: userId, emoji })
+  if (error && error.code !== '23505') throw error
+  return true
+}
+
+export async function loadConversationPins(messageIds: string[]) {
+  const userId = await requireAuthenticatedUserId()
+  if (!messageIds.length) return new Set<string>()
+  const { data, error } = await supabase.from('connect_direct_message_pins').select('message_id')
+    .eq('user_id', userId).in('message_id', messageIds)
+  if (error) throw error
+  return new Set((data ?? []).map((row) => row.message_id as string))
+}
+
+export async function toggleConversationPin(messageId: string) {
+  const userId = await requireAuthenticatedUserId()
+  const { data: existing, error: lookupError } = await supabase.from('connect_direct_message_pins')
+    .select('message_id').eq('user_id', userId).eq('message_id', messageId).maybeSingle()
+  if (lookupError) throw lookupError
+  if (existing) {
+    const { error } = await supabase.from('connect_direct_message_pins')
+      .delete().eq('user_id', userId).eq('message_id', messageId)
+    if (error) throw error
+    return false
+  }
+  const { error } = await supabase.from('connect_direct_message_pins').insert({ user_id: userId, message_id: messageId })
+  if (error && error.code !== '23505') throw error
+  return true
+}
+
 export async function deleteMessageForMe(messageId: string) {
   const userId = await requireAuthenticatedUserId()
   const { data: membership, error: membershipError } = await supabase.from('messages').select('id,conversation_id').eq('id', messageId).maybeSingle()

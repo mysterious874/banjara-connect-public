@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './authenticatedUser'
+import { sendActivityPushNotification } from './pushNotifications'
 import type { ProfileRecord } from '../types/app'
 
 export type CommentRecord = {
@@ -10,6 +11,42 @@ export type CommentRecord = {
   parent_id: string | null
   created_at: string
   author: Pick<ProfileRecord, 'username' | 'display_name' | 'avatar_url'> | null
+}
+
+export type PostEngagementCounts = {
+  commentCount: number
+  shareCount: number
+}
+
+export async function loadPostCommentCounts(postIds: string[]) {
+  const results = new Map(postIds.map((postId) => [postId, 0]))
+  if (!postIds.length) return results
+
+  const { data, error } = await supabase.from('comments').select('post_id').in('post_id', postIds)
+  if (error) throw error
+  for (const comment of data ?? []) {
+    const count = results.get(comment.post_id)
+    if (count !== undefined) results.set(comment.post_id, count + 1)
+  }
+  return results
+}
+
+export async function loadPostShareCounts(postIds: string[]) {
+  const results = new Map(postIds.map((postId) => [postId, 0]))
+  if (!postIds.length) return results
+
+  const { data, error } = await supabase.rpc('get_post_share_counts', { p_post_ids: postIds })
+  if (error) throw error
+  for (const share of data ?? []) {
+    if (results.has(share.post_id)) results.set(share.post_id, Number(share.share_count) || 0)
+  }
+  return results
+}
+
+export async function recordPostShare(postId: string) {
+  const userId = await requireAuthenticatedUserId()
+  const { error } = await supabase.from('post_shares').insert({ post_id: postId, shared_by: userId })
+  if (error) throw error
 }
 
 export async function loadPostLikes(postId: string) {
@@ -47,6 +84,7 @@ export async function togglePostLike(postId: string, currentlyLiked: boolean) {
   } else {
     const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: userId })
     if (error) throw error
+    void sendActivityPushNotification({ event_type: 'post_like', post_id: postId })
   }
   return loadPostLikes(postId)
 }
@@ -79,13 +117,14 @@ export async function createComment(postId: string, content: string, parentId: s
   const normalizedContent = content.trim()
   if (!normalizedContent) throw new Error('Comment cannot be empty.')
   const userId = await requireAuthenticatedUserId()
-  const { error } = await supabase.from('comments').insert({
+  const { data: comment, error } = await supabase.from('comments').insert({
     post_id: postId,
     user_id: userId,
     content: normalizedContent,
     parent_id: parentId,
-  })
+  }).select('id').single()
   if (error) throw error
+  void sendActivityPushNotification({ comment_id: comment.id })
   return loadComments(postId)
 }
 

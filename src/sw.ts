@@ -1,7 +1,9 @@
 /// <reference lib="webworker" />
 
 import { clientsClaim } from 'workbox-core'
-import { precacheAndRoute } from 'workbox-precaching'
+import { NavigationRoute, registerRoute } from 'workbox-routing'
+import { createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
+import { parseNotificationPayload, safeNotificationPath, type PushPayload } from './utils/pushNotificationUrl'
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<unknown>
@@ -17,33 +19,54 @@ self.addEventListener('message', (event) => {
 })
 
 precacheAndRoute(self.__WB_MANIFEST)
+registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), {
+  denylist: [/^\/install\.html$/],
+}))
 
 self.addEventListener('push', (event) => {
-  if (!event.data) return
-  let data: { title?: string; body?: string; url?: string; icon?: string; badge?: string } = {}
-  try { data = event.data.json() } catch { data = { body: event.data.text() } }
+  let data: PushPayload = {}
+  if (event.data) {
+    try {
+      const payload = parseNotificationPayload(event.data.json())
+      if (payload) {
+        data = payload
+      } else {
+        data = { body: event.data.text() }
+      }
+    } catch {
+      data = { body: event.data.text() }
+    }
+  }
 
   const title = data.title || 'Banjara Connect'
+  const url = safeNotificationPath(data.url, self.location.origin)
+  const eventId = typeof data.event_id === 'string' ? data.event_id : ''
+  const requestedTag = typeof data.tag === 'string' ? data.tag : ''
+  const tag = (requestedTag || (eventId ? `connect:${eventId}` : '')).slice(0, 128)
   const options: NotificationOptions = {
     body: data.body || 'You have a new notification.',
-    icon: data.icon || '/banjara-mark.svg',
-    badge: data.badge || '/banjara-mark.svg',
-    data: { url: data.url || '/notifications' },
-    tag: 'banjara-connect',
+    icon: safeNotificationPath(data.icon || '/banjara-mark.svg', self.location.origin),
+    badge: safeNotificationPath(data.badge || '/banjara-mark.svg', self.location.origin),
+    data: { url },
   }
+  if (tag) options.tag = tag
   event.waitUntil(self.registration.showNotification(title, options))
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = new URL((event.notification.data?.url || '/notifications') as string, self.location.origin).href
+  const requestedUrl = event.notification.data?.url
+  const url = new URL(safeNotificationPath(requestedUrl, self.location.origin), self.location.origin).href
   event.waitUntil((async () => {
     const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     for (const client of windowClients) {
-      if ('focus' in client) {
-        await client.focus()
+      if (!('focus' in client)) continue
+      try {
         if ('navigate' in client) await client.navigate(url)
+        await client.focus()
         return
+      } catch {
+        continue
       }
     }
     await self.clients.openWindow(url)

@@ -34,6 +34,9 @@ jobs:
         id: locked_install
         run: npm ci
 
+      - name: Tests
+        run: npm test
+
       - name: Build
         id: build
         run: npm run build
@@ -44,6 +47,7 @@ jobs:
           echo "npm ci failed; retrying with a clean dependency resolution."
           rm -rf node_modules
           npm install
+          npm test
           npm run build
 
       - name: Report

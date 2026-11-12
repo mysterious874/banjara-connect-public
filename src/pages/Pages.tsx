@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Volume2, Ban, LogOut, Download, Maximize2, Minimize2, Forward } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Heart, KeyRound, LockKeyhole, MapPin, MessageCircle, Paperclip, Pencil, Camera, Plus, Eye, Search, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, Video, X, Flag, MoreVertical, Palette, VolumeX, Volume2, Ban, LogOut, Download, Maximize2, Minimize2, Forward, Mic, Square } from 'lucide-react'
 import { PostCard, PostComposer } from '../components/feed'
 import { BrandLockup, BrandMark } from '../components/brand'
 import { SearchBar } from '../components/search'
@@ -21,14 +21,17 @@ import { validateChatMedia } from '../utils/chatMediaData'
 import { createGroupMediaUrl, deleteGroupMedia, hydrateGroupMediaUrls, uploadGroupMedia, validateGroupMedia } from '../utils/groupMediaData'
 import { createStory, deleteStory, loadActiveStories, loadStoryViewers, recordStoryView, validateStoryMedia, type StoryRecord, type StoryViewer } from '../utils/storyData'
 import { userFacingError } from '../utils/userFacingError'
-import { getPushNotificationStatus, registerPushNotifications, unregisterPushNotifications, type PushNotificationStatus } from '../utils/pushNotifications'
+import { getPushNotificationStatus, registerPushNotifications, sendActivityPushNotification, sendGroupPushNotification, unregisterPushNotifications, type PushNotificationStatus } from '../utils/pushNotifications'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
 import type { FeedPost, ProfileRecord } from '../types/app'
-import { deleteMessageForEveryone, deleteMessageForMe, hydrateConversationMediaUrls, invalidateConversationListCache, loadConversation, loadConversationMessages, loadConversations, sendConversationMessage, subscribeToConversation, type ChatMessage } from '../utils/chatData'
-import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostLikesBatch, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
+import { chatReactionOptions, deleteMessageForEveryone, deleteMessageForMe, editConversationMessage, hydrateConversationMediaUrls, invalidateConversationListCache, loadConversation, loadConversationMessages, loadConversationPins, loadConversationReactions, loadConversations, loadPeerReadReceipts, sendConversationMessage, subscribeToConversation, toggleConversationPin, toggleConversationReaction, type ChatMessage, type ChatReaction } from '../utils/chatData'
+import { createComment, deleteComment, loadCommentLikes, loadComments, loadPostCommentCounts, loadPostLikesBatch, loadPostShareCounts, toggleCommentLike, updateComment, type CommentRecord } from '../utils/socialData'
 import { getCached, invalidateCache, setCached } from '../utils/performanceCache'
+import { canEditChatMessage, chatReplyPreview, getChatSearchIndexes, isAudioMediaPath, isMessageReadByReceipt } from '../utils/chatMessageFeatures'
+import { editCommunityGroupMessage, loadGroupMemberReadReceipts, loadGroupMessagePins, loadGroupMessageReactions, toggleGroupMessagePin, toggleGroupMessageReaction } from '../utils/groupChatFeatures'
+import { loadDirectPeerTyping, loadGroupTyping, publishDirectTyping, publishGroupTyping } from '../utils/chatTyping'
 import { CallInviteControls } from '../components/calling/CallInviteControls'
 
 function renderChatMessageContent(content: string) {
@@ -261,7 +264,8 @@ export function HomePage() {
   const [postsHasMore, setPostsHasMore] = useState(cachedPosts?.hasMore ?? false)
   const [postsOffset, setPostsOffset] = useState(cachedPosts?.nextOffset ?? 0)
   const [postsError, setPostsError] = useState('')
-  const [postLikeStates, setPostLikeStates] = useState<Map<string, { count: number; liked: boolean }>>(new Map())
+  const [isPostEngagementLoading, setIsPostEngagementLoading] = useState(false)
+  const [postLikeStates, setPostLikeStates] = useState<Map<string, { count: number; liked: boolean; commentCount?: number | null; shareCount?: number | null }>>(new Map())
   const [people, setPeople] = useState<ProfileRecord[]>(cachedPeople ?? [])
   const [isPeopleLoading, setIsPeopleLoading] = useState(!cachedPeople)
   const [peopleError, setPeopleError] = useState('')
@@ -294,10 +298,12 @@ export function HomePage() {
       setPosts([])
       setPostsError('')
       setPostsHasMore(false)
+      setIsPostEngagementLoading(false)
       setIsPostsLoading(false)
       return () => { active = false }
     }
     setPostsError('')
+    setIsPostEngagementLoading(true)
     void (async () => {
       try {
         const blockedPromise = loadBlockedUserIds()
@@ -310,9 +316,25 @@ export function HomePage() {
         setPostsOffset(page.nextOffset)
         setIsPostsLoading(false)
         setCached(`home-posts:${session.user.id}`, page, 30_000)
-        void loadPostLikesBatch(page.posts.map((post) => post.id)).then((likeStates) => {
-          if (active) setPostLikeStates(likeStates)
-        }).catch(() => {})
+        const postIds = page.posts.map((post) => post.id)
+        void Promise.allSettled([loadPostLikesBatch(postIds), loadPostCommentCounts(postIds), loadPostShareCounts(postIds)]).then(([likeResult, commentResult, shareResult]) => {
+          if (!active) return
+          const combined = new Map<string, { count: number; liked: boolean; commentCount?: number | null; shareCount?: number | null }>()
+          const failures = []
+          for (const postId of postIds) {
+            const likes = likeResult.status === 'fulfilled' ? likeResult.value.get(postId) : undefined
+            const commentCount = commentResult.status === 'fulfilled' ? commentResult.value.get(postId) ?? 0 : null
+            const shareCount = shareResult.status === 'fulfilled' ? shareResult.value.get(postId) ?? 0 : null
+            if (likes) combined.set(postId, { ...likes, commentCount, shareCount })
+          }
+          if (likeResult.status === 'rejected') failures.push(likeResult.reason)
+          if (commentResult.status === 'rejected') failures.push(commentResult.reason)
+          if (shareResult.status === 'rejected') failures.push(shareResult.reason)
+          setPostLikeStates(combined)
+          if (failures.length) setPostsError(userFacingError(failures[0], 'Some post engagement counts could not be loaded.'))
+        }).finally(() => {
+          if (active) setIsPostEngagementLoading(false)
+        })
       } catch (error) {
         if (active) {
           if (!posts.length) setPostsError(userFacingError(error, 'Could not load posts.'))
@@ -357,7 +379,7 @@ export function HomePage() {
         <StoriesRail />
         <PostComposer name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url} />
         <div className="feed-heading"><div><span className="eyebrow">FROM YOUR COMMUNITY</span><h2>Your feed</h2></div></div>
-        {isPostsLoading ? <Loading label="Loading posts" /> : postsError && !posts.length ? <ErrorState title="Could not load posts" description={postsError} /> : posts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared with your community will appear here." action={<Button to="/create" variant="outline">Create a post</Button>} /> : <><div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} initialLikeState={postLikeStates.get(post.id)} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>{postsError && <p className="field__error" role="alert">{postsError}</p>}{postsHasMore && <Button variant="outline" onClick={() => void loadMorePosts()} disabled={isLoadingMorePosts}>{isLoadingMorePosts ? 'Loading posts…' : 'Load more posts'}</Button>}</>}
+        {isPostsLoading ? <Loading label="Loading posts" /> : postsError && !posts.length ? <ErrorState title="Could not load posts" description={postsError} /> : posts.length === 0 ? <EmptyState title="No posts yet" description="Posts shared with your community will appear here." action={<Button to="/create" variant="outline">Create a post</Button>} /> : <><div className="feed-list">{posts.map((post) => <PostCard key={post.id} post={post} initialLikeState={postLikeStates.get(post.id)} engagementPending={isPostEngagementLoading} onDeleted={() => setPosts((current) => current.filter((item) => item.id !== post.id))} />)}</div>{postsError && <p className="field__error" role="alert">{postsError}</p>}{postsHasMore && <Button variant="outline" onClick={() => void loadMorePosts()} disabled={isLoadingMorePosts}>{isLoadingMorePosts ? 'Loading posts…' : 'Load more posts'}</Button>}</>}
       </div>
       <aside className="home-aside">
         <section className="aside-section"><div className="aside-section__heading"><h2>People to know</h2><Link className="text-link" to="/connect">More</Link></div>{isPeopleLoading && !people.length ? <Loading label="Loading profiles" /> : peopleError ? <p className="field__error" role="alert">{peopleError}</p> : <div className="user-list">{people.slice(0, 2).map((user) => <UserCard key={user.id} user={user} compact />)}</div>}</section>
@@ -487,8 +509,9 @@ export function CommunityPage() {
     setGroupRequesting(groupId)
     setGroupError('')
     try {
-      const { error: requestError } = await supabase.rpc('request_community_group_join', { p_group_id: groupId })
+      const { data: requestId, error: requestError } = await supabase.rpc('request_community_group_join', { p_group_id: groupId })
       if (requestError) throw requestError
+      if (requestId) void sendActivityPushNotification({ event_type: 'group_join_request', group_join_request_id: requestId })
       setGroupRequestIds((current) => new Set(current).add(groupId))
     } catch (caught) {
       setGroupError(userFacingError(caught, 'Could not send the join request.'))
@@ -1629,13 +1652,19 @@ export function StoriesPage() {
     setStoryActionBusy(true)
     setError('')
     try {
-      const { error: notificationError } = await supabase.from('notifications').insert({
+      const { data: notification, error: notificationError } = await supabase.from('notifications').insert({
         user_id: selectedStory.user_id,
         actor_id: session.user.id,
         type: 'story_like',
+        story_id: selectedStory.id,
         is_read: false,
-      })
+      }).select('id').single()
       if (notificationError) throw notificationError
+      void sendActivityPushNotification({
+        event_type: 'story_like',
+        story_id: selectedStory.id,
+        notification_id: notification.id,
+      })
       setStoryLikedIds((current) => [...current, selectedStory.id])
       setSuccess('Story liked')
     } catch (caught) {
@@ -2296,6 +2325,21 @@ export function ChatConversationPage() {
   const [isSending, setIsSending] = useState(false)
   const [pendingMediaPreviews, setPendingMediaPreviews] = useState<Array<{ id: string; url: string; type: 'image' | 'video' | 'document'; name: string }>>([])
   const [readyMediaIds, setReadyMediaIds] = useState<string[]>([])
+  const [messageSearch, setMessageSearch] = useState('')
+  const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null)
+  const [editingMessageId, setEditingMessageId] = useState('')
+  const [messageReactions, setMessageReactions] = useState<Map<string, Array<{ emoji: ChatReaction; user_id: string }>>>(new Map())
+  const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set())
+  const [featureError, setFeatureError] = useState('')
+  const [featureBusy, setFeatureBusy] = useState(false)
+  const [peerTyping, setPeerTyping] = useState(false)
+  const lastTypingWrite = useRef(0)
+  const peerTypingTimeout = useRef<number | null>(null)
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const voiceRecorder = useRef<MediaRecorder | null>(null)
+  const voiceStream = useRef<MediaStream | null>(null)
+  const voiceChunks = useRef<Blob[]>([])
 
   const [mediaViewer, setMediaViewer] = useState<ChatMessage | null>(null)
   const [mediaViewerSize, setMediaViewerSize] = useState('Checking size…')
@@ -2324,10 +2368,125 @@ export function ChatConversationPage() {
   const peerOnline = Boolean(person?.id && onlineUserIds.has(person.id))
   const peerInApp = Boolean(person?.id && activeUserIds.has(person.id))
   const initialBottomScrollDone = useRef(false)
+  const selectedMessage = selectedMessageIds.length === 1
+    ? messages.find((item) => item.id === selectedMessageIds[0]) ?? null
+    : null
+  const selectedReplyParent = selectedMessage?.reply_to_message_id
+    ? messages.find((item) => item.id === selectedMessage.reply_to_message_id) ?? null
+    : null
+  const filteredMessageIndexes = getChatSearchIndexes(messages, messageSearch)
+  const [activeSearchResult, setActiveSearchResult] = useState(0)
 
   useEffect(() => {
     initialBottomScrollDone.current = false
+    setReplyTarget(null)
+    setEditingMessageId('')
+    setMessageSearch('')
+    setActiveSearchResult(0)
   }, [conversationId])
+
+  useEffect(() => {
+    let active = true
+    if (!selectedMessage) {
+      setMessageReactions(new Map())
+      setPinnedMessageIds(new Set())
+      return
+    }
+    const refresh = async () => {
+      try {
+        const [reactions, pins] = await Promise.all([loadConversationReactions([selectedMessage.id]), loadConversationPins([selectedMessage.id])])
+        if (!active) return
+        setMessageReactions(reactions)
+        setPinnedMessageIds(pins)
+        setFeatureError('')
+      } catch (caught) {
+        if (active) setFeatureError(userFacingError(caught, 'Message reactions and pins are unavailable. Apply the chat features migration first.'))
+      }
+    }
+    const unsubscribe = subscribeToPostgresChanges({
+      topic: `chat-reactions:${conversationId}:${selectedMessage.id}`,
+      event: '*',
+      table: 'connect_direct_message_reactions',
+      filter: `message_id=eq.${selectedMessage.id}`,
+    }, () => { void refresh() })
+    void refresh()
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [conversationId, selectedMessage?.id])
+
+  useEffect(() => {
+    if (!person?.id || !session?.user.id) return
+    let active = true
+    const refresh = async () => {
+      try {
+        const typing = await loadDirectPeerTyping(conversationId, person.id)
+        if (!active) return
+        setPeerTyping(typing)
+        if (peerTypingTimeout.current !== null) window.clearTimeout(peerTypingTimeout.current)
+        if (typing) peerTypingTimeout.current = window.setTimeout(() => setPeerTyping(false), 6500)
+      } catch (caught) {
+        if (active) setFeatureError(userFacingError(caught, 'Typing status is unavailable until the chat features migration is applied.'))
+      }
+    }
+    const unsubscribe = subscribeToPostgresChanges({
+      topic: `chat-typing:${conversationId}`,
+      event: '*',
+      table: 'connect_direct_chat_typing',
+      filter: `conversation_id=eq.${conversationId}`,
+    }, () => { void refresh() })
+    void refresh()
+    return () => {
+      active = false
+      unsubscribe()
+      if (peerTypingTimeout.current !== null) window.clearTimeout(peerTypingTimeout.current)
+      void publishDirectTyping(conversationId, false).catch((caught) => {
+        if (import.meta.env.DEV) console.error('Could not clear direct chat typing status.', caught)
+      })
+    }
+  }, [conversationId, person?.id, session?.user.id])
+
+  useEffect(() => {
+    if (!session?.user.id || !conversationId) return
+    if (!message.trim()) {
+      if (lastTypingWrite.current) {
+        lastTypingWrite.current = 0
+        void publishDirectTyping(conversationId, false).catch((caught) => {
+          setFeatureError(userFacingError(caught, 'Could not clear typing status.'))
+        })
+      }
+      return
+    }
+    const delay = Math.max(0, 1800 - (Date.now() - lastTypingWrite.current))
+    const timer = window.setTimeout(() => {
+      lastTypingWrite.current = Date.now()
+      void publishDirectTyping(conversationId, true).catch((caught) => {
+        setFeatureError(userFacingError(caught, 'Typing status is unavailable until the chat features migration is applied.'))
+      })
+    }, delay)
+    return () => window.clearTimeout(timer)
+  }, [conversationId, message, session?.user.id])
+
+  useEffect(() => {
+    if (!isRecordingVoice) {
+      setRecordingSeconds(0)
+      return
+    }
+    const timer = window.setInterval(() => setRecordingSeconds((seconds) => {
+      if (seconds >= 299) {
+        voiceRecorder.current?.stop()
+        return 300
+      }
+      return seconds + 1
+    }), 1000)
+    return () => window.clearInterval(timer)
+  }, [isRecordingVoice])
+
+  useEffect(() => () => {
+    voiceRecorder.current?.stop()
+    voiceStream.current?.getTracks().forEach((track) => track.stop())
+  }, [])
 
   useEffect(() => {
     const query = forwardQuery.trim()
@@ -2419,6 +2578,14 @@ export function ChatConversationPage() {
         setPerson(peer as ProfileRecord)
         setMessages(history.messages)
         setHasOlderMessages(history.hasMore)
+        void loadPeerReadReceipts(history.messages, peer.id).then((readIds) => {
+          if (!active) return
+          setMessages((current) => current.map((item) => item.sender_id === session?.user.id
+            ? { ...item, readByPeer: readIds.has(item.id) }
+            : item))
+        }).catch((caught) => {
+          if (active) setRealtimeError(userFacingError(caught, 'Could not load message read receipts.'))
+        })
         if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: history.messages, hasOlderMessages: history.hasMore }, 60_000)
         void hydrateConversationMediaUrls(history.messages).then((ready) => {
           if (!active) return
@@ -2444,6 +2611,15 @@ export function ChatConversationPage() {
                 const merged = [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
                 if (session?.user.id) setCached(`chat-history:${session.user.id}:${conversationId}`, { person: peer as ProfileRecord, messages: merged, hasOlderMessages: history.hasMore }, 60_000)
                 return merged
+              })
+              void loadPeerReadReceipts(latest.messages, peer.id).then((readIds) => {
+                if (!active) return
+                const latestIds = new Set(latest.messages.map((item) => item.id))
+                setMessages((current) => current.map((item) => latestIds.has(item.id) && item.sender_id === session?.user.id
+                  ? { ...item, readByPeer: readIds.has(item.id) }
+                  : item))
+              }).catch((caught) => {
+                if (active) setRealtimeError(userFacingError(caught, 'Could not refresh message read receipts.'))
               })
               void hydrateConversationMediaUrls(latest.messages).then((ready) => {
                 if (!active) return
@@ -2498,10 +2674,23 @@ export function ChatConversationPage() {
     try {
       const page = await loadConversationMessages(conversationId, { created_at: oldest.created_at, id: oldest.id })
       setMessages((current) => {
-        const byId = new Map(page.messages.map((item) => [item.id, item]))
+        const byId = new Map(page.messages.map((item) => [
+          item.id,
+          item,
+        ]))
         for (const item of current) byId.set(item.id, item)
         return [...byId.values()].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
       })
+      if (person) {
+        const pageIds = new Set(page.messages.map((item) => item.id))
+        void loadPeerReadReceipts(page.messages, person.id).then((readIds) => {
+          setMessages((current) => current.map((item) => pageIds.has(item.id) && item.sender_id === session?.user.id
+            ? { ...item, readByPeer: readIds.has(item.id) }
+            : item))
+        }).catch((caught) => {
+          setRealtimeError(userFacingError(caught, 'Could not load message read receipts.'))
+        })
+      }
       setHasOlderMessages(page.hasMore)
     } catch (caught) {
       setError(userFacingError(caught, 'Could not load earlier messages.'))
@@ -2643,13 +2832,152 @@ export function ChatConversationPage() {
     if (videoInputRef.current) videoInputRef.current.value = ''
   }
 
+  async function toggleVoiceRecording() {
+    if (isRecordingVoice) {
+      voiceRecorder.current?.stop()
+      return
+    }
+    if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setFeatureError('Voice recording is not supported by this browser.')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const preferredType = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']
+        .find((type) => MediaRecorder.isTypeSupported(type))
+      const recorder = new MediaRecorder(stream, preferredType ? { mimeType: preferredType } : undefined)
+      voiceStream.current = stream
+      voiceChunks.current = []
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data.size) voiceChunks.current.push(event.data)
+      })
+      recorder.addEventListener('error', () => {
+        setFeatureError('Voice recording was interrupted. Try recording again.')
+      })
+      recorder.addEventListener('stop', () => {
+        stream.getTracks().forEach((track) => track.stop())
+        voiceStream.current = null
+        voiceRecorder.current = null
+        setIsRecordingVoice(false)
+        const type = recorder.mimeType || 'audio/webm'
+        const blob = new Blob(voiceChunks.current, { type })
+        voiceChunks.current = []
+        if (!blob.size) {
+          setFeatureError('No audio was recorded. Check microphone permission and try again.')
+          return
+        }
+        const extension = type.includes('ogg') ? 'ogg' : type.includes('mp4') ? 'm4a' : 'webm'
+        const file = new File([blob], `voice-${Date.now()}.${extension}`, { type })
+        try {
+          validateChatMedia(file)
+          setSelectedMediaFiles([file])
+          setSelectedMedia(file)
+          setMessage((current) => current.trim() ? current : 'Voice message')
+          setFeatureError('')
+        } catch (caught) {
+          setFeatureError(userFacingError(caught, 'This voice note could not be attached.'))
+        }
+      })
+      voiceRecorder.current = recorder
+      recorder.start(250)
+      setIsRecordingVoice(true)
+      setFeatureError('')
+    } catch (caught) {
+      setFeatureError(userFacingError(caught, 'Could not access the microphone. Check browser permission and try again.'))
+    }
+  }
+
+  function replyToSelectedMessage() {
+    if (!selectedMessage || selectedMessage.is_deleted_for_everyone) return
+    setReplyTarget(selectedMessage)
+    setEditingMessageId('')
+    setSelectedMessageIds([])
+  }
+
+  function editSelectedMessage() {
+    if (!selectedMessage || !canEditChatMessage(selectedMessage, session?.user.id)) return
+    setMessage(selectedMessage.content)
+    setEditingMessageId(selectedMessage.id)
+    setReplyTarget(null)
+    setSelectedMessageIds([])
+  }
+
+  async function toggleSelectedReaction(emoji: ChatReaction) {
+    if (!selectedMessage || featureBusy) return
+    setFeatureBusy(true)
+    setFeatureError('')
+    try {
+      await toggleConversationReaction(selectedMessage.id, emoji)
+      setMessageReactions(await loadConversationReactions([selectedMessage.id]))
+    } catch (caught) {
+      setFeatureError(userFacingError(caught, 'Could not update this reaction.'))
+    } finally {
+      setFeatureBusy(false)
+    }
+  }
+
+  async function toggleSelectedPin() {
+    if (!selectedMessage || featureBusy) return
+    setFeatureBusy(true)
+    setFeatureError('')
+    try {
+      const pinned = await toggleConversationPin(selectedMessage.id)
+      setPinnedMessageIds((current) => {
+        const next = new Set(current)
+        if (pinned) next.add(selectedMessage.id)
+        else next.delete(selectedMessage.id)
+        return next
+      })
+    } catch (caught) {
+      setFeatureError(userFacingError(caught, 'Could not update this pin.'))
+    } finally {
+      setFeatureBusy(false)
+    }
+  }
+
+  function jumpToSearchResult(direction: 1 | -1) {
+    if (!filteredMessageIndexes.length) return
+    const next = (activeSearchResult + direction + filteredMessageIndexes.length) % filteredMessageIndexes.length
+    setActiveSearchResult(next)
+    const rows = document.querySelectorAll('.chat-screen .chat-messages > .chat-message-row')
+    rows.item(filteredMessageIndexes[next])?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  function jumpToMessage(messageId: string | null | undefined) {
+    if (!messageId) return
+    const index = messages.findIndex((item) => item.id === messageId)
+    if (index < 0) return
+    document.querySelectorAll('.chat-screen .chat-messages > .chat-message-row')
+      .item(index)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const textToSend = message.trim()
     const mediaToSend = selectedMediaFiles.length ? [...selectedMediaFiles] : (selectedMedia ? [selectedMedia] : [])
     if (sendLock.current || (!textToSend && !mediaToSend.length)) return
+    if (editingMessageId && mediaToSend.length) {
+      setError('Remove the attachment before editing a message.')
+      return
+    }
     sendLock.current = true
     setError('')
+
+    if (editingMessageId) {
+      setIsSending(true)
+      try {
+        const edited = await editConversationMessage(editingMessageId, textToSend)
+        setMessages((current) => current.map((item) => item.id === edited.id ? { ...item, ...edited } : item))
+        setMessage('')
+        setEditingMessageId('')
+      } catch (caught) {
+        setError(userFacingError(caught, 'Could not edit this message.'))
+      } finally {
+        setIsSending(false)
+        sendLock.current = false
+      }
+      return
+    }
 
     if (mediaToSend.length) {
       setIsSendingMedia(true)
@@ -2666,13 +2994,14 @@ export function ChatConversationPage() {
       let sentCount = 0
       try {
         for (let index = 0; index < mediaToSend.length; index += 1) {
-          const created = await sendConversationMessage(conversationId, index === 0 ? textToSend : '', mediaToSend[index])
+          const created = await sendConversationMessage(conversationId, index === 0 ? textToSend : '', mediaToSend[index], index === 0 ? replyTarget?.id : null)
           sentCount = index + 1
           setMessages((current) => current.some((item) => item.id === created.id) ? [...current.filter((item) => item.id !== created.id), created] : [...current, created])
           setPendingMediaPreviews((current) => current.filter((preview) => preview.id !== previews[index].id))
           URL.revokeObjectURL(previews[index].url)
           if (index === 0 && textToSend && message.trim() === textToSend) setMessage('')
         }
+        setReplyTarget(null)
         window.requestAnimationFrame(() => { const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
       } catch (caught) {
         const remainingMedia = mediaToSend.slice(sentCount)
@@ -2693,8 +3022,9 @@ export function ChatConversationPage() {
     stickToLatest.current = true
     setIsSending(true)
     try {
-      const created = await sendConversationMessage(conversationId, textToSend)
+      const created = await sendConversationMessage(conversationId, textToSend, undefined, replyTarget?.id)
       setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
+      setReplyTarget(null)
       window.requestAnimationFrame(() => { const pane = document.querySelector('.chat-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
       if (message.trim() === textToSend) setMessage('')
     } catch (caught) {
@@ -2724,7 +3054,7 @@ export function ChatConversationPage() {
         <Avatar name={personName} image={person.avatar_url ?? undefined} />
         <span className="chat-screen__identity">
           <strong>{personName}</strong>
-          <small className={`chat-screen__presence ${peerStatusClass}`} aria-live="polite">{peerStatus}</small>
+          <small className={`chat-screen__presence ${peerStatusClass}`} aria-live="polite">{peerTyping ? 'typing…' : peerStatus}</small>
         </span>
       </Link>
       <div className="chat-screen__actions">
@@ -2733,6 +3063,45 @@ export function ChatConversationPage() {
         {chatMenuOpen && <div className="chat-options-menu"><button type="button" className="chat-options-menu__item" onClick={() => { setChatThemeOpen(true); setChatMenuOpen(false) }}><Palette size={17} /><span>Chat Background</span><ChevronRight size={15} /></button></div>}
       </div>
     </header>
+    <div className="chat-feature-tools" aria-label="Conversation tools">
+      <label className="chat-feature-tools__search">
+        <Search size={16} aria-hidden="true" />
+        <input aria-label="Search loaded messages" placeholder="Search loaded messages" value={messageSearch} onChange={(event) => { setMessageSearch(event.target.value); setActiveSearchResult(0) }} />
+      </label>
+      <button type="button" className={`chat-feature-tools__record${isRecordingVoice ? ' is-recording' : ''}`} aria-pressed={isRecordingVoice} disabled={isSending || isSendingMedia} onClick={() => void toggleVoiceRecording()}>
+        {isRecordingVoice ? <><Square size={15} /> Stop recording · {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}</> : <><Mic size={16} /> Record voice note</>}
+      </button>
+      {messageSearch.trim() && <div className="chat-feature-tools__search-nav">
+        <span>{filteredMessageIndexes.length ? `${activeSearchResult + 1} of ${filteredMessageIndexes.length}` : 'No matches in loaded messages'}</span>
+        <button type="button" disabled={!filteredMessageIndexes.length} onClick={() => jumpToSearchResult(-1)} aria-label="Previous search result">↑</button>
+        <button type="button" disabled={!filteredMessageIndexes.length} onClick={() => jumpToSearchResult(1)} aria-label="Next search result">↓</button>
+      </div>}
+      {selectedMessage && <div className="chat-feature-tools__actions" aria-label="Selected message actions">
+        <span className="chat-feature-tools__selection">{selectedMessage.edited_at ? 'Edited · ' : ''}{selectedMessage.content.slice(0, 80) || 'Media message'}{selectedMessage.content.length > 80 ? '…' : ''}</span>
+        {!selectedMessage.is_deleted_for_everyone && <button type="button" onClick={replyToSelectedMessage}>Reply</button>}
+        {canEditChatMessage(selectedMessage, session?.user.id) && <button type="button" onClick={editSelectedMessage}>Edit</button>}
+        {!selectedMessage.is_deleted_for_everyone && <button type="button" disabled={featureBusy} onClick={() => void toggleSelectedPin()}>{pinnedMessageIds.has(selectedMessage.id) ? 'Unpin for me' : 'Pin for me'}</button>}
+        {chatReactionOptions.map((emoji) => {
+          const reactions = messageReactions.get(selectedMessage.id) ?? []
+          const count = reactions.filter((reaction) => reaction.emoji === emoji).length
+          const mine = reactions.some((reaction) => reaction.emoji === emoji && reaction.user_id === session?.user.id)
+          return <button type="button" key={emoji} aria-pressed={mine} disabled={featureBusy || selectedMessage.is_deleted_for_everyone} onClick={() => void toggleSelectedReaction(emoji)}>{emoji}{count > 0 ? ` ${count}` : ''}</button>
+        })}
+        <button type="button" onClick={() => setSelectedMessageIds([])} aria-label="Close selected message actions">×</button>
+      </div>}
+      {selectedMessage?.reply_to_message_id && <button type="button" className="chat-feature-tools__quote" onClick={() => jumpToMessage(selectedMessage.reply_to_message_id)}>
+        Replying to: {selectedReplyParent ? chatReplyPreview(selectedReplyParent.content, selectedReplyParent.media_type) : 'Earlier message'}
+      </button>}
+      {featureError && <p className="field__error" role="status">{featureError}</p>}
+      {replyTarget && <div className="chat-feature-tools__reply" role="status">
+        <span><strong>Replying to {replyTarget.sender_id === session?.user.id ? 'yourself' : personName}</strong><small>{chatReplyPreview(replyTarget.content, replyTarget.media_type)}</small></span>
+        <button type="button" onClick={() => setReplyTarget(null)} aria-label="Cancel reply">×</button>
+      </div>}
+      {editingMessageId && <div className="chat-feature-tools__reply" role="status">
+        <span><strong>Editing message</strong><small>Update the text and send to save.</small></span>
+        <button type="button" onClick={() => { setEditingMessageId(''); setMessage('') }} aria-label="Cancel message edit">×</button>
+      </div>}
+    </div>
     {chatThemeOpen && <Modal open={chatThemeOpen} title="Chat background" onClose={() => setChatThemeOpen(false)}><div className="chat-theme-picker">{chatThemes.map((theme) => <button type="button" key={theme.id} className={`chat-theme-option${chatTheme === theme.id ? ' chat-theme-option--active' : ''}`} onClick={() => selectChatTheme(theme.id)}><span className="chat-theme-option__swatch" style={{ background: theme.preview }} /><span><strong>{theme.label}</strong><small>{theme.id === 'classic' ? 'Banjara Connect default' : 'Apply only to this chat'}</small></span>{chatTheme === theme.id && <Check size={17} />}</button>)}</div></Modal>}
     <div className="chat-messages" onScroll={(event) => { const pane = event.currentTarget; stickToLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120 }}>{hasOlderMessages && <Button variant="quiet" onClick={() => void loadOlderMessages()} disabled={isLoadingOlder}>{isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}</Button>}{selectedMessageIds.length > 0 && <div className="chat-selection-toolbar"><button type="button" className="chat-selection-toolbar__close" onClick={cancelMessageSelection} aria-label="Close message selection">×</button><strong>{selectedMessageIds.length} selected</strong><button type="button" onClick={() => void copySelectedMessages()}>Copy</button><button type="button" onClick={() => void openForwardPicker()}><Forward size={14} /> Forward</button><button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('me')}>Delete for me</button>{messages.some((item) => selectedMessageIds.includes(item.id) && item.sender_id === session?.user.id && !item.is_deleted_for_everyone && (item.media_type === 'image' || item.media_type === 'video' || item.content)) && <button type="button" disabled={pendingDeleteId === 'bulk'} onClick={() => void deleteSelectedMessages('everyone')}>Delete for everyone</button>}</div>}{messages.length ? messages.map((item, index) => { const mine = item.sender_id === session?.user.id; const selected = selectedMessageIds.includes(item.id); const mediaUrl = item.media_signed_url; return <div className={`chat-message-row${mine ? ' chat-message-row--you' : ' chat-message-row--them'}${selected ? ' chat-message-row--selected' : ''}${index === 0 ? ' chat-message-row--first' : ''}`} key={item.id}><div className={`chat-bubble${mine ? ' chat-bubble--you' : ' chat-bubble--them'}${selected ? ' chat-bubble--selected' : ''}`} onPointerDown={() => startMessageLongPress(item.id)} onPointerUp={clearLongPressTimer} onPointerCancel={clearLongPressTimer} onPointerLeave={clearLongPressTimer} onContextMenu={(event) => handleMessageContextMenu(event, item.id)} onClick={() => {
   if (suppressNextMessageClick.current) {
@@ -2740,8 +3109,28 @@ export function ChatConversationPage() {
     return
   }
   if (selectedMessageIds.length > 0) toggleMessageSelection(item.id)
-}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <span className={`chat-message-media-wrap${readyMediaIds.includes(item.id) ? ' is-ready' : ''}`}><img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" onLoad={() => setReadyMediaIds((current) => current.includes(item.id) ? current : [...current, item.id])} onError={() => setReadyMediaIds((current) => current.includes(item.id) ? current : [...current, item.id])} onClick={(event) => { event.stopPropagation(); setMediaViewer(item); setMediaViewerFullscreen(false) }} />{!readyMediaIds.includes(item.id) && <span className="chat-media-progress" role="status" aria-label="Loading photo"><span className="chat-media-progress__spinner" /></span>}</span>}{mediaUrl && item.media_type === 'video' && <span className={`chat-message-media-wrap${readyMediaIds.includes(item.id) ? ' is-ready' : ''}`}><video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" onLoadedData={() => setReadyMediaIds((current) => current.includes(item.id) ? current : [...current, item.id])} onError={() => setReadyMediaIds((current) => current.includes(item.id) ? current : [...current, item.id])} onClick={(event) => { event.stopPropagation(); setMediaViewer(item); setMediaViewerFullscreen(false) }} />{!readyMediaIds.includes(item.id) && <span className="chat-media-progress" role="status" aria-label="Loading video"><span className="chat-media-progress__spinner" /></span>}</span>}{mediaUrl && item.media_type === 'document' && <button type="button" className="chat-document" onClick={(event) => { event.stopPropagation(); setMediaViewer(item); setMediaViewerFullscreen(false) }}><Paperclip size={17} /><span>Open document</span></button>}{item.content && <p className="chat-message-text">{renderChatMessageContent(item.content)}</p>}</>}<span className="chat-bubble__meta"><time>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{mine && !item.is_deleted_for_everyone && <span className={`chat-read-ticks${peerInApp ? ' chat-read-ticks--glow' : peerOnline ? ' chat-read-ticks--delivered' : ''}`} aria-label={peerInApp ? 'Chat open' : peerOnline ? 'Delivered' : 'Sent'}>{peerOnline ? '✓✓' : '✓'}</span>}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{pendingMediaPreviews.map((preview) => <div className="chat-message-row chat-message-row--you chat-message-row--pending" key={preview.id}><div className="chat-bubble chat-bubble--you chat-bubble--pending-media">{preview.type === 'image' ? <img className="chat-message-media" src={preview.url} alt="Photo uploading" /> : preview.type === 'video' ? <video className="chat-message-media chat-message-media--video" src={preview.url} muted playsInline preload="metadata" /> : <div className="chat-document"><Paperclip size={17} /><span>{preview.name}</span></div>}<span className="chat-media-progress" role="status" aria-label="Uploading media"><span className="chat-media-progress__spinner" /></span><span className="chat-media-progress__label">Uploading</span></div></div>)}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{selectedMediaFiles.length > 0 && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMediaFiles.length} file{selectedMediaFiles.length === 1 ? '' : 's'} selected</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" multiple onChange={handleMediaChange} /><input ref={photoInputRef} className="chat-media-input" type="file" accept="image/*" multiple onChange={handleMediaChange} /><input ref={videoInputRef} className="chat-media-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/*" multiple onChange={handleMediaChange} /><input ref={cameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleMediaChange} /><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} /><div className="chat-attachment-wrap"><Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" aria-expanded={attachmentMenuOpen} onClick={() => setAttachmentMenuOpen((open) => !open)} disabled={isSendingMedia}><Paperclip size={18} /></Button>{attachmentMenuOpen && <div className="chat-attachment-menu" role="menu" aria-label="Choose attachment type"><button type="button" role="menuitem" onClick={() => { setAttachmentMenuOpen(false); photoInputRef.current?.click() }}><span className="chat-attachment-menu__icon"><Camera size={16} /></span><span>Photo</span></button><button type="button" role="menuitem" onClick={() => { setAttachmentMenuOpen(false); videoInputRef.current?.click() }}><span className="chat-attachment-menu__icon"><Video size={16} /></span><span>Video</span></button></div>}</div><Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => cameraInputRef.current?.click()} disabled={isSendingMedia}><Camera size={18} /></Button><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form></div>
-    {mediaViewer?.media_signed_url && <div className={`chat-media-viewer-backdrop${mediaViewerFullscreen ? ' chat-media-viewer-backdrop--fullscreen' : ''}`} role="dialog" aria-modal="true" aria-label="Shared media" onClick={() => { setMediaViewer(null); setMediaViewerFullscreen(false) }}><div className="chat-media-viewer" onClick={(event) => event.stopPropagation()}><div className="chat-media-viewer__head"><span><strong>{mediaViewer.media_type === 'video' ? 'Video' : mediaViewer.media_type === 'image' ? 'Photo' : 'File'}</strong><small>{mediaViewerSize}</small></span><div><a href={mediaViewer.media_signed_url} download target="_blank" rel="noreferrer" aria-label="Download media" title="Download media"><Download size={18} /></a><button type="button" onClick={() => setMediaViewerFullscreen((value) => !value)} aria-label={mediaViewerFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{mediaViewerFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button><button type="button" onClick={() => { setMediaViewer(null); setMediaViewerFullscreen(false) }} aria-label="Close media"><X size={20} /></button></div></div><div className="chat-media-viewer__content">{mediaViewer.media_type === 'video' ? <video src={mediaViewer.media_signed_url} controls autoPlay playsInline /> : mediaViewer.media_type === 'image' ? <img src={mediaViewer.media_signed_url} alt="Shared media full view" /> : <a href={mediaViewer.media_signed_url} download target="_blank" rel="noreferrer"><Download size={24} /> Download file</a>}</div></div></div>}
+}}>{item.is_deleted_for_everyone ? <em>Message deleted</em> : <>{mediaUrl && item.media_type === 'image' && <span className={`chat-message-media-wrap${readyMediaIds.includes(item.id) ? ' is-ready' : ''}`}><img className="chat-message-media" src={mediaUrl} alt="Shared photo" loading="lazy" onLoad={() => setReadyMediaIds((current) => current.includes(item.id) ? current : [...current, item.id])} onError={() => setReadyMediaIds((current) => current.includes(item.id) ? current : [...current, item.id])} onClick={(event) => { event.stopPropagation(); setMediaViewer(item); setMediaViewerFullscreen(false) }} />{!readyMediaIds.includes(item.id) && <span className="chat-media-progress" role="status" aria-label="Loading photo"><span className="chat-media-progress__spinner" /></span>}</span>}{mediaUrl && item.media_type === 'video' && <span className={`chat-message-media-wrap${readyMediaIds.includes(item.id) ? ' is-ready' : ''}`}><video className="chat-message-media chat-message-media--video" src={mediaUrl} controls playsInline preload="metadata" onLoadedData={() => setReadyMediaIds((current) => current.includes(item.id) ? current : [...current, item.id])} onError={() => setReadyMediaIds((current) => current.includes(item.id) ? current : [...current, item.id])} onClick={(event) => { event.stopPropagation(); setMediaViewer(item); setMediaViewerFullscreen(false) }} />{!readyMediaIds.includes(item.id) && <span className="chat-media-progress" role="status" aria-label="Loading video"><span className="chat-media-progress__spinner" /></span>}</span>}{mediaUrl && item.media_type === 'document' && <button type="button" className="chat-document" onClick={(event) => { event.stopPropagation(); setMediaViewer(item); setMediaViewerFullscreen(false) }}><Paperclip size={17} /><span>Open document</span></button>}{item.content && <p className="chat-message-text">{renderChatMessageContent(item.content)}</p>}</>}<span className="chat-bubble__meta"><time>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{mine && !item.is_deleted_for_everyone && <span className={`chat-read-ticks${item.readByPeer ? ' chat-read-ticks--read' : ''}`} aria-label={item.readByPeer ? 'Read' : 'Sent'}>{item.readByPeer ? '✓✓' : '✓'}</span>}</span></div></div>}) : <p className="micro-note">No messages yet. Start the conversation.</p>}{pendingMediaPreviews.map((preview) => <div className="chat-message-row chat-message-row--you chat-message-row--pending" key={preview.id}><div className="chat-bubble chat-bubble--you chat-bubble--pending-media">{preview.type === 'image' ? <img className="chat-message-media" src={preview.url} alt="Photo uploading" /> : preview.type === 'video' ? <video className="chat-message-media chat-message-media--video" src={preview.url} muted playsInline preload="metadata" /> : <div className="chat-document"><Paperclip size={17} /><span>{preview.name}</span></div>}<span className="chat-media-progress" role="status" aria-label="Uploading media"><span className="chat-media-progress__spinner" /></span><span className="chat-media-progress__label">Uploading</span></div></div>)}{realtimeError && <p className="field__error" role="status">{realtimeError}</p>}{error && <p className="field__error" role="alert">{error}</p>}</div><div className="chat-compose-area">{selectedMediaFiles.length > 0 && !isSendingMedia && <div className="chat-attachment-preview"><span><Paperclip size={14} />{selectedMediaFiles.length} file{selectedMediaFiles.length === 1 ? '' : 's'} selected</span><button type="button" onClick={clearSelectedMedia} aria-label="Remove selected media">×</button></div>}<form className="chat-disabled-compose" onSubmit={sendMessage}><input ref={mediaInputRef} className="chat-media-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" multiple onChange={handleMediaChange} /><input ref={photoInputRef} className="chat-media-input" type="file" accept="image/*" multiple onChange={handleMediaChange} /><input ref={videoInputRef} className="chat-media-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/*" multiple onChange={handleMediaChange} /><input ref={cameraInputRef} className="chat-media-input" type="file" accept="image/*" capture="environment" onChange={handleMediaChange} /><Input aria-label="Message" placeholder={selectedMedia ? 'Add a caption (optional)' : 'Write a message'} value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} /><div className="chat-attachment-wrap"><Button type="button" variant="quiet" iconOnly aria-label="Attach photo or video" aria-expanded={attachmentMenuOpen} onClick={() => setAttachmentMenuOpen((open) => !open)} disabled={isSendingMedia}><Paperclip size={18} /></Button>{attachmentMenuOpen && <div className="chat-attachment-menu" role="menu" aria-label="Choose attachment type"><button type="button" role="menuitem" onClick={() => { setAttachmentMenuOpen(false); photoInputRef.current?.click() }}><span className="chat-attachment-menu__icon"><Camera size={16} /></span><span>Photo</span></button><button type="button" role="menuitem" onClick={() => { setAttachmentMenuOpen(false); videoInputRef.current?.click() }}><span className="chat-attachment-menu__icon"><Video size={16} /></span><span>Video</span></button></div>}</div><Button type="button" variant="quiet" iconOnly aria-label="Take a photo" onClick={() => cameraInputRef.current?.click()} disabled={isSendingMedia}><Camera size={18} /></Button><Button type="submit" disabled={!message.trim() && !selectedMedia} iconOnly aria-label="Send message">{isSendingMedia ? '…' : <Send size={17} />}</Button></form></div>
+    {mediaViewer?.media_signed_url && <div className={`chat-media-viewer-backdrop${mediaViewerFullscreen ? ' chat-media-viewer-backdrop--fullscreen' : ''}`} role="dialog" aria-modal="true" aria-label="Shared media" onClick={() => { setMediaViewer(null); setMediaViewerFullscreen(false) }}>
+      <div className="chat-media-viewer" onClick={(event) => event.stopPropagation()}>
+        <div className="chat-media-viewer__head">
+          <span><strong>{isAudioMediaPath(mediaViewer.media_url) ? 'Voice note' : mediaViewer.media_type === 'video' ? 'Video' : mediaViewer.media_type === 'image' ? 'Photo' : 'File'}</strong><small>{mediaViewerSize}</small></span>
+          <div>
+            <a href={mediaViewer.media_signed_url} download target="_blank" rel="noreferrer" aria-label="Download media" title="Download media"><Download size={18} /></a>
+            <button type="button" onClick={() => setMediaViewerFullscreen((value) => !value)} aria-label={mediaViewerFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{mediaViewerFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button>
+            <button type="button" onClick={() => { setMediaViewer(null); setMediaViewerFullscreen(false) }} aria-label="Close media"><X size={20} /></button>
+          </div>
+        </div>
+        <div className="chat-media-viewer__content">
+          {isAudioMediaPath(mediaViewer.media_url)
+            ? <audio src={mediaViewer.media_signed_url} controls preload="metadata" />
+            : mediaViewer.media_type === 'video'
+              ? <video src={mediaViewer.media_signed_url} controls autoPlay playsInline />
+              : mediaViewer.media_type === 'image'
+                ? <img src={mediaViewer.media_signed_url} alt="Shared media full view" />
+                : <a href={mediaViewer.media_signed_url} download target="_blank" rel="noreferrer"><Download size={24} /> Download file</a>}
+        </div>
+      </div>
+    </div>}
     {forwardOpen && <div className="chat-forward-backdrop" role="dialog" aria-modal="true" aria-label="Forward messages" onClick={() => !forwardingTo && setForwardOpen(false)}><div className="chat-forward-modal" onClick={(event) => event.stopPropagation()}><div className="chat-forward-modal__head"><strong>Forward to</strong><button type="button" onClick={() => !forwardingTo && setForwardOpen(false)} aria-label="Close forward picker"><X size={19} /></button></div><Input aria-label="Search conversations" placeholder="Search people or username" value={forwardQuery} onChange={(event) => setForwardQuery(event.target.value)} /><div className="chat-forward-modal__list">{forwardLoading ? <Loading label="Loading conversations" /> : forwardConversations.filter((row) => row.id !== conversationId && `${row.member.display_name || ''} ${row.member.username || ''}`.toLowerCase().includes(forwardQuery.trim().toLowerCase())).map((row) => <button type="button" className="chat-forward-contact" key={row.id} onClick={() => setSelectedForwardIds((current) => current.includes(row.id) ? current.filter((id) => id !== row.id) : [...current, row.id])} disabled={Boolean(forwardingTo)}><Avatar name={row.member.display_name || row.member.username} image={row.member.avatar_url ?? undefined} /><span><strong>{row.member.display_name || row.member.username}</strong><small>@{row.member.username}</small></span><span className={`chat-forward-check${selectedForwardIds.includes(row.id) ? ' is-selected' : ''}`}>{selectedForwardIds.includes(row.id) && <Check size={14} />}</span></button>)}{forwardQuery.trim().length >= 2 && forwardProfiles.filter((profile) => !forwardConversations.some((row) => row.member.id === profile.id)).map((profile) => <button type="button" className="chat-forward-contact" key={profile.id} onClick={() => setSelectedForwardIds((current) => current.includes(profile.id) ? current.filter((id) => id !== profile.id) : [...current, profile.id])} disabled={Boolean(forwardingTo)}><Avatar name={profile.display_name || profile.username} image={profile.avatar_url ?? undefined} /><span><strong>{profile.display_name || profile.username}</strong><small>@{profile.username} · New chat</small></span><span className={`chat-forward-check${selectedForwardIds.includes(profile.id) ? ' is-selected' : ''}`}>{selectedForwardIds.includes(profile.id) && <Check size={14} />}</span></button>)}{forwardSearchLoading && <Loading label="Searching contacts" />}{!forwardLoading && !forwardSearchLoading && !forwardConversations.some((row) => row.id !== conversationId && `${row.member.display_name || ''} ${row.member.username || ''}`.toLowerCase().includes(forwardQuery.trim().toLowerCase())) && !forwardProfiles.some((profile) => !forwardConversations.some((row) => row.member.id === profile.id)) && <p className="micro-note">{forwardQuery.trim().length < 2 ? 'Search by username to find other contacts.' : 'No matching contacts found.'}</p>}</div>{forwardError && <p className="field__error" role="alert">{forwardError}</p>}<div className="chat-forward-modal__footer"><span>{selectedForwardIds.length} selected</span><button type="button" disabled={!selectedForwardIds.length || Boolean(forwardingTo)} onClick={() => void sendForwardedToSelectedContacts()}>{forwardingTo ? <Loading label="Sending" /> : <><Forward size={16} /> Send</>}</button></div></div></div>}
 </section>
 }
@@ -2757,6 +3146,8 @@ type CommunityGroupMessage = {
   media_signed_url?: string | null
   is_deleted_for_everyone: boolean
   created_at: string
+  reply_to_message_id?: string | null
+  edited_at?: string | null
 }
 
 export function CommunityGroupPage() {
@@ -2790,6 +3181,16 @@ export function CommunityGroupPage() {
   const [groupAttachmentMenuOpen, setGroupAttachmentMenuOpen] = useState(false)
   const [selectedGroupMessageIds, setSelectedGroupMessageIds] = useState<string[]>([])
   const [pendingGroupDelete, setPendingGroupDelete] = useState('')
+  const [groupMessageSearch, setGroupMessageSearch] = useState('')
+  const [groupReplyTarget, setGroupReplyTarget] = useState<CommunityGroupMessage | null>(null)
+  const [editingGroupMessageId, setEditingGroupMessageId] = useState('')
+  const [groupMessageReactions, setGroupMessageReactions] = useState<Map<string, Array<{ emoji: ChatReaction; user_id: string }>>>(new Map())
+  const [pinnedGroupMessageIds, setPinnedGroupMessageIds] = useState<Set<string>>(new Set())
+  const [groupMemberReadReceipts, setGroupMemberReadReceipts] = useState<Array<{ user_id: string; last_read_message_id: string | null; last_read_at: string | null }>>([])
+  const [groupFeatureError, setGroupFeatureError] = useState('')
+  const [groupFeatureBusy, setGroupFeatureBusy] = useState(false)
+  const [typingGroupMemberIds, setTypingGroupMemberIds] = useState<string[]>([])
+  const lastGroupTypingWrite = useRef(0)
   const groupLongPressTimer = useRef<number | null>(null)
   const suppressNextGroupMessageClick = useRef(false)
   const [isSendingGroupMedia, setIsSendingGroupMedia] = useState(false)
@@ -2816,10 +3217,117 @@ export function CommunityGroupPage() {
   const [reportSaving, setReportSaving] = useState(false)
   const [reportError, setReportError] = useState('')
   const initialGroupBottomScrollDone = useRef(false)
+  const selectedGroupMessage = selectedGroupMessageIds.length === 1
+    ? messages.find((item) => item.id === selectedGroupMessageIds[0]) ?? null
+    : null
+  const selectedGroupReplyParent = selectedGroupMessage?.reply_to_message_id
+    ? messages.find((item) => item.id === selectedGroupMessage.reply_to_message_id) ?? null
+    : null
+  const selectedGroupReaders = selectedGroupMessage
+    ? groupMemberReadReceipts.filter((receipt) => receipt.user_id !== selectedGroupMessage.sender_id
+      && members.some((member) => member.user_id === receipt.user_id)
+      && isMessageReadByReceipt(selectedGroupMessage, receipt))
+    : []
+  const groupSearchIndexes = getChatSearchIndexes(messages, groupMessageSearch)
+  const [activeGroupSearchResult, setActiveGroupSearchResult] = useState(0)
 
   useEffect(() => {
     initialGroupBottomScrollDone.current = false
+    setGroupReplyTarget(null)
+    setEditingGroupMessageId('')
+    setGroupMessageSearch('')
+    setActiveGroupSearchResult(0)
   }, [groupId])
+
+  useEffect(() => {
+    let active = true
+    if (!selectedGroupMessage) {
+      setGroupMessageReactions(new Map())
+      setPinnedGroupMessageIds(new Set())
+      setGroupMemberReadReceipts([])
+      return
+    }
+    const refresh = async () => {
+      try {
+        const [reactions, pins, receipts] = await Promise.all([
+          loadGroupMessageReactions([selectedGroupMessage.id]),
+          loadGroupMessagePins([selectedGroupMessage.id]),
+          groupId ? loadGroupMemberReadReceipts(groupId) : Promise.resolve([]),
+        ])
+        if (!active) return
+        setGroupMessageReactions(reactions)
+        setPinnedGroupMessageIds(pins)
+        setGroupMemberReadReceipts(receipts)
+        setGroupFeatureError('')
+      } catch (caught) {
+        if (active) setGroupFeatureError(userFacingError(caught, 'Message reactions and pins are unavailable. Apply the chat features migration first.'))
+      }
+    }
+    const unsubscribe = subscribeToPostgresChanges({
+      topic: `group-message-reactions:${groupId}:${selectedGroupMessage.id}`,
+      event: '*',
+      table: 'connect_group_message_reactions',
+      filter: `message_id=eq.${selectedGroupMessage.id}`,
+    }, () => { void refresh() })
+    void refresh()
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [groupId, selectedGroupMessage?.id])
+
+  useEffect(() => {
+    if (!groupId || !session?.user.id) return
+    let active = true
+    let expiry: number | null = null
+    const refresh = async () => {
+      try {
+        const typingIds = await loadGroupTyping(groupId)
+        if (!active) return
+        setTypingGroupMemberIds(typingIds)
+        if (expiry !== null) window.clearTimeout(expiry)
+        if (typingIds.length) expiry = window.setTimeout(() => setTypingGroupMemberIds([]), 6500)
+      } catch (caught) {
+        if (active) setGroupFeatureError(userFacingError(caught, 'Group typing status is unavailable until the chat features migration is applied.'))
+      }
+    }
+    const unsubscribe = subscribeToPostgresChanges({
+      topic: `community-group:${groupId}:typing`,
+      event: '*',
+      table: 'connect_group_chat_typing',
+      filter: `group_id=eq.${groupId}`,
+    }, () => { void refresh() })
+    void refresh()
+    return () => {
+      active = false
+      unsubscribe()
+      if (expiry !== null) window.clearTimeout(expiry)
+      void publishGroupTyping(groupId, false).catch((caught) => {
+        if (import.meta.env.DEV) console.error('Could not clear group typing status.', caught)
+      })
+    }
+  }, [groupId, session?.user.id])
+
+  useEffect(() => {
+    if (!session?.user.id || !groupId) return
+    if (!message.trim()) {
+      if (lastGroupTypingWrite.current) {
+        lastGroupTypingWrite.current = 0
+        void publishGroupTyping(groupId, false).catch((caught) => {
+          setGroupFeatureError(userFacingError(caught, 'Could not clear group typing status.'))
+        })
+      }
+      return
+    }
+    const delay = Math.max(0, 1800 - (Date.now() - lastGroupTypingWrite.current))
+    const timer = window.setTimeout(() => {
+      lastGroupTypingWrite.current = Date.now()
+      void publishGroupTyping(groupId, true).catch((caught) => {
+        setGroupFeatureError(userFacingError(caught, 'Group typing status is unavailable until the chat features migration is applied.'))
+      })
+    }, delay)
+    return () => window.clearTimeout(timer)
+  }, [groupId, message, session?.user.id])
 
   useEffect(() => {
     if (isLoading || !messages.length || initialGroupBottomScrollDone.current) return
@@ -2884,6 +3392,14 @@ export function CommunityGroupPage() {
     let groupMessageRefreshQueued = false
     let groupMemberRefreshPending = false
     let groupMemberRefreshQueued = false
+    const refreshGroupReceipts = async () => {
+      try {
+        const receipts = await loadGroupMemberReadReceipts(groupId)
+        if (active) setGroupMemberReadReceipts(receipts)
+      } catch (caught) {
+        if (active) setGroupFeatureError(userFacingError(caught, 'Group read receipts are unavailable until the chat migration is applied.'))
+      }
+    }
 
     const refreshGroupMessages = async () => {
       if (groupMessageRefreshPending) {
@@ -2907,6 +3423,15 @@ export function CommunityGroupPage() {
           if (hiddenError) throw hiddenError
           const hiddenIds = new Set((hiddenRows ?? []).map((row) => row.message_id as string))
           const incoming = ((latest ?? []) as CommunityGroupMessage[]).filter((row) => !hiddenIds.has(row.id)).reverse()
+          const newestVisibleMessage = incoming[incoming.length - 1]
+          if (newestVisibleMessage && session?.user.id) {
+            void Promise.resolve(supabase.rpc('mark_community_group_read', { p_group_id: groupId, p_message_id: newestVisibleMessage.id }))
+              .then(({ error: markReadError }) => {
+                if (markReadError && active) setRealtimeError(userFacingError(markReadError, 'Could not update your group read receipt.'))
+              }).catch((caught) => {
+                if (active) setRealtimeError(userFacingError(caught, 'Could not update your group read receipt.'))
+              })
+          }
           setMessages((current) => {
             const byId = new Map(current.map((item) => [item.id, item]))
             for (const item of incoming) byId.set(item.id, { ...byId.get(item.id), ...item })
@@ -3051,9 +3576,19 @@ export function CommunityGroupPage() {
           if (active && status !== 'SUBSCRIBED') setRealtimeError(`Live member updates are unavailable (${status.toLowerCase().replace('_', ' ')}).`)
         })
 
+        const unsubscribeReadReceipts = subscribeToPostgresChanges({
+          topic: `community-group:${groupId}:read-receipts`,
+          event: '*',
+          table: 'community_group_message_reads',
+          filter: `group_id=eq.${groupId}`,
+        }, () => {
+          void refreshGroupReceipts()
+        })
+
         unsubscribe = () => {
           unsubscribeMessages()
           unsubscribeMembers()
+          unsubscribeReadReceipts()
         }
       } catch (caught) {
         if (active) setError(userFacingError(caught, 'Could not load this community.'))
@@ -3162,6 +3697,7 @@ export function CommunityGroupPage() {
     try {
       const { error: requestError } = await supabase.rpc('add_community_group_member', { p_group_id: groupId, p_user_id: userId })
       if (requestError) throw requestError
+      void sendActivityPushNotification({ event_type: 'group_member_added', group_id: groupId, target_user_id: userId })
       setMemberResults((current) => current.filter((profile) => profile.id !== userId))
       setMemberQuery('')
     } catch (caught) {
@@ -3184,6 +3720,7 @@ export function CommunityGroupPage() {
         p_role: role,
       })
       if (roleError) throw roleError
+      void sendActivityPushNotification({ event_type: 'group_role_changed', group_id: groupId, target_user_id: userId })
       await loadGroupMembers()
     } catch (caught) {
       setMemberError(userFacingError(caught, 'Could not update this member role.'))
@@ -3302,6 +3839,7 @@ export function CommunityGroupPage() {
         p_approve: approve,
       })
       if (responseError) throw responseError
+      void sendActivityPushNotification({ event_type: 'group_join_request_result', group_join_request_id: requestId })
       setMemberRequests((current) => current.filter((request) => request.id !== requestId))
       if (approve) await loadGroupMembers()
     } catch (caught) {
@@ -3376,6 +3914,7 @@ export function CommunityGroupPage() {
     try {
       const { error: removeError } = await supabase.rpc('remove_community_group_member', { p_group_id: groupId, p_user_id: userId })
       if (removeError) throw removeError
+      void sendActivityPushNotification({ event_type: 'group_member_removed', group_id: groupId, target_user_id: userId })
       await loadGroupMembers()
     } catch (caught) {
       setMemberError(userFacingError(caught, 'Could not remove this member.'))
@@ -3416,6 +3955,70 @@ export function CommunityGroupPage() {
     setSelectedGroupMessageIds([])
   }
 
+  function replyToSelectedGroupMessage() {
+    if (!selectedGroupMessage || selectedGroupMessage.is_deleted_for_everyone) return
+    setGroupReplyTarget(selectedGroupMessage)
+    setEditingGroupMessageId('')
+    setSelectedGroupMessageIds([])
+  }
+
+  function editSelectedGroupMessage() {
+    if (!selectedGroupMessage || !canEditChatMessage(selectedGroupMessage, session?.user.id)) return
+    setMessage(selectedGroupMessage.content)
+    setEditingGroupMessageId(selectedGroupMessage.id)
+    setGroupReplyTarget(null)
+    setSelectedGroupMessageIds([])
+  }
+
+  async function toggleSelectedGroupReaction(emoji: ChatReaction) {
+    if (!selectedGroupMessage || groupFeatureBusy) return
+    setGroupFeatureBusy(true)
+    setGroupFeatureError('')
+    try {
+      await toggleGroupMessageReaction(selectedGroupMessage.id, emoji)
+      setGroupMessageReactions(await loadGroupMessageReactions([selectedGroupMessage.id]))
+    } catch (caught) {
+      setGroupFeatureError(userFacingError(caught, 'Could not update this reaction.'))
+    } finally {
+      setGroupFeatureBusy(false)
+    }
+  }
+
+  async function toggleSelectedGroupPin() {
+    if (!selectedGroupMessage || groupFeatureBusy) return
+    setGroupFeatureBusy(true)
+    setGroupFeatureError('')
+    try {
+      const pinned = await toggleGroupMessagePin(selectedGroupMessage.id)
+      setPinnedGroupMessageIds((current) => {
+        const next = new Set(current)
+        if (pinned) next.add(selectedGroupMessage.id)
+        else next.delete(selectedGroupMessage.id)
+        return next
+      })
+    } catch (caught) {
+      setGroupFeatureError(userFacingError(caught, 'Could not update this pin.'))
+    } finally {
+      setGroupFeatureBusy(false)
+    }
+  }
+
+  function jumpToGroupSearchResult(direction: 1 | -1) {
+    if (!groupSearchIndexes.length) return
+    const next = (activeGroupSearchResult + direction + groupSearchIndexes.length) % groupSearchIndexes.length
+    setActiveGroupSearchResult(next)
+    document.querySelectorAll('.community-group-screen .chat-messages > .chat-message-row')
+      .item(groupSearchIndexes[next])?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  function jumpToGroupMessage(messageId: string | null | undefined) {
+    if (!messageId) return
+    const index = messages.findIndex((item) => item.id === messageId)
+    if (index < 0) return
+    document.querySelectorAll('.community-group-screen .chat-messages > .chat-message-row')
+      .item(index)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
   async function deleteSelectedGroupMessages(mode: 'me' | 'everyone') {
     if (!selectedGroupMessageIds.length || pendingGroupDelete) return
     const selected = messages.filter((item) => selectedGroupMessageIds.includes(item.id))
@@ -3450,7 +4053,27 @@ export function CommunityGroupPage() {
     const mediaToSend = [...selectedGroupMedia]
     // Lock synchronously so rapid taps cannot start duplicate uploads before React rerenders.
     if (groupSendLock.current || (!textToSend && !mediaToSend.length) || isSending || isSendingGroupMedia || !session?.user || !groupId) return
+    if (editingGroupMessageId && mediaToSend.length) {
+      setError('Remove the attachment before editing a message.')
+      return
+    }
     groupSendLock.current = true
+    if (editingGroupMessageId) {
+      setIsSending(true)
+      setError('')
+      try {
+        const edited = await editCommunityGroupMessage(editingGroupMessageId, textToSend) as CommunityGroupMessage
+        setMessages((current) => current.map((item) => item.id === edited.id ? { ...item, ...edited } : item))
+        setEditingGroupMessageId('')
+        setMessage('')
+      } catch (caught) {
+        setError(userFacingError(caught, 'Could not edit this message.'))
+      } finally {
+        groupSendLock.current = false
+        setIsSending(false)
+      }
+      return
+    }
     setIsSendingGroupMedia(mediaToSend.length > 0)
     setIsSending(mediaToSend.length === 0)
     setError('')
@@ -3472,11 +4095,17 @@ export function CommunityGroupPage() {
         // with the real caption together with media_url in one update.
         const initialContent = index === 0 && textToSend ? textToSend : (file ? 'Uploading media…' : '')
         const { data, error: sendError } = await supabase.from('community_group_messages')
-          .insert({ group_id: groupId, sender_id: session.user.id, content: initialContent })
+          .insert({
+            group_id: groupId,
+            sender_id: session.user.id,
+            content: initialContent,
+            ...(index === 0 && groupReplyTarget ? { reply_to_message_id: groupReplyTarget.id } : {}),
+          })
           .select('id,group_id,sender_id,content,media_url,media_type,created_at')
           .single()
         if (sendError) throw sendError
         let created = data as CommunityGroupMessage
+        if (index === 0) created.reply_to_message_id = groupReplyTarget?.id ?? null
         pendingMessageId = created.id
         if (file) {
           const media = await uploadGroupMedia(file, session.user.id, groupId, created.id)
@@ -3491,9 +4120,11 @@ export function CommunityGroupPage() {
           uploadedPath = ''
         }
         setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
+        void sendGroupPushNotification(created.id)
         pendingMessageId = ''
       }
       setMessage('')
+      setGroupReplyTarget(null)
       setSelectedGroupMedia([])
       for (const input of [groupMediaInputRef.current, groupPhotoInputRef.current, groupVideoInputRef.current, groupCameraInputRef.current]) if (input) input.value = ''
       window.requestAnimationFrame(() => { const pane = document.querySelector('.community-group-screen .chat-messages') as HTMLElement | null; if (pane) pane.scrollTop = pane.scrollHeight })
@@ -3522,7 +4153,7 @@ export function CommunityGroupPage() {
     <header className="chat-screen__head"><Button to="/community" variant="quiet" iconOnly aria-label="Back to community"><ArrowLeft size={18} /></Button>
       <button type="button" className="chat-screen__profile community-group-header-button" onClick={() => { setMembersOpen(true); void loadGroupMembers() }}>
         <span className="community-group-card__icon"><Users size={20} /></span>
-        <span className="chat-screen__identity"><strong>{group.name}</strong><small>{members.length} members · tap for members</small></span>
+        <span className="chat-screen__identity"><strong>{group.name}</strong><small aria-live="polite">{typingGroupMemberIds.length ? `${typingGroupMemberIds.map((id) => { const member = members.find((item) => item.user_id === id); return member?.display_name || member?.username || 'A member' }).join(', ')} typing…` : `${members.length} members · tap for members`}</small></span>
       </button>
       <div className="chat-screen__actions">
         <CallInviteControls groupId={group.id} peerName={group.name} hideIncomingPrompt />
@@ -3539,6 +4170,49 @@ export function CommunityGroupPage() {
         </div>}
       </div>
     </header>
+    <div className="chat-feature-tools" aria-label="Community chat tools">
+      <label className="chat-feature-tools__search">
+        <Search size={16} aria-hidden="true" />
+        <input aria-label="Search loaded messages" placeholder="Search loaded messages" value={groupMessageSearch} onChange={(event) => { setGroupMessageSearch(event.target.value); setActiveGroupSearchResult(0) }} />
+      </label>
+      {groupMessageSearch.trim() && <div className="chat-feature-tools__search-nav">
+        <span>{groupSearchIndexes.length ? `${activeGroupSearchResult + 1} of ${groupSearchIndexes.length}` : 'No matches in loaded messages'}</span>
+        <button type="button" disabled={!groupSearchIndexes.length} onClick={() => jumpToGroupSearchResult(-1)} aria-label="Previous search result">↑</button>
+        <button type="button" disabled={!groupSearchIndexes.length} onClick={() => jumpToGroupSearchResult(1)} aria-label="Next search result">↓</button>
+      </div>}
+      {selectedGroupMessage && <div className="chat-feature-tools__actions" aria-label="Selected message actions">
+        <span className="chat-feature-tools__selection">{selectedGroupMessage.edited_at ? 'Edited · ' : ''}{selectedGroupMessage.content.slice(0, 80) || 'Media message'}{selectedGroupMessage.content.length > 80 ? '…' : ''}</span>
+        {!selectedGroupMessage.is_deleted_for_everyone && <button type="button" onClick={replyToSelectedGroupMessage}>Reply</button>}
+        {canEditChatMessage(selectedGroupMessage, session?.user.id) && <button type="button" onClick={editSelectedGroupMessage}>Edit</button>}
+        {!selectedGroupMessage.is_deleted_for_everyone && <button type="button" disabled={groupFeatureBusy} onClick={() => void toggleSelectedGroupPin()}>{pinnedGroupMessageIds.has(selectedGroupMessage.id) ? 'Unpin for me' : 'Pin for me'}</button>}
+        {chatReactionOptions.map((emoji) => {
+          const reactions = groupMessageReactions.get(selectedGroupMessage.id) ?? []
+          const count = reactions.filter((reaction) => reaction.emoji === emoji).length
+          const mine = reactions.some((reaction) => reaction.emoji === emoji && reaction.user_id === session?.user.id)
+          return <button type="button" key={emoji} aria-pressed={mine} disabled={groupFeatureBusy || selectedGroupMessage.is_deleted_for_everyone} onClick={() => void toggleSelectedGroupReaction(emoji)}>{emoji}{count > 0 ? ` ${count}` : ''}</button>
+        })}
+        <button type="button" onClick={() => setSelectedGroupMessageIds([])} aria-label="Close selected message actions">×</button>
+      </div>}
+      {selectedGroupMessage?.reply_to_message_id && <button type="button" className="chat-feature-tools__quote" onClick={() => jumpToGroupMessage(selectedGroupMessage.reply_to_message_id)}>
+        Replying to: {selectedGroupReplyParent ? chatReplyPreview(selectedGroupReplyParent.content, selectedGroupReplyParent.media_type) : 'Earlier message'}
+      </button>}
+      {selectedGroupMessage?.sender_id === session?.user.id && <p className="chat-feature-tools__readers" aria-live="polite">
+        Read by {selectedGroupReaders.length} of {Math.max(0, members.length - 1)} other members
+        {selectedGroupReaders.length > 0 && ` · ${selectedGroupReaders.map((receipt) => {
+          const member = members.find((item) => item.user_id === receipt.user_id)
+          return member?.display_name || member?.username || 'Member'
+        }).join(', ')}`}
+      </p>}
+      {groupFeatureError && <p className="field__error" role="status">{groupFeatureError}</p>}
+      {groupReplyTarget && <div className="chat-feature-tools__reply" role="status">
+        <span><strong>Replying to {profiles[groupReplyTarget.sender_id]?.display_name || profiles[groupReplyTarget.sender_id]?.username || 'community member'}</strong><small>{chatReplyPreview(groupReplyTarget.content, groupReplyTarget.media_type)}</small></span>
+        <button type="button" onClick={() => setGroupReplyTarget(null)} aria-label="Cancel reply">×</button>
+      </div>}
+      {editingGroupMessageId && <div className="chat-feature-tools__reply" role="status">
+        <span><strong>Editing message</strong><small>Update the text and send to save.</small></span>
+        <button type="button" onClick={() => { setEditingGroupMessageId(''); setMessage('') }} aria-label="Cancel message edit">×</button>
+      </div>}
+    </div>
     <Modal open={groupEditOpen} title="Edit community" onClose={() => setGroupEditOpen(false)}>
       <form className="form-stack" onSubmit={saveGroupDetails}>
         <Input label="Community name" value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={80} required />
@@ -3730,6 +4404,7 @@ export function NotificationsPage() {
     try {
       const { error: responseError } = await supabase.rpc('respond_community_group_join_request', { p_request_id: notification.group_join_request_id, p_approve: approve })
       if (responseError) throw responseError
+      void sendActivityPushNotification({ event_type: 'group_join_request_result', group_join_request_id: notification.group_join_request_id })
       await markNotificationRead(notification.id)
       setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true, group_join_request_status: approve ? 'approved' : 'declined' } : item))
     } catch (caught) {
@@ -3925,7 +4600,10 @@ export function SettingsPage() {
     let active = true
     setError('')
     void getPushNotificationStatus().then((status) => {
-      if (active) setPushStatus(status)
+      if (active) {
+        setPushStatus(status)
+        if (status === 'server-error') setError('Device notifications are enabled, but the push server is unavailable or not configured correctly.')
+      }
     }).catch((caught) => {
       if (active) {
         setPushStatus('unknown')
@@ -3940,7 +4618,7 @@ export function SettingsPage() {
     setError('')
     try {
       const enabled = await registerPushNotifications()
-      const nextStatus = enabled ? 'enabled' : await getPushNotificationStatus()
+      const nextStatus = await getPushNotificationStatus()
       setPushStatus(nextStatus)
       if (!enabled) {
         setError(nextStatus === 'blocked'
@@ -3948,8 +4626,11 @@ export function SettingsPage() {
           : nextStatus === 'unsupported'
             ? 'Notifications are not supported in this browser.'
             : 'Could not enable notifications. Install Connect to your Home Screen, allow notifications, and retry.')
+      } else if (nextStatus === 'server-error') {
+        setError('Your device subscription is saved, but push delivery could not be verified. Check the server configuration and try again.')
       }
     } catch (caught) {
+      setPushStatus('unknown')
       setError(userFacingError(caught, 'Could not enable phone notifications. Check your connection and try again.'))
     } finally {
       setPushBusy(false)
@@ -3973,7 +4654,9 @@ export function SettingsPage() {
     setPushBusy(true)
     setError('')
     try {
-      setPushStatus(await getPushNotificationStatus())
+      const status = await getPushNotificationStatus()
+      setPushStatus(status)
+      if (status === 'server-error') setError('The push server is unavailable or its VAPID key does not match this app.')
     } catch (caught) {
       setPushStatus('unknown')
       setError(userFacingError(caught, 'Could not check phone notification settings.'))
@@ -4014,7 +4697,7 @@ export function SettingsPage() {
           <button type="button" className={theme === 'system' ? 'is-active' : ''} onClick={() => changeTheme('system')}>⚙️ System</button>
         </div>
       </div>
-    </section><section className="settings-group"><h2>Phone notifications</h2><p className="micro-note">Allow Connect to show supported push notifications in your device notification bar.</p><div className="settings-row"><span className="settings-row__icon">🔔</span><span><strong>{pushStatus === 'enabled' ? 'Notifications enabled on this device' : pushStatus === 'blocked' ? 'Notifications blocked' : pushStatus === 'unsupported' ? 'Not supported in this browser' : pushStatus === 'checking' ? 'Checking notification settings…' : pushStatus === 'unknown' ? 'Could not check notification settings' : 'Enable phone notifications'}</strong><small>{pushStatus === 'enabled' ? 'Background delivery also depends on server push configuration.' : pushStatus === 'blocked' ? 'Allow notifications from this site in your browser settings, or remove this device subscription below.' : pushStatus === 'unsupported' ? 'Try installing Connect from a supported browser.' : pushStatus === 'checking' ? 'Checking this device’s push subscription.' : pushStatus === 'unknown' ? 'Try checking again.' : 'Tap below and choose Allow when your browser asks.'}</small></span></div><Button variant="outline" onClick={pushStatus === 'enabled' || pushStatus === 'blocked' ? disablePushNotifications : pushStatus === 'unknown' ? checkPushNotificationStatus : enablePushNotifications} disabled={pushBusy || pushStatus === 'checking' || pushStatus === 'unsupported'}>{pushBusy ? (pushStatus === 'enabled' || pushStatus === 'blocked' ? 'Disabling…' : 'Checking…') : pushStatus === 'enabled' || pushStatus === 'blocked' ? 'Disable notifications' : pushStatus === 'unknown' ? 'Check status' : pushStatus === 'unsupported' ? 'Notifications unavailable' : 'Enable notifications'}</Button></section>{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}<PwaInstallControl />{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
+    </section><section className="settings-group"><h2>Phone notifications</h2><p className="micro-note">Allow Connect to show supported push notifications in your device notification bar.</p><div className="settings-row"><span className="settings-row__icon">🔔</span><span><strong>{pushStatus === 'enabled' ? 'Notifications enabled on this device' : pushStatus === 'server-error' ? 'Push service unavailable' : pushStatus === 'blocked' ? 'Notifications blocked' : pushStatus === 'unsupported' ? 'Not supported in this browser' : pushStatus === 'checking' ? 'Checking notification settings…' : pushStatus === 'unknown' ? 'Could not check notification settings' : 'Enable phone notifications'}</strong><small>{pushStatus === 'enabled' ? 'Notifications are registered on this device and the push service is available.' : pushStatus === 'server-error' ? 'Your device subscription is saved, but push delivery needs server configuration.' : pushStatus === 'blocked' ? 'Allow notifications from this site in your browser settings, or remove this device subscription below.' : pushStatus === 'unsupported' ? 'Try installing Connect from a supported browser.' : pushStatus === 'checking' ? 'Checking this device’s push subscription.' : pushStatus === 'unknown' ? 'Try checking again.' : 'Tap below and choose Allow when your browser asks.'}</small></span></div><Button variant="outline" onClick={pushStatus === 'enabled' || pushStatus === 'server-error' || pushStatus === 'blocked' ? disablePushNotifications : pushStatus === 'unknown' ? checkPushNotificationStatus : enablePushNotifications} disabled={pushBusy || pushStatus === 'checking' || pushStatus === 'unsupported'}>{pushBusy ? (pushStatus === 'enabled' || pushStatus === 'server-error' || pushStatus === 'blocked' ? 'Disabling…' : 'Checking…') : pushStatus === 'enabled' || pushStatus === 'server-error' || pushStatus === 'blocked' ? 'Disable notifications' : pushStatus === 'unknown' ? 'Check status' : pushStatus === 'unsupported' ? 'Notifications unavailable' : 'Enable notifications'}</Button></section>{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}<PwaInstallControl />{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
 }
 
 export function ChangePasswordPage() {
@@ -4074,7 +4757,6 @@ export function ChangePasswordPage() {
 }
 
 export function PrivacyPage() {
-  const [privateProfile, setPrivateProfile] = useState(false)
   const { profile, isProfileLoading, profileError, hideActivityStatus, activityStatusError, updateActivityStatusPrivacy } = useAuth()
   const [isSavingActivityStatus, setIsSavingActivityStatus] = useState(false)
   const activityStatusEnabled = hideActivityStatus === false
@@ -4089,7 +4771,7 @@ export function PrivacyPage() {
     }
   }
 
-  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="YOUR SPACE, YOUR CHOICE" title="Privacy & security" description="Choose whether people can see when you are online or using the app." /><PreviewNotice>PROFILE VISIBILITY IS A PREVIEW; ACTIVITY STATUS IS SAVED</PreviewNotice><div className="settings-group"><h2>Profile visibility</h2><div className="preference-row"><span><strong>Private profile</strong><small>Preview only; this does not limit who can see your profile or posts.</small></span><button type="button" className={`toggle${privateProfile ? ' is-on' : ''}`} role="switch" aria-checked={privateProfile} aria-label="Private profile preview" onClick={() => setPrivateProfile(!privateProfile)}><span /></button></div><div className="preference-row"><span><strong>Show activity status</strong><small>When off, other people cannot see your online or active presence.</small></span><button type="button" className={`toggle${activityStatusEnabled ? ' is-on' : ''}`} role="switch" aria-checked={activityStatusEnabled} aria-label="Show activity status" disabled={!profile || isProfileLoading || hideActivityStatus === null || isSavingActivityStatus} onClick={() => void toggleActivityStatus()}><span /></button></div>{(activityStatusError || profileError) && <p className="field__error" role="alert">{activityStatusError || profileError}</p>}{(isProfileLoading || (hideActivityStatus === null && !activityStatusError)) && <p className="micro-note" role="status">Loading privacy settings…</p>}</div><div className="settings-group"><h2>Safety</h2><Link className="settings-row" to="/settings/blocked"><span className="settings-row__icon"><LockKeyhole size={18} /></span><span><strong>Blocked users</strong><small>Review profiles you have blocked</small></span><ChevronRight size={18} /></Link><Link className="settings-row" to="/report"><span className="settings-row__icon"><CircleHelp size={18} /></span><span><strong>Report a concern</strong><small>Let the team know what feels wrong</small></span></Link></div></section>
+  return <section className="page-stack page-stack--narrow"><Button to="/settings" variant="quiet"><ArrowLeft size={16} />Settings</Button><PageHeading eyebrow="YOUR SPACE, YOUR CHOICE" title="Privacy & security" description="Choose whether people can see when you are online or using the app." /><PreviewNotice>PROFILE VISIBILITY IS NOT AVAILABLE; ACTIVITY STATUS IS SAVED</PreviewNotice><div className="settings-group"><h2>Profile visibility</h2><div className="preference-row"><span><strong>Private profile</strong><small>This setting is not available yet. Your profile and posts remain visible according to current app rules.</small></span><span className="micro-note">Unavailable</span></div><div className="preference-row"><span><strong>Show activity status</strong><small>When off, other people cannot see your online or active presence.</small></span><button type="button" className={`toggle${activityStatusEnabled ? ' is-on' : ''}`} role="switch" aria-checked={activityStatusEnabled} aria-label="Show activity status" disabled={!profile || isProfileLoading || hideActivityStatus === null || isSavingActivityStatus} onClick={() => void toggleActivityStatus()}><span /></button></div>{(activityStatusError || profileError) && <p className="field__error" role="alert">{activityStatusError || profileError}</p>}{(isProfileLoading || (hideActivityStatus === null && !activityStatusError)) && <p className="micro-note" role="status">Loading privacy settings…</p>}</div><div className="settings-group"><h2>Safety</h2><Link className="settings-row" to="/settings/blocked"><span className="settings-row__icon"><LockKeyhole size={18} /></span><span><strong>Blocked users</strong><small>Review profiles you have blocked</small></span><ChevronRight size={18} /></Link><Link className="settings-row" to="/report"><span className="settings-row__icon"><CircleHelp size={18} /></span><span><strong>Report a concern</strong><small>Let the team know what feels wrong</small></span></Link></div></section>
 }
 
 export function BlockedUsersPage() {

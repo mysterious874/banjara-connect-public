@@ -1,3 +1,30 @@
+# Security verification update — 2026-11-12
+
+This update supersedes the repository and dependency inventory in the historical
+2026-10-05 snapshot below. It does not claim that production authorization has
+been verified.
+
+| Area | Verified status |
+|---|---|
+| Repository security review | A read-only review reported no confirmed vulnerabilities in its reviewed scope. This is not a penetration test or proof of production safety. |
+| Production dependencies | `npm audit --omit=dev --audit-level=low` completed with zero reported vulnerabilities. |
+| Development dependencies | `npm audit` reports 6 development-only vulnerable dependency entries: 2 low (`deepmerge`, `@rollup/plugin-node-resolve`) and 4 moderate (`glob`, `minimatch`, `workbox-build`, `vite-plugin-pwa`). The lockfile uses Workbox's declared `glob@11.1.0` and `minimatch@10.2.6`; no cross-major override remains. npm offers only `vite-plugin-pwa@1.1.0`, a breaking major downgrade from 2.0.0, so no forced fix was applied. |
+| Automated tests and build | After `npm ci`, all 17 tests passed; TypeScript, Vite production build, and injected service-worker build passed. `git diff --check` passed. |
+| Supabase production schema metadata | Read-only inspection found 26 public tables with RLS enabled and 75 policies; each table had at least one policy. This does not prove that the policy expressions enforce the intended access rules. |
+| Privileged database functions | Read-only inspection found 25 `SECURITY DEFINER` functions, each with a configured `search_path`. Function behavior and execute grants still need review. |
+| Storage and Realtime | All five expected buckets exist; four are private and `banjara-profile-avatars` is public. Nine public tables are in the Realtime publication. Production `banjara-chat-media` permits image/video types only; the local migration that adds audio/document types is unapplied. Object-policy behavior and private-channel authorization were not exercised. |
+| Production migration history | Production records 41 versions; this checkout contains 19 SQL migration files. A version comparison finds 38 production versions without local source and 16 local versions absent from production history. The histories and schema definitions remain unreconciled; do not apply migrations based on file counts. |
+| Supabase production changes | No schema, RLS, Auth, Storage, or Realtime changes were made during this update. No authenticated cross-user authorization tests were run. |
+| Supabase Auth signup | The production dashboard shows “Allow new users to sign up” enabled, with Email enabled and Phone disabled. The signup control is disabled in the dashboard UI, so it was not changed. |
+| Backups and quota | The production dashboard shows the free-plan grace period is over and “No backups.” This is a reliability risk; no billing or plan changes were made. |
+| Secondary Supabase project | The second project is named “mysterious874's Project” and is marked Production. Its purpose is not verified; it was not used as staging. |
+| Android | **Not verified.** No Java, Android SDK, Gradle, or `adb` toolchain is installed in this environment; no Android release artifact was built. |
+| GitHub release protection | A branch-protection rule for `main` is present, and the latest `verify-and-safe-repair` run on `main` succeeded. The settings page is stuck loading its rule details, so exact required-check and bypass settings could not be freshly read. The remote AI auto-fix workflow still attempts to push generated code directly to `main`; the local draft-PR replacement is uncommitted and not active. |
+
+The historical 2026-10-05 findings below are retained for context. Re-verify
+them against the current schema before acting; do not treat the secondary
+Supabase project as staging without independently confirming its purpose.
+
 # Banjara Connect security verification status
 
 **Checked:** 2026-10-05
