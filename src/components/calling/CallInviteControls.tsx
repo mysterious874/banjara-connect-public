@@ -76,6 +76,20 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     return () => { void supabase.removeChannel(channel) }
   }, [userId, recipientId, groupId, refreshCalls])
 
+  // Request browser media permission directly from the user's tap. Browsers
+  // are more reliable about showing the permission prompt in a user gesture
+  // than when getUserMedia is first called later from an effect.
+  const requestCallPermissions = async (callType: CallType) => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('This browser does not support camera and microphone access. Please open Connect in Chrome.')
+    }
+    const permissionStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: callType === 'video' ? { facingMode: { ideal: 'user' } } : false,
+    })
+    permissionStream.getTracks().forEach(track => track.stop())
+  }
+
   const startCall = async (callType: CallType) => {
     if (!userId) {
       setNotice('Please sign in again to start a call.')
@@ -90,8 +104,10 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
       setNotice('Voice/video calling needs a secure connection and browser media support. Open the app in the latest Chrome or Edge and allow microphone/camera access.')
       return
     }
-    setBusy(true); setNotice(callType === 'voice' ? 'Starting voice call…' : 'Starting video call…')
+    setBusy(true); setNotice(callType === 'voice' ? 'Allow microphone access to continue…' : 'Allow camera and microphone access to continue…')
     try {
+      await requestCallPermissions(callType)
+      setNotice('Starting call…')
       const { data, error } = await supabase.from('call_sessions').insert({
         caller_id: userId, recipient_id: recipientId ?? null, group_id: groupId ?? null,
         call_type: callType, status: 'ringing',
@@ -113,6 +129,11 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     if (!userId || busy) return
     setBusy(true); setNotice('')
     try {
+      if (status === 'active') {
+        setNotice(call.call_type === 'video' ? 'Allow camera and microphone access to join…' : 'Allow microphone access to join…')
+        await requestCallPermissions(call.call_type)
+        setNotice('')
+      }
       const { error } = await supabase.from('call_sessions').update({
         status, ...(status === 'active' ? { answered_at: new Date().toISOString() } : { ended_at: new Date().toISOString() }),
       }).eq('id', call.id)
