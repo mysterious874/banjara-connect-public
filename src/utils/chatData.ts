@@ -29,6 +29,13 @@ export type ConversationSummary = {
   unreadCount: number
 }
 
+type DirectConversationSummary = {
+  conversation_id: string
+  peer_id: string
+  last_message: ChatMessage | null
+  unread_count: number | string
+}
+
 const messageColumns = 'id,conversation_id,sender_id,content,media_url,media_type,is_deleted_for_everyone,created_at,updated_at'
 const pendingConversationRequests = new Map<string, Promise<string>>()
 const conversationMessagePageSize = 50
@@ -94,7 +101,8 @@ async function loadConversationsUncached(): Promise<ConversationSummary[]> {
   if (summariesError) throw summariesError
 
   const blocked = new Set(blockedIds)
-  const visibleSummaries = (summaries ?? []).filter((summary) =>
+  const summaryRows = (summaries ?? []) as DirectConversationSummary[]
+  const visibleSummaries = summaryRows.filter((summary) =>
     Boolean(summary.peer_id) && !blocked.has(summary.peer_id as string),
   )
   if (!visibleSummaries.length) return []
