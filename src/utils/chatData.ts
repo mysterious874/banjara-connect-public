@@ -109,63 +109,35 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
 }
 
 async function loadConversationsUncached(userId: string): Promise<ConversationSummary[]> {
-  const { data: ownMemberships, error: membershipError } = await supabase.from('conversation_members')
-    .select('conversation_id').eq('user_id', userId)
-  if (membershipError) throw membershipError
-  const conversationIds = [...new Set((ownMemberships ?? []).map((row) => row.conversation_id as string))]
-  if (!conversationIds.length) return []
-
-  const { data: members, error: membersError } = await supabase.from('conversation_members')
-    .select('conversation_id,user_id').in('conversation_id', conversationIds)
-  if (membersError) throw membersError
-
-  const otherUsers = new Map<string, string>()
-  for (const member of members ?? []) {
-    if (member.user_id !== userId && conversationIds.includes(member.conversation_id)) otherUsers.set(member.conversation_id, member.user_id)
-  }
-  const blockedIds = new Set(await loadBlockedUserIds())
-  for (const [conversationId, peerId] of otherUsers) {
-    if (blockedIds.has(peerId)) otherUsers.delete(conversationId)
-  }
-  const visibleConversationIds = conversationIds.filter((id) => otherUsers.has(id))
-  if (!visibleConversationIds.length) return []
-  const otherUserIds = [...new Set(otherUsers.values())]
-  if (!otherUserIds.length) return []
-
-  // Conversation summaries and profile cards are independent; avoid making
-  // the user wait for every summary before starting the profile query.
-  const [summaryRows, profilesResult] = await Promise.all([
-    Promise.all(visibleConversationIds.map((id) => loadConversationSummaryMessages(id, userId))),
-    supabase.from('profiles')
-      .select('id,username,display_name,avatar_url').in('id', otherUserIds),
+  // Fetch all direct-chat summaries and unread counts in one RLS-protected RPC.
+  // This replaces two message queries per conversation plus read-receipt batches.
+  const [blockedIds, summariesResult] = await Promise.all([
+    loadBlockedUserIds(),
+    supabase.rpc('get_direct_conversation_summaries'),
   ])
-  const { data: profiles, error: profilesError } = profilesResult
-  if (profilesError) throw profilesError
-  const incomingMessageIds = [...new Set(summaryRows.flatMap((summary) => summary.incomingMessageIds))]
-  let readIds = new Set<string>()
-  if (incomingMessageIds.length) {
-    const readBatches = await Promise.all(Array.from(
-      { length: Math.ceil(incomingMessageIds.length / 200) },
-      (_, index) => supabase.from('message_reads').select('message_id')
-        .eq('user_id', userId).in('message_id', incomingMessageIds.slice(index * 200, (index + 1) * 200)),
-    ))
-    for (const { data: reads, error: readsError } of readBatches) {
-      if (readsError) throw readsError
-      for (const row of reads ?? []) readIds.add(row.message_id as string)
-    }
-  }
-  const summaryMessages = summaryRows.map(({ lastMessage, incomingMessageIds: incomingIds }) => ({
-    lastMessage,
-    unreadCount: incomingIds.filter((id) => !readIds.has(id)).length,
-  }))
+  const { data: summaries, error: summariesError } = summariesResult
+  if (summariesError) throw summariesError
+  const blocked = new Set(blockedIds)
+  const visible = (summaries ?? []).filter((row) => !blocked.has(row.peer_id as string))
+  if (!visible.length) return []
 
+  const peerIds = [...new Set(visible.map((row) => row.peer_id as string))]
+  const { data: profiles, error: profilesError } = await supabase.from('profiles')
+    .select('id,username,display_name,avatar_url').in('id', peerIds)
+  if (profilesError) throw profilesError
   const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
-  return visibleConversationIds.flatMap((id, index) => {
-    const memberId = otherUsers.get(id)
-    const member = memberId ? profileMap.get(memberId) : undefined
+
+  return visible.flatMap((row) => {
+    const member = profileMap.get(row.peer_id as string)
     if (!member) return []
-    return [{ id, member, ...summaryMessages[index] }]
-  }).sort((left, right) => (right.lastMessage?.created_at ?? '').localeCompare(left.lastMessage?.created_at ?? ''))
+    return [{
+      id: row.conversation_id as string,
+      member,
+      lastMessage: (row.last_message as ChatMessage | null) ?? null,
+      unreadCount: Number(row.unread_count ?? 0),
+    }]
+  })
+    .sort((left, right) => (right.lastMessage?.created_at ?? '').localeCompare(left.lastMessage?.created_at ?? ''))
 }
 
 async function loadConversationPeerId(conversationId: string, userId: string) {
