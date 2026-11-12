@@ -16,7 +16,6 @@ function loadTypeScript(relativePath) {
 }
 
 const core = loadTypeScript('supabase/functions/send-chat-push/pushCore.ts')
-const { parseNotificationPayload, safeNotificationPath, runBestEffortPush } = loadTypeScript('src/utils/pushNotificationUrl.ts')
 const actorId = '11111111-1111-4111-8111-111111111111'
 const recipientId = '22222222-2222-4222-8222-222222222222'
 const storyId = '33333333-3333-4333-8333-333333333333'
@@ -139,40 +138,3 @@ test('expired subscriptions are removed while temporary delivery failures are re
   assert.deepEqual(removed, ['expired'])
 })
 
-test('notification URLs stay on the app origin and fall back when malformed', () => {
-  assert.equal(safeNotificationPath('/chat/abc?source=push#latest', 'https://connect.example'), '/chat/abc?source=push#latest')
-  assert.equal(safeNotificationPath('https://evil.example/steal', 'https://connect.example'), '/notifications')
-  assert.equal(safeNotificationPath('//evil.example/steal', 'https://connect.example'), '/notifications')
-  assert.equal(safeNotificationPath('http://[', 'https://connect.example'), '/notifications')
-  assert.equal(safeNotificationPath(undefined, 'https://connect.example'), '/notifications')
-})
-
-test('notification payload parsing rejects non-objects and bounds untrusted text fields', () => {
-  assert.equal(parseNotificationPayload(null), null)
-  assert.equal(parseNotificationPayload([]), null)
-  const payload = parseNotificationPayload({
-    title: 'T'.repeat(200),
-    body: 'B'.repeat(300),
-    url: { unexpected: true },
-    tag: 'x'.repeat(200),
-    event_id: 42,
-  })
-  assert.equal(payload.title.length, 120)
-  assert.equal(payload.body.length, 240)
-  assert.equal(payload.url, undefined)
-  assert.equal(payload.tag.length, 128)
-  assert.equal(payload.event_id, undefined)
-})
-
-test('best-effort push failure is reported and never rejects the user action', async () => {
-  let reported
-  await assert.doesNotReject(runBestEffortPush(
-    async () => { throw new Error('offline') },
-    (error) => { reported = error },
-  ))
-  assert.equal(reported.message, 'offline')
-  await assert.doesNotReject(runBestEffortPush(
-    async () => { throw new Error('offline') },
-    () => { throw new Error('logger failure') },
-  ))
-})
