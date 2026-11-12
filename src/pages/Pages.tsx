@@ -2081,6 +2081,43 @@ function persistChatListPreference(userId: string | undefined, preference: 'dele
   }
 }
 
+function readDeletedChatTimestamps(userId: string | undefined): Record<string, string> {
+  if (!userId) return {}
+  try {
+    const stored = window.localStorage.getItem(`banjara-chat-deleted-${userId}`)
+    if (!stored) return {}
+    const parsed: unknown = JSON.parse(stored)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+    }
+  } catch {
+    return {}
+  }
+  return {}
+}
+
+function readMutedChatIds(userId: string | undefined): string[] {
+  if (!userId) return []
+  try {
+    const stored = window.localStorage.getItem(`banjara-chat-muted-${userId}`)
+    if (!stored) return []
+    const parsed: unknown = JSON.parse(stored)
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function persistChatListPreference(userId: string | undefined, preference: 'deleted' | 'muted', value: unknown) {
+  if (!userId) return false
+  try {
+    window.localStorage.setItem(`banjara-chat-${preference}-${userId}`, JSON.stringify(value))
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function ChatListPage() {
   const { session, onlineUserIds, activeUserIds } = useAuth()
   const userId = session?.user.id
