@@ -5,7 +5,7 @@ const test = require('node:test')
 
 test('all SECURITY DEFINER routines with a public search path put pg_temp last', () => {
   const migration = fs.readFileSync(path.resolve(
-    __dirname, '..', 'supabase/migrations/20261113100000_harden_security_definer_search_paths.sql',
+    __dirname, '..', 'supabase/migrations/20261112205358_harden_security_definer_search_paths.sql',
   ), 'utf8')
   const statements = migration.match(/ALTER FUNCTION public\.[^;]+;/gi) ?? []
 
