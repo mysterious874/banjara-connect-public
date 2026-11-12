@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { BrandLockup } from '../components/brand'
 import { Button, Input } from '../components/ui'
+import { PwaInstallControl } from '../components/PwaInstall'
 import { useAuth } from '../hooks/AuthProvider'
 import { supabase } from '../utils/supabase'
 import { userFacingError } from '../utils/userFacingError'
@@ -24,6 +25,22 @@ export function SplashPage() {
         <span className="splash__line" />
         <p className="splash__quote">अपनी संस्कृति, अपनी पहचान — अपना कनेक्ट</p>
         <span className="splash__loader" aria-hidden="true"><span /></span>
+      </div>
+    </main>
+  )
+}
+
+export function InstallPage() {
+  return (
+    <main className="auth-page">
+      <div className="auth-page__brand"><BrandLockup /></div>
+      <div className="auth-card install-card">
+        <span className="eyebrow">CONNECT ON YOUR PHONE</span>
+        <h1>Install Connect.</h1>
+        <p className="auth-card__intro">Get the full-screen app experience and open your community right from your home screen.</p>
+        <PwaInstallControl />
+        <p className="micro-note install-card__help">On Android, open this page in Chrome for the one-tap install prompt. If your browser does not support it yet, the install steps will appear here.</p>
+        <a className="text-link install-card__open" href="/login">Already installed? Open Connect</a>
       </div>
     </main>
   )

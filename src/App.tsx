@@ -6,6 +6,7 @@ import { Loading } from './components/ui'
 const SplashPage = lazy(() => import('./pages/AuthPages').then(({ SplashPage }) => ({ default: SplashPage })))
 const LoginPage = lazy(() => import('./pages/AuthPages').then(({ LoginPage }) => ({ default: LoginPage })))
 const SignupPage = lazy(() => import('./pages/AuthPages').then(({ SignupPage }) => ({ default: SignupPage })))
+const InstallPage = lazy(() => import('./pages/AuthPages').then(({ InstallPage }) => ({ default: InstallPage })))
 const HomePage = lazy(() => import('./pages/Pages').then(({ HomePage }) => ({ default: HomePage })))
 const ConnectPage = lazy(() => import('./pages/Pages').then(({ ConnectPage }) => ({ default: ConnectPage })))
 const CommunityPage = lazy(() => import('./pages/Pages').then(({ CommunityPage }) => ({ default: CommunityPage })))
@@ -93,7 +94,7 @@ export default function App() {
   useWarmRouteModules()
   const navigate = useNavigate()
   const [showStartupIntro, setShowStartupIntro] = useState(() => {
-    return window.sessionStorage.getItem('connect-startup-intro-seen') !== '1'
+    return window.location.pathname !== '/install' && window.sessionStorage.getItem('connect-startup-intro-seen') !== '1'
   })
 
   // Warm the main app route bundle during the intro so the first navigation
@@ -165,6 +166,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<SplashPage />} />
           <Route path="/splash" element={<SplashPage />} />
+          <Route path="/install" element={<InstallPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route element={<AppLayout />}>
