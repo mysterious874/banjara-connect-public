@@ -59,35 +59,6 @@ async function createOrFindConversation(targetUserId: string) {
   if (!data) throw new Error('Could not create the conversation.')
   return data as string
 }
-async function loadConversationSummaryMessages(conversationId: string, userId: string) {
-  // These reads are independent; run them together to avoid adding a network
-  // round-trip for every conversation on the chat list.
-  const [latestResult, incomingResult] = await Promise.all([
-    supabase.from('messages').select(messageColumns)
-      .eq('conversation_id', conversationId)
-      .eq('is_deleted_for_everyone', false)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(1),
-    // Keep the list fast: only inspect the most recent incoming messages when
-    // calculating the badge instead of walking the entire conversation history.
-    supabase.from('messages').select('id')
-      .eq('conversation_id', conversationId)
-      .eq('is_deleted_for_everyone', false)
-      .neq('sender_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(200),
-  ])
-  const { data: latestRows, error: latestError } = latestResult
-  const { data: incoming, error: incomingError } = incomingResult
-  if (latestError) throw latestError
-  if (incomingError) throw incomingError
-  return {
-    lastMessage: (latestRows?.[0] as ChatMessage | undefined) ?? null,
-    incomingMessageIds: (incoming ?? []).map((row) => row.id as string),
-  }
-}
-
 export async function loadUnreadChatCount(): Promise<number> {
   const conversations = await loadConversations()
   return conversations.reduce((total, conversation) => total + conversation.unreadCount, 0)
@@ -100,7 +71,7 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   if (cached && cached.expiresAt > now) return cached.value
   const pending = conversationListRequests.get(userId)
   if (pending) return pending
-  const request = loadConversationsUncached(userId).then((value) => {
+  const request = loadConversationsUncached().then((value) => {
     conversationListCache.set(userId, { expiresAt: Date.now() + CONVERSATION_LIST_CACHE_TTL_MS, value })
     return value
   }).finally(() => conversationListRequests.delete(userId))
@@ -108,14 +79,23 @@ export async function loadConversations(): Promise<ConversationSummary[]> {
   return request
 }
 
-async function loadConversationsUncached(userId: string): Promise<ConversationSummary[]> {
+async function loadConversationsUncached(): Promise<ConversationSummary[]> {
   // Fetch all direct-chat summaries and unread counts in one RLS-protected RPC.
   // This replaces two message queries per conversation plus read-receipt batches.
+  type DirectConversationSummaryRow = {
+    conversation_id: string
+    peer_id: string
+    last_message: ChatMessage | null
+    unread_count: number | string
+  }
   const [blockedIds, summariesResult] = await Promise.all([
     loadBlockedUserIds(),
     supabase.rpc('get_direct_conversation_summaries'),
   ])
-  const { data: summaries, error: summariesError } = summariesResult
+  const { data: summaries, error: summariesError } = summariesResult as {
+    data: DirectConversationSummaryRow[] | null
+    error: { message: string } | null
+  }
   if (summariesError) throw summariesError
   const blocked = new Set(blockedIds)
   const visible = (summaries ?? []).filter((row) => !blocked.has(row.peer_id as string))
