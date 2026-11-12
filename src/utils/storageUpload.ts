@@ -154,7 +154,8 @@ export async function uploadStorageFile(bucket: string, path: string, file: File
   const storage = supabase.storage.from(bucket)
   let lastError: unknown
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const retryDelays = [1000, 2500, 5000, 8000, 12000]
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     try {
       const { error } = await storage.upload(path, file, {
         cacheControl: '3600',
@@ -169,14 +170,16 @@ export async function uploadStorageFile(bucket: string, path: string, file: File
       if (!isTransientUploadError(error)) throw error
     }
 
-    if (attempt < 2) {
+    if (attempt < retryDelays.length) {
+      // A timed-out mobile request may still have reached Storage. Verify the
+      // unique object before retrying, then use a longer backoff for weak data.
       try {
         const { data, error } = await storage.createSignedUrl(path, 60)
         if (!error && data?.signedUrl) return
       } catch {
-        // The upload may not have completed; retry the same unique object path.
+        // The object is not available yet; retry the same unique object path.
       }
-      await wait(500 * (attempt + 1))
+      await wait(retryDelays[attempt])
     }
   }
 
