@@ -105,22 +105,26 @@ export default function CreatePostPage() {
     try {
       // The current schema stores one destination per post row. Create one row for
       // the public feed and one for each selected group, reusing the same content.
+      let sharedMedia: Awaited<ReturnType<typeof uploadPostMedia>> | null = null
       for (const destination of destinations) {
         const { data, error: insertError } = await supabase.from('posts').insert({
           user_id: session.user.id,
           group_id: destination.group_id,
           content: text.trim(),
-          media_urls: [],
-          media_type: mediaFile?.type.startsWith('video/') ? 'video' : mediaFile ? 'image' : null,
+          media_urls: sharedMedia ? [sharedMedia.path] : [],
+          media_type: sharedMedia?.type ?? (mediaFile?.type.startsWith('video/') ? 'video' : mediaFile ? 'image' : null),
         }).select('id').single()
         if (insertError) throw insertError
         createdIds.push(data.id)
 
-        if (mediaFile) {
-          const uploaded = await uploadPostMedia(mediaFile, session.user.id, data.id)
-          uploadedPaths.push(uploaded.path)
+        // Upload the selected file once, then reuse its storage path for every
+        // destination row. Re-uploading the same video for each group made
+        // multi-destination publishing fragile on mobile connections.
+        if (mediaFile && !sharedMedia) {
+          sharedMedia = await uploadPostMedia(mediaFile, session.user.id, data.id)
+          uploadedPaths.push(sharedMedia.path)
           const { error: updateError } = await supabase.from('posts')
-            .update({ media_urls: [uploaded.path], media_type: uploaded.type })
+            .update({ media_urls: [sharedMedia.path], media_type: sharedMedia.type })
             .eq('id', data.id).eq('user_id', session.user.id)
           if (updateError) throw updateError
         }
