@@ -3088,11 +3088,7 @@ export function CommunityGroupPage() {
       const fetched = ((rows ?? []) as CommunityGroupMessage[]).filter((row) => !hiddenOlderIds.has(row.id))
       setHasOlderGroupMessages(fetched.length > 50)
       const older = fetched.slice(0, 50).reverse()
-      for (const item of older) {
-        if (item.media_url) {
-          try { item.media_signed_url = await createGroupMediaUrl(item.media_url) } catch { item.media_signed_url = null }
-        }
-      }
+      await hydrateGroupMediaUrls(older)
       const ids = [...new Set(older.map((row) => row.sender_id))]
       if (ids.length) {
         const { data: olderProfiles } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', ids)
