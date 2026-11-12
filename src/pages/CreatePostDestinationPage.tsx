@@ -144,7 +144,7 @@ export default function CreatePostPage() {
     <form className="create-post-box create-post-box--modern" onSubmit={submit}>
       <div className="create-post-author post-card__author">
         <Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} />
-        <span><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><span>{sharePublic && shareCommunity ? 'Public + selected communities' : sharePublic ? 'Sharing publicly' : shareCommunity ? 'Sharing to selected communities' : 'Choose a destination below'}</span></span>
+        <span className="create-post-author__copy"><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><span>{sharePublic && shareCommunity ? 'Public + selected communities' : sharePublic ? 'Sharing publicly' : shareCommunity ? 'Sharing to selected communities' : 'Choose a destination below'}</span></span>
       </div>
 
       <div className="destination-options" style={{ display: 'grid', gap: 10, margin: '16px 0' }}>
@@ -167,7 +167,7 @@ export default function CreatePostPage() {
       <div className="create-post-writing"><textarea id="post-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="What’s on your mind?" maxLength={500} /><span className="create-post-writing__hint">Share a moment, thought or update with your community.</span></div>
       <div className="create-post-media-picker">
         <label className="create-post-media-picker__trigger" htmlFor="post-media"><ImagePlus size={19} /><span>Add photos or videos</span><small>Choose from your device</small></label>
-        <input id="post-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf,text/plain,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" onChange={handleMediaChange} />
+        <input id="post-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} />
         {mediaFile && <div className="create-post-media-preview">{mediaPreviewUrl && mediaFile.type.startsWith("image/") ? <img src={mediaPreviewUrl} alt="Selected post preview" /> : mediaPreviewUrl && mediaFile.type.startsWith("video/") ? <video src={mediaPreviewUrl} controls playsInline /> : <div className="create-post-media-preview__file"><FileText size={25} /><span>{mediaFile.name}</span></div>}<button type="button" className="create-post-media-preview__remove" aria-label="Remove selected media" onClick={() => setMediaFile(null)}><X size={17} /></button><span className="create-post-media-preview__name">{mediaFile.name} · {(mediaFile.size / (1024 * 1024)).toFixed(1)} MB</span></div>}
         <span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span>
       </div>
