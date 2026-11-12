@@ -159,8 +159,24 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
       peer.onicecandidate = event => {
         if (event.candidate) void sendSignal('ice', { to: id, candidate: event.candidate.toJSON() })
       }
+      // Some browsers (and some mobile WebRTC stacks) deliver ontrack with
+      // an empty event.streams array. Keep a per-peer MediaStream and attach
+      // every received track so remote video/audio is not silently discarded.
+      const remoteMedia = new MediaStream()
       peer.ontrack = event => {
-        if (event.streams?.[0]) setRemote(id, event.streams[0])
+        const incomingTrack = event.track
+        if (incomingTrack && !remoteMedia.getTracks().some(track => track.id === incomingTrack.id)) {
+          remoteMedia.addTrack(incomingTrack)
+        }
+        const receivedStream = event.streams?.[0]
+        if (receivedStream?.getTracks().length) {
+          setRemote(id, receivedStream)
+        } else if (remoteMedia.getTracks().length) {
+          setRemote(id, remoteMedia)
+        }
+        incomingTrack?.addEventListener('ended', () => {
+          if (remoteMedia.getTracks().every(track => track.readyState === 'ended')) setRemote(id, null)
+        }, { once: true })
       }
       peer.onconnectionstatechange = () => {
         if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
