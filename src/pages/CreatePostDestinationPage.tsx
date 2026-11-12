@@ -140,19 +140,19 @@ export default function CreatePostPage() {
   }
 
   return <section className="page-stack page-stack--narrow">
-    <header className="page-heading">
-      <span className="eyebrow">MAKE SOMETHING TOGETHER</span>
-      <h1>Create a post</h1>
-      <p>Choose one or more places to share your post.</p>
+    <header className="page-heading create-post-hero">
+      <span className="eyebrow">✦ BANJARA CONNECT ✦</span>
+      <h1>Share your <em>moment.</em></h1>
+      <p>Your people. Your stories. Your space.</p>
     </header>
-    <form className="create-post-box create-post-box--modern" onSubmit={submit}>
+    <form className="create-post-box create-post-box--modern create-post-box--festival" onSubmit={submit}>
       <div className="create-post-author post-card__author">
         <Avatar name={profile?.display_name || profile?.username || 'Your profile'} image={profile?.avatar_url ?? undefined} />
         <span className="create-post-author__copy"><strong>{profile?.display_name || profile?.username || 'Your profile'}</strong><span>{sharePublic && shareCommunity ? 'Public + selected communities' : sharePublic ? 'Sharing publicly' : shareCommunity ? 'Sharing to selected communities' : 'Choose a destination below'}</span></span>
       </div>
 
       <div className="destination-options" style={{ display: 'grid', gap: 10, margin: '16px 0' }}>
-        <label className="destination-option" style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid var(--border, #ddd)', borderRadius: 14, padding: 14, cursor: 'pointer' }}>
+        <label className="destination-option destination-option--instagram" style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid var(--border, #ddd)', borderRadius: 14, padding: 14, cursor: 'pointer' }}>
           <input type="checkbox" checked={sharePublic} onChange={(event) => setSharePublic(event.target.checked)} />
           <Globe size={20} />
           <span style={{ flex: 1 }}><strong>Share to Public</strong><span style={{ display: 'block', opacity: .72, fontSize: 13 }}>Make this post available in the public feed.</span></span>
@@ -169,8 +169,8 @@ export default function CreatePostPage() {
 
       <label className="visually-hidden" htmlFor="post-text">Write your post</label>
       <div className="create-post-writing"><textarea id="post-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="What’s on your mind?" maxLength={500} /><span className="create-post-writing__hint">Share a moment, thought or update with your community.</span></div>
-      <div className="create-post-media-picker">
-        <label className="create-post-media-picker__trigger" htmlFor="post-media"><ImagePlus size={19} /><span>Add photos or videos</span><small>Choose from your device</small></label>
+      <div className="create-post-media-picker create-post-media-picker--festival">
+        <label className="create-post-media-picker__trigger create-post-media-picker__trigger--festival" htmlFor="post-media"><ImagePlus size={19} /><span>Add photos or videos</span><small>Choose from your device</small></label>
         <input id="post-media" className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" onChange={handleMediaChange} />
         {mediaFile && <div className="create-post-media-preview">{mediaPreviewUrl && mediaFile.type.startsWith("image/") ? <img src={mediaPreviewUrl} alt="Selected post preview" /> : mediaPreviewUrl && mediaFile.type.startsWith("video/") ? <video src={mediaPreviewUrl} controls playsInline /> : <div className="create-post-media-preview__file"><FileText size={25} /><span>{mediaFile.name}</span></div>}<button type="button" className="create-post-media-preview__remove" aria-label="Remove selected media" onClick={() => setMediaFile(null)}><X size={17} /></button><span className="create-post-media-preview__name">{mediaFile.name} · {(mediaFile.size / (1024 * 1024)).toFixed(1)} MB</span></div>}
         <span className="micro-note">JPG, PNG, WEBP, GIF, MP4, WebM or MOV · max 50 MB</span>
