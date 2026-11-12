@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-const RESUMABLE_UPLOAD_THRESHOLD = 2 * 1024 * 1024
+const RESUMABLE_UPLOAD_THRESHOLD = 6 * 1024 * 1024
 const TUS_CHUNK_SIZE = 2 * 1024 * 1024
 const TUS_RETRY_DELAYS = [0, 3000, 5000, 10000, 20000]
 
@@ -141,9 +141,9 @@ async function uploadResumable(bucket: string, path: string, file: File) {
 }
 
 /**
- * Use resumable TUS chunks for media above 2 MB. This includes short mobile
- * videos that are vulnerable to a failed single-request upload on unstable data.
- * Smaller files retain the simpler standard upload path.
+ * Use resumable TUS chunks for media above 6 MB. Keep short mobile videos on
+ * the standard Storage upload path: live device logs showed 2–4 MB videos
+ * creating TUS sessions but never completing a PATCH transfer on mobile data.
  */
 export async function uploadStorageFile(bucket: string, path: string, file: File) {
   if (file.size > RESUMABLE_UPLOAD_THRESHOLD) {
