@@ -65,7 +65,7 @@ function requiredEnvironment() {
     supabaseUrl: Deno.env.get("SUPABASE_URL"),
     anonKey: Deno.env.get("SUPABASE_ANON_KEY"),
     serviceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-    vapidSubject: Deno.env.get("VAPID_SUBJECT")?.trim(),
+    vapidSubject: Deno.env.get("VAPID_SUBJECT")?.trim() || "mailto:admin@banjaraconnect.app",
     vapidPrivateKey: Deno.env.get("VAPID_PRIVATE_KEY")?.trim(),
     vapidPublicKey: Deno.env.get("VAPID_PUBLIC_KEY")?.trim(),
   }

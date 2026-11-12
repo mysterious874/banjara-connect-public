@@ -1652,19 +1652,17 @@ export function StoriesPage() {
     setStoryActionBusy(true)
     setError('')
     try {
-      const { data: notification, error: notificationError } = await supabase.from('notifications').insert({
-        user_id: selectedStory.user_id,
-        actor_id: session.user.id,
-        type: 'story_like',
-        story_id: selectedStory.id,
-        is_read: false,
-      }).select('id').single()
-      if (notificationError) throw notificationError
-      void sendActivityPushNotification({
-        event_type: 'story_like',
-        story_id: selectedStory.id,
-        notification_id: notification.id,
+      const { data: notificationId, error: notificationError } = await supabase.rpc('like_story', {
+        p_story_id: selectedStory.id,
       })
+      if (notificationError) throw notificationError
+      if (notificationId) {
+        void sendActivityPushNotification({
+          event_type: 'story_like',
+          story_id: selectedStory.id,
+          notification_id: notificationId,
+        })
+      }
       setStoryLikedIds((current) => [...current, selectedStory.id])
       setSuccess('Story liked')
     } catch (caught) {
