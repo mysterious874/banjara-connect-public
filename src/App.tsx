@@ -126,7 +126,10 @@ export default function App() {
     if (!showStartupIntro) return
     const timer = window.setTimeout(() => {
       setShowStartupIntro(false)
-      navigate('/home', { replace: true })
+      const initialPath = window.location.pathname
+      if (initialPath === '/' || initialPath === '/splash') {
+        navigate('/home', { replace: true })
+      }
     }, 4000)
     return () => window.clearTimeout(timer)
   }, [navigate, showStartupIntro])
