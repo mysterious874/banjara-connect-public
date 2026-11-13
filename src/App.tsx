@@ -83,6 +83,9 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
         <div style={{ maxWidth: '420px', textAlign: 'center' }}>
           <h2>Connect could not load</h2>
           <p>Please reload the app. Your account and data are safe.</p>
+          <p role="status" style={{ marginTop: '12px', padding: '12px', borderRadius: '8px', background: 'rgba(196, 22, 58, 0.08)', overflowWrap: 'anywhere', fontSize: '13px' }}>
+            Error details: {this.state.error?.message || 'Unknown app error'}
+          </p>
           <button className="button button--primary" type="button" onClick={this.handleRetry}>Reload app</button>
         </div>
       </main>
