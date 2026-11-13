@@ -226,7 +226,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
             }
           })
 
-        await room.connect(serverUrl, token, { autoSubscribe: true, dynacast: true })
+        await room.connect(serverUrl, token, { autoSubscribe: true })
         if (disposed) { await room.disconnect(); return }
         await room.localParticipant.setMicrophoneEnabled(true)
         if (activeCall.call_type === 'video') {
