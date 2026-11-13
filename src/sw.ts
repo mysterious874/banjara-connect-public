@@ -24,7 +24,7 @@ self.addEventListener('push', (event) => {
   try { data = event.data.json() } catch { data = { body: event.data.text() } }
 
   const title = data.title || 'Banjara Connect'
-  const options: NotificationOptions = {
+  const options: NotificationOptions & { renotify?: boolean } = {
     body: data.body || 'You have a new notification.',
     icon: data.icon || '/banjara-mark.svg',
     badge: data.badge || '/banjara-mark.svg',
