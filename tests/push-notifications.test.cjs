@@ -138,3 +138,21 @@ test('expired subscriptions are removed while temporary delivery failures are re
   assert.deepEqual(removed, ['expired'])
 })
 
+
+test('service worker preserves per-notification tags instead of replacing every push', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '..', 'src/sw.ts'), 'utf8')
+  assert.match(source, /tag: data\.tag \|\| undefined/)
+  assert.match(source, /renotify: Boolean\(data\.tag\)/)
+  assert.match(source, /requestedUrl\.origin === self\.location\.origin/)
+})
+test('background push events are requested for group messages and new follows', () => {
+  const groupSource = fs.readFileSync(path.resolve(__dirname, '..', 'src/pages/Pages.tsx'), 'utf8')
+  const followSource = fs.readFileSync(path.resolve(__dirname, '..', 'src/utils/followData.ts'), 'utf8')
+  assert.match(groupSource, /sendPushEvent\(\{ group_message_id: created\.id \}\)/)
+  assert.match(followSource, /sendPushEvent\(\{ event_type: 'follow', followed_user_id: targetUserId \}\)/)
+})
+test('settings checks server push readiness separately from browser subscription', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '..', 'src/utils/pushNotifications.ts'), 'utf8')
+  assert.match(source, /health_check: true/)
+  assert.match(source, /return 'service-unavailable'/)
+})
