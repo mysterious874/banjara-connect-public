@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './authenticatedUser'
+import { sendPushEvent } from './pushNotifications'
 
 export async function loadFollowState(targetUserId: string) {
   const userId = await requireAuthenticatedUserId()
@@ -24,5 +25,6 @@ export async function toggleFollow(targetUserId: string, currentlyFollowing: boo
     if (state.following) return true
   }
   if (error) throw error
+  void sendPushEvent({ event_type: 'follow', followed_user_id: targetUserId })
   return true
 }

@@ -20,23 +20,25 @@ precacheAndRoute(self.__WB_MANIFEST)
 
 self.addEventListener('push', (event) => {
   if (!event.data) return
-  let data: { title?: string; body?: string; url?: string; icon?: string; badge?: string } = {}
+  let data: { title?: string; body?: string; url?: string; icon?: string; badge?: string; tag?: string } = {}
   try { data = event.data.json() } catch { data = { body: event.data.text() } }
 
   const title = data.title || 'Banjara Connect'
-  const options: NotificationOptions = {
+  const options: NotificationOptions & { renotify?: boolean } = {
     body: data.body || 'You have a new notification.',
     icon: data.icon || '/banjara-mark.svg',
     badge: data.badge || '/banjara-mark.svg',
     data: { url: data.url || '/notifications' },
-    tag: 'banjara-connect',
+    tag: data.tag || undefined,
+    renotify: Boolean(data.tag),
   }
   event.waitUntil(self.registration.showNotification(title, options))
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = new URL((event.notification.data?.url || '/notifications') as string, self.location.origin).href
+  const requestedUrl = new URL((event.notification.data?.url || '/notifications') as string, self.location.origin)
+  const url = requestedUrl.origin === self.location.origin ? requestedUrl.href : new URL('/notifications', self.location.origin).href
   event.waitUntil((async () => {
     const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     for (const client of windowClients) {

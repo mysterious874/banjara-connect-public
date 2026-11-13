@@ -22,7 +22,7 @@ import { validateChatMedia } from '../utils/chatMediaData'
 import { createGroupMediaUrl, deleteGroupMedia, hydrateGroupMediaUrls, uploadGroupMedia, validateGroupMedia } from '../utils/groupMediaData'
 import { createStory, deleteStory, loadActiveStories, loadStoryViewers, recordStoryView, validateStoryMedia, type StoryRecord, type StoryViewer } from '../utils/storyData'
 import { userFacingError } from '../utils/userFacingError'
-import { getPushNotificationStatus, registerPushNotifications, unregisterPushNotifications, type PushNotificationStatus } from '../utils/pushNotifications'
+import { getPushNotificationStatus, registerPushNotifications, sendActivityPushNotification, sendPushEvent, unregisterPushNotifications, type PushNotificationStatus } from '../utils/pushNotifications'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
@@ -1630,13 +1630,17 @@ export function StoriesPage() {
     setStoryActionBusy(true)
     setError('')
     try {
-      const { error: notificationError } = await supabase.from('notifications').insert({
-        user_id: selectedStory.user_id,
-        actor_id: session.user.id,
-        type: 'story_like',
-        is_read: false,
+      const { data: notificationId, error: notificationError } = await supabase.rpc('like_story', {
+        p_story_id: selectedStory.id,
       })
       if (notificationError) throw notificationError
+      if (notificationId) {
+        void sendActivityPushNotification({
+          event_type: 'story_like',
+          story_id: selectedStory.id,
+          notification_id: notificationId,
+        })
+      }
       setStoryLikedIds((current) => [...current, selectedStory.id])
       setSuccess('Story liked')
     } catch (caught) {
@@ -3487,6 +3491,7 @@ export function CommunityGroupPage() {
           created.media_signed_url = await createGroupMediaUrl(media.path)
           uploadedPath = ''
         }
+        void sendPushEvent({ group_message_id: created.id })
         setMessages((current) => current.some((item) => item.id === created.id) ? current : [...current, created])
         pendingMessageId = ''
       }
@@ -3943,14 +3948,16 @@ export function SettingsPage() {
     setError('')
     try {
       const enabled = await registerPushNotifications()
-      const nextStatus = enabled ? 'enabled' : await getPushNotificationStatus()
+      const nextStatus = await getPushNotificationStatus()
       setPushStatus(nextStatus)
-      if (!enabled) {
+      if (!enabled || nextStatus !== 'enabled') {
         setError(nextStatus === 'blocked'
           ? 'Notifications are blocked by your browser. Open site settings and allow notifications, then try again.'
           : nextStatus === 'unsupported'
             ? 'Notifications are not supported in this browser.'
-            : 'Could not enable notifications. Install Connect to your Home Screen, allow notifications, and retry.')
+            : nextStatus === 'service-unavailable'
+              ? 'Your device is subscribed, but the server push keys are not configured. Background notifications will start after the server is configured.'
+              : 'Could not enable notifications. Install Connect to your Home Screen, allow notifications, and retry.')
       }
     } catch (caught) {
       setError(userFacingError(caught, 'Could not enable phone notifications. Check your connection and try again.'))
@@ -4017,7 +4024,7 @@ export function SettingsPage() {
           <button type="button" className={theme === 'system' ? 'is-active' : ''} onClick={() => changeTheme('system')}>⚙️ System</button>
         </div>
       </div>
-    </section><section className="settings-group"><h2>Phone notifications</h2><p className="micro-note">Allow Connect to show supported push notifications in your device notification bar.</p><div className="settings-row"><span className="settings-row__icon">🔔</span><span><strong>{pushStatus === 'enabled' ? 'Notifications enabled on this device' : pushStatus === 'blocked' ? 'Notifications blocked' : pushStatus === 'unsupported' ? 'Not supported in this browser' : pushStatus === 'checking' ? 'Checking notification settings…' : pushStatus === 'unknown' ? 'Could not check notification settings' : 'Enable phone notifications'}</strong><small>{pushStatus === 'enabled' ? 'Background delivery also depends on server push configuration.' : pushStatus === 'blocked' ? 'Allow notifications from this site in your browser settings, or remove this device subscription below.' : pushStatus === 'unsupported' ? 'Try installing Connect from a supported browser.' : pushStatus === 'checking' ? 'Checking this device’s push subscription.' : pushStatus === 'unknown' ? 'Try checking again.' : 'Tap below and choose Allow when your browser asks.'}</small></span></div><Button variant="outline" onClick={pushStatus === 'enabled' || pushStatus === 'blocked' ? disablePushNotifications : pushStatus === 'unknown' ? checkPushNotificationStatus : enablePushNotifications} disabled={pushBusy || pushStatus === 'checking' || pushStatus === 'unsupported'}>{pushBusy ? (pushStatus === 'enabled' || pushStatus === 'blocked' ? 'Disabling…' : 'Checking…') : pushStatus === 'enabled' || pushStatus === 'blocked' ? 'Disable notifications' : pushStatus === 'unknown' ? 'Check status' : pushStatus === 'unsupported' ? 'Notifications unavailable' : 'Enable notifications'}</Button></section>{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}<PwaInstallControl />{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
+    </section><section className="settings-group"><h2>Phone notifications</h2><p className="micro-note">Allow Connect to show supported push notifications in your device notification bar.</p><div className="settings-row"><span className="settings-row__icon">🔔</span><span><strong>{pushStatus === 'enabled' ? 'Notifications enabled on this device' : pushStatus === 'blocked' ? 'Notifications blocked' : pushStatus === 'unsupported' ? 'Not supported in this browser' : pushStatus === 'service-unavailable' ? 'Push service needs setup' : pushStatus === 'checking' ? 'Checking notification settings…' : pushStatus === 'unknown' ? 'Could not check notification settings' : 'Enable phone notifications'}</strong><small>{pushStatus === 'enabled' ? 'Background delivery also depends on server push configuration.' : pushStatus === 'blocked' ? 'Allow notifications from this site in your browser settings, or remove this device subscription below.' : pushStatus === 'unsupported' ? 'Try installing Connect from a supported browser.' : pushStatus === 'service-unavailable' ? 'This device has a push subscription, but the server is missing its VAPID signing keys. Background alerts cannot be delivered until those keys are configured.' : pushStatus === 'checking' ? 'Checking this device’s push subscription.' : pushStatus === 'unknown' ? 'Try checking again.' : 'Tap below and choose Allow when your browser asks.'}</small></span></div><Button variant="outline" onClick={pushStatus === 'enabled' || pushStatus === 'blocked' ? disablePushNotifications : pushStatus === 'unknown' || pushStatus === 'service-unavailable' ? checkPushNotificationStatus : enablePushNotifications} disabled={pushBusy || pushStatus === 'checking' || pushStatus === 'unsupported'}>{pushBusy ? (pushStatus === 'enabled' || pushStatus === 'blocked' ? 'Disabling…' : 'Checking…') : pushStatus === 'enabled' || pushStatus === 'blocked' ? 'Disable notifications' : pushStatus === 'unknown' || pushStatus === 'service-unavailable' ? 'Check again' : pushStatus === 'unsupported' ? 'Notifications unavailable' : 'Enable notifications'}</Button></section>{settingsGroups.map((group) => <section className="settings-group" key={group.heading}><h2>{group.heading}</h2>{group.items.map(({ to, icon: Icon, title, detail }) => <Link className="settings-row" to={to} key={to}><span className="settings-row__icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={18} /></Link>)}</section>)}<PwaInstallControl />{error && <p className="field__error" role="alert">{error}</p>}<Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>{isSigningOut ? 'Signing out…' : 'Sign out'}</Button></section>
 }
 
 export function ChangePasswordPage() {
