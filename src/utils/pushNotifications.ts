@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-const VAPID_PUBLIC_KEY = 'BOKRQvTFtfg4n13X-JoqffDlTHyuXiR10Wry7OLi4-XmSJU1Z2s3ooQEl_ul5nJApnp4Z04ndXNXk1tYS0612TQ'
+const VAPID_PUBLIC_KEY = 'BJLTkHT_r0HTNyGuIAlSMEI5UW2Fo6XRAEH_0cvJugNH5YQY2NY_ly_9Bri8NhibOtiODcdfTvlRFhFn8qmHFVo'
 
 export type PushNotificationStatus = 'checking' | 'enabled' | 'not-enabled' | 'blocked' | 'unsupported' | 'service-unavailable' | 'unknown'
 
