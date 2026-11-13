@@ -1,0 +1,15 @@
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+const test = require('node:test')
+
+test('PWA manifest declares installable 192px and 512px PNG icons including maskable icons', () => {
+  const config = fs.readFileSync(path.resolve(__dirname, '..', 'vite.config.ts'), 'utf8')
+  assert.match(config, /name: 'Connect'/)
+  assert.match(config, /short_name: 'Connect'/)
+  assert.match(config, /display: 'standalone'/)
+  assert.match(config, /src: '\/pwa-192x192\.png', sizes: '192x192', type: 'image\/png'/)
+  assert.match(config, /src: '\/pwa-512x512\.png', sizes: '512x512', type: 'image\/png'/)
+  assert.match(config, /src: '\/pwa-192x192-maskable\.png', sizes: '192x192', type: 'image\/png', purpose: 'maskable'/)
+  assert.match(config, /src: '\/pwa-512x512-maskable\.png', sizes: '512x512', type: 'image\/png', purpose: 'maskable'/)
+})

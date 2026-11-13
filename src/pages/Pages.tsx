@@ -22,7 +22,7 @@ import { validateChatMedia } from '../utils/chatMediaData'
 import { createGroupMediaUrl, deleteGroupMedia, hydrateGroupMediaUrls, uploadGroupMedia, validateGroupMedia } from '../utils/groupMediaData'
 import { createStory, deleteStory, loadActiveStories, loadStoryViewers, recordStoryView, validateStoryMedia, type StoryRecord, type StoryViewer } from '../utils/storyData'
 import { userFacingError } from '../utils/userFacingError'
-import { getPushNotificationStatus, registerPushNotifications, unregisterPushNotifications, type PushNotificationStatus } from '../utils/pushNotifications'
+import { getPushNotificationStatus, registerPushNotifications, sendActivityPushNotification, unregisterPushNotifications, type PushNotificationStatus } from '../utils/pushNotifications'
 import { subscribeToPostgresChanges } from '../utils/realtimeData'
 import { loadNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../utils/notificationData'
 import { createReport } from '../utils/reportData'
@@ -1630,13 +1630,17 @@ export function StoriesPage() {
     setStoryActionBusy(true)
     setError('')
     try {
-      const { error: notificationError } = await supabase.from('notifications').insert({
-        user_id: selectedStory.user_id,
-        actor_id: session.user.id,
-        type: 'story_like',
-        is_read: false,
+      const { data: notificationId, error: notificationError } = await supabase.rpc('like_story', {
+        p_story_id: selectedStory.id,
       })
       if (notificationError) throw notificationError
+      if (notificationId) {
+        void sendActivityPushNotification({
+          event_type: 'story_like',
+          story_id: selectedStory.id,
+          notification_id: notificationId,
+        })
+      }
       setStoryLikedIds((current) => [...current, selectedStory.id])
       setSuccess('Story liked')
     } catch (caught) {

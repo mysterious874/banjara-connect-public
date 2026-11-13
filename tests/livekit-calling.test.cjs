@@ -1,0 +1,21 @@
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+const test = require('node:test')
+
+test('calls use authenticated LiveKit tokens instead of public STUN-only peer connections', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '..', 'src/components/calling/CallInviteControls.tsx'), 'utf8')
+  assert.match(source, /from 'livekit-client'/)
+  assert.match(source, /functions\.invoke\('livekit-token'/)
+  assert.match(source, /new Room\(/)
+  assert.match(source, /RoomEvent\.TrackSubscribed/)
+  assert.match(source, /setMicrophoneEnabled/)
+  assert.match(source, /setCameraEnabled/)
+  assert.doesNotMatch(source, /new RTCPeerConnection\(/)
+  assert.doesNotMatch(source, /stun:stun\.l\.google\.com/)
+})
+test('camera switching uses the active LiveKit camera track', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '..', 'src/components/calling/CallInviteControls.tsx'), 'utf8')
+  assert.match(source, /getTrackPublication\(Track\.Source\.Camera\)/)
+  assert.match(source, /restartTrack\(\{ facingMode: nextFacingMode \}\)/)
+})

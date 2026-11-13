@@ -160,7 +160,7 @@ export async function recordStoryView(storyId: string, viewerId: string) {
   if (!storyId || !viewerId) return
   const { error } = await supabase.from('story_views').upsert(
     { story_id: storyId, viewer_id: viewerId, viewed_at: new Date().toISOString() },
-    { onConflict: 'story_id,viewer_id' },
+    { onConflict: 'story_id,viewer_id', ignoreDuplicates: true },
   )
   if (error) throw error
 }

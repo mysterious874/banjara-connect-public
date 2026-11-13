@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { Room, RoomEvent, Track } from 'livekit-client'
 import { createPortal } from 'react-dom'
 import { Phone, Video, PhoneOff, Check, X, Users, Mic, MicOff, Camera, CameraOff, SwitchCamera, Volume2, VolumeX } from 'lucide-react'
 import { useAuth } from '../../hooks/AuthProvider'
@@ -47,8 +48,7 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map())
   const [joinedGroupCallId, setJoinedGroupCallId] = useState<string | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
-  const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map())
-  const channelRef = useRef<any>(null)
+  const liveKitRoomRef = useRef<Room | null>(null)
   const isGroup = Boolean(groupId)
   const activeCall = outgoing?.status === 'active' ? outgoing : incoming?.status === 'active' && (!incoming.group_id || joinedGroupCallId === incoming.id) ? incoming : null
   const ringingOutgoing = outgoing?.status === 'ringing' ? outgoing : null
@@ -148,196 +148,144 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     finally { setBusy(false) }
   }
 
-  // Native WebRTC carries media; private Supabase Realtime broadcasts exchange SDP and ICE.
+  // LiveKit SFU carries call media and handles TURN/ICE relay negotiation.
   useEffect(() => {
     if (!activeCall || !userId) return
     let disposed = false
-    let channel: any = null
-    let local: MediaStream | null = null
-    let joinInterval: number | undefined
-    const peers = peerConnectionsRef.current
-    const pendingIce = new Map<string, RTCIceCandidateInit[]>()
+    let room: Room | null = null
 
-    const sendSignal = async (event: string, payload: Record<string, unknown>) => {
-      if (!disposed && channel) {
-        try { await channel.send({ type: 'broadcast', event, payload: { ...payload, from: userId } }) }
-        catch (error) { if (!disposed) console.warn('Call signaling failed:', event, error) }
-      }
+    const setRemoteTrack = (identity: string, track: MediaStreamTrack) => {
+      setRemoteStreams(current => {
+        const existing = current[identity]
+        const nextTracks = existing?.getTracks() ?? []
+        if (nextTracks.some(item => item.id === track.id)) return current
+        return { ...current, [identity]: new MediaStream([...nextTracks, track]) }
+      })
     }
-    const setRemote = (id: string, stream: MediaStream | null) => setRemoteStreams(prev => {
-      const next = { ...prev }
-      if (stream?.getTracks().length) next[id] = stream
-      else delete next[id]
-      return next
-    })
-    const getPeer = (id: string) => {
-      const existing = peers.get(id)
-      if (existing) return existing
-      const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
-      peers.set(id, peer)
-      const currentLocalStream = localStreamRef.current ?? local
-      currentLocalStream?.getTracks().forEach(track => peer.addTrack(track, currentLocalStream))
-      peer.onicecandidate = event => {
-        if (event.candidate) void sendSignal('ice', { to: id, candidate: event.candidate.toJSON() })
-      }
-      // Some browsers (and some mobile WebRTC stacks) deliver ontrack with
-      // an empty event.streams array. Keep a per-peer MediaStream and attach
-      // every received track so remote video/audio is not silently discarded.
-      const remoteMedia = new MediaStream()
-      peer.ontrack = event => {
-        const incomingTrack = event.track
-        if (incomingTrack && !remoteMedia.getTracks().some(track => track.id === incomingTrack.id)) {
-          remoteMedia.addTrack(incomingTrack)
-        }
-        const receivedStream = event.streams?.[0]
-        if (receivedStream?.getTracks().length) {
-          setRemote(id, receivedStream)
-        } else if (remoteMedia.getTracks().length) {
-          setRemote(id, remoteMedia)
-        }
-        incomingTrack?.addEventListener('ended', () => {
-          if (remoteMedia.getTracks().every(track => track.readyState === 'ended')) setRemote(id, null)
-        }, { once: true })
-      }
-      peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
-          peer.close(); peers.delete(id); setRemote(id, null)
-        }
-      }
-      return peer
+    const removeRemoteTrack = (identity: string, track: MediaStreamTrack) => {
+      setRemoteStreams(current => {
+        const existing = current[identity]
+        if (!existing) return current
+        const remaining = existing.getTracks().filter(item => item.id !== track.id)
+        const next = { ...current }
+        if (remaining.length) next[identity] = new MediaStream(remaining)
+        else delete next[identity]
+        return next
+      })
     }
-    const flushIce = async (id: string, peer: RTCPeerConnection) => {
-      const queued = pendingIce.get(id) ?? []
-      pendingIce.delete(id)
-      for (const candidate of queued) {
-        try { await peer.addIceCandidate(candidate) } catch (error) { console.warn('ICE candidate rejected', error) }
-      }
+    const syncLocalStream = (connectedRoom: Room) => {
+      const tracks = connectedRoom.localParticipant.getTrackPublications()
+        .map(publication => publication.track?.mediaStreamTrack)
+        .filter((track): track is MediaStreamTrack => Boolean(track && track.readyState === 'live'))
+      const stream = new MediaStream(tracks)
+      localStreamRef.current = stream
+      setLocalStream(stream)
     }
-    const onSignal = async (event: string, payload: any) => {
-      const from = typeof payload?.from === 'string' ? payload.from : ''
-      if (!from || from === userId || (payload?.to && payload.to !== userId)) return
+
+    const connect = async () => {
       try {
-        if (event === 'join') {
-          if (userId.localeCompare(from) < 0 && !peers.has(from)) {
-            const peer = getPeer(from)
-            const offer = await peer.createOffer()
-            await peer.setLocalDescription(offer)
-            await sendSignal('offer', { to: from, description: peer.localDescription })
-          }
-        } else if (event === 'offer') {
-          const peer = getPeer(from)
-          await peer.setRemoteDescription(payload.description as RTCSessionDescriptionInit)
-          await flushIce(from, peer)
-          const answer = await peer.createAnswer()
-          await peer.setLocalDescription(answer)
-          await sendSignal('answer', { to: from, description: peer.localDescription })
-        } else if (event === 'answer') {
-          const peer = peers.get(from)
-          if (peer) {
-            await peer.setRemoteDescription(payload.description as RTCSessionDescriptionInit)
-            await flushIce(from, peer)
-          }
-        } else if (event === 'ice') {
-          const candidate = payload.candidate as RTCIceCandidateInit | undefined
-          if (!candidate) return
-          const peer = peers.get(from)
-          if (peer?.remoteDescription) await peer.addIceCandidate(candidate)
-          else pendingIce.set(from, [...(pendingIce.get(from) ?? []), candidate])
-        } else if (event === 'leave') {
-          peers.get(from)?.close(); peers.delete(from); pendingIce.delete(from); setRemote(from, null)
-          // A direct call is over when the other participant leaves. Mark the
-          // database session ended so reopening the chat cannot resurrect it.
-          if (!activeCall.group_id) {
-            void supabase.from('call_sessions').update({ status: 'ended', ended_at: new Date().toISOString() })
-              .eq('id', activeCall.id).in('status', ['ringing', 'active'])
-            setIncoming(current => current?.id === activeCall.id ? null : current)
-            setOutgoing(current => current?.id === activeCall.id ? null : current)
-            setNotice('')
-          }
-        }
-      } catch (error) {
-        if (!disposed) {
-          console.error('WebRTC signaling failed:', event, error)
-          setNotice('Could not establish the call connection. Check the network and try again.')
-        }
-      }
-    }
-    const start = async () => {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
+        if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error('This browser does not support secure calling. Open Connect over HTTPS in a current browser.')
         }
-        local = await navigator.mediaDevices.getUserMedia({ audio: true, video: activeCall.call_type === 'video' ? { facingMode: { ideal: 'user' } } : false })
-        if (disposed) { local.getTracks().forEach(track => track.stop()); return }
-        localStreamRef.current = local
-        setLocalStream(local)
-        channel = supabase.channel(`call:${activeCall.id}`, { config: { private: true } })
-        channelRef.current = channel
-        for (const event of ['join', 'offer', 'answer', 'ice', 'leave']) {
-          channel.on('broadcast', { event }, (message: any) => { void onSignal(event, message?.payload) })
+        setNotice('Connecting securely to the call…')
+        const { data, error } = await supabase.functions.invoke('livekit-token', {
+          body: { callId: activeCall.id },
+        })
+        if (error) throw error
+        const serverUrl = typeof data?.serverUrl === 'string' ? data.serverUrl : ''
+        const token = typeof data?.token === 'string' ? data.token : ''
+        if (!serverUrl || !token) {
+          throw new Error(data?.error || 'Calling service is not configured. Please try again later.')
         }
-        await new Promise<void>((resolve, reject) => {
-          const timeout = window.setTimeout(() => reject(new Error('Call signaling timed out. Check your connection.')), 12000)
-          channel.subscribe((status: string) => {
-            if (status === 'SUBSCRIBED') { window.clearTimeout(timeout); resolve() }
-            else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
-              window.clearTimeout(timeout)
-              reject(new Error('Private call signaling could not connect. Check Supabase Realtime permissions.'))
+        if (disposed) return
+
+        room = new Room({ adaptiveStream: true, dynacast: true })
+        liveKitRoomRef.current = room
+        room
+          .on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
+            if (track.kind === Track.Kind.Video || track.kind === Track.Kind.Audio) {
+              setRemoteTrack(participant.identity, track.mediaStreamTrack)
             }
           })
-        })
-        if (!disposed) {
-          await sendSignal('join', {})
-          // Broadcast join briefly more than once so peers that subscribed later
-          // still discover each other; Realtime broadcast itself is not durable.
-          let attempts = 0
-          joinInterval = window.setInterval(() => {
-            attempts += 1
-            if (attempts >= 5 || disposed) {
-              if (joinInterval !== undefined) window.clearInterval(joinInterval)
-              return
+          .on(RoomEvent.TrackUnsubscribed, (track, _publication, participant) => {
+            removeRemoteTrack(participant.identity, track.mediaStreamTrack)
+          })
+          .on(RoomEvent.ParticipantDisconnected, participant => {
+            setRemoteStreams(current => {
+              const next = { ...current }
+              delete next[participant.identity]
+              return next
+            })
+          })
+          .on(RoomEvent.Disconnected, () => {
+            if (!disposed) setNotice('Call connection was interrupted. Please reconnect.')
+          })
+          .on(RoomEvent.AudioPlaybackStatusChanged, () => {
+            if (room && !room.canPlaybackAudio && !disposed) {
+              setNotice('Tap Speaker to enable call audio on this browser.')
             }
-            void sendSignal('join', {})
-          }, 1000)
-          setNotice('')
+          })
+
+        await room.connect(serverUrl, token, { autoSubscribe: true })
+        if (disposed) { await room.disconnect(); return }
+        await room.localParticipant.setMicrophoneEnabled(true)
+        if (activeCall.call_type === 'video') {
+          await room.localParticipant.setCameraEnabled(true, {
+            facingMode: 'user',
+            resolution: { width: 1280, height: 720, frameRate: 24 },
+          })
         }
+        if (disposed) { await room.disconnect(); return }
+        syncLocalStream(room)
+        for (const participant of room.remoteParticipants.values()) {
+          for (const publication of participant.trackPublications.values()) {
+            const track = publication.track
+            if (publication.isSubscribed && track && (track.kind === Track.Kind.Video || track.kind === Track.Kind.Audio)) {
+              setRemoteTrack(participant.identity, track.mediaStreamTrack)
+            }
+          }
+        }
+        setNotice('')
       } catch (error) {
         if (!disposed) {
+          console.error('LiveKit call connection failed:', error)
           const message = error instanceof Error ? error.message : ''
-          setNotice(message.includes('NotAllowedError') || message.toLowerCase().includes('permission')
+          setNotice(message.toLowerCase().includes('permission')
             ? 'Microphone/camera permission was denied. Allow access and retry the call.'
-            : message || 'Could not connect audio/video. Check browser permissions and network, then try again.')
+            : message || 'Could not connect audio/video. Check browser permissions and try again.')
         }
       }
     }
-    void start()
+
+    void connect()
     return () => {
       disposed = true
-      if (joinInterval !== undefined) window.clearInterval(joinInterval)
-      if (channelRef.current === channel) channelRef.current = null
-      if (channel) {
-        void channel.send({ type: 'broadcast', event: 'leave', payload: { from: userId } })
-        void supabase.removeChannel(channel)
-      }
-      peers.forEach(peer => peer.close()); peers.clear(); pendingIce.clear()
-      const streamToStop = localStreamRef.current ?? local
-      streamToStop?.getTracks().forEach(track => track.stop())
+      const activeRoom = room
+      if (liveKitRoomRef.current === activeRoom) liveKitRoomRef.current = null
+      if (activeRoom) void activeRoom.disconnect()
       localStreamRef.current = null
-      setLocalStream(null); setRemoteStreams({})
+      setLocalStream(null)
+      setRemoteStreams({})
     }
   }, [activeCall?.id, activeCall?.status, activeCall?.call_type, activeCall?.group_id, userId])
 
   const toggleMute = () => {
-    const next = !muted
-    const tracks = localStreamRef.current?.getAudioTracks() ?? []
-    if (!tracks.length) {
+    const room = liveKitRoomRef.current
+    if (!room) {
       setNotice('Microphone is not ready yet. Please wait for the call to connect.')
       return
     }
-    tracks.forEach(track => { track.enabled = !next })
-    setMuted(next)
+    const next = !muted
+    void room.localParticipant.setMicrophoneEnabled(!next).then(() => setMuted(next)).catch(error => {
+      console.warn('Could not change microphone state:', error)
+      setNotice('Could not change microphone state. Please try again.')
+    })
   }
   const toggleSpeaker = async () => {
+    const room = liveKitRoomRef.current
+    if (room && !room.canPlaybackAudio) {
+      try { await room.startAudio() } catch (error) { console.warn('Could not start call audio:', error) }
+    }
     const audioElements = [...audioElementsRef.current.values()]
     if (!audioElements.length) {
       setNotice('Call audio is not ready yet. Please wait a moment and try again.')
@@ -379,51 +327,54 @@ export function CallInviteControls({ recipientId, groupId, peerName, compact = f
     }
   }
   const toggleCamera = () => {
-    const next = !cameraOff
-    const tracks = localStreamRef.current?.getVideoTracks() ?? []
-    if (!tracks.length) {
-      setNotice('Camera is not ready yet. Please wait for the video call to connect.')
+    const room = liveKitRoomRef.current
+    if (!room) {
+      setNotice('Camera is not ready yet. Please wait for the call to connect.')
       return
     }
-    tracks.forEach(track => { track.enabled = !next })
-    setCameraOff(next)
+    const next = !cameraOff
+    void room.localParticipant.setCameraEnabled(!next).then(() => {
+      setCameraOff(next)
+      syncCallLocalPreview(room)
+    }).catch(error => {
+      console.warn('Could not change camera state:', error)
+      setNotice('Could not change camera state. Please try again.')
+    })
   }
   const switchCamera = async () => {
     if (cameraSwitching) return
-    const currentStream = localStreamRef.current
-    if (!currentStream?.getVideoTracks().length || !navigator.mediaDevices?.getUserMedia) {
-      setNotice('Camera is not ready yet. Please wait for the video call to connect.')
+    const room = liveKitRoomRef.current
+    const cameraTrack = room?.localParticipant.getTrackPublication(Track.Source.Camera)?.videoTrack
+    if (!room || !cameraTrack) {
+      setNotice('Camera is not ready yet. Please wait for the call to connect.')
       return
     }
     const nextFacingMode = cameraFacingMode === 'user' ? 'environment' : 'user'
     setCameraSwitching(true)
-    let replacementStream: MediaStream | null = null
     try {
-      try {
-        replacementStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { exact: nextFacingMode } } })
-      } catch {
-        replacementStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: nextFacingMode } } })
-      }
-      const nextTrack = replacementStream.getVideoTracks()[0]
-      if (!nextTrack) throw new Error('No camera track was returned.')
-      const videoSenders = [...peerConnectionsRef.current.values()]
-        .flatMap(peer => peer.getSenders())
-        .filter(sender => sender.track?.kind === 'video')
-      await Promise.all(videoSenders.map(sender => sender.replaceTrack(nextTrack)))
-      const latestStream = localStreamRef.current ?? currentStream
-      const nextStream = new MediaStream([...latestStream.getAudioTracks(), nextTrack])
-      localStreamRef.current = nextStream
-      setLocalStream(nextStream)
-      currentStream.getVideoTracks().forEach(track => track.stop())
+      await cameraTrack.restartTrack({ facingMode: nextFacingMode })
+      const tracks = room.localParticipant.getTrackPublications()
+        .map(publication => publication.track?.mediaStreamTrack)
+        .filter((track): track is MediaStreamTrack => Boolean(track && track.readyState === 'live'))
+      const stream = new MediaStream(tracks)
+      localStreamRef.current = stream
+      setLocalStream(stream)
       setCameraFacingMode(nextFacingMode)
       setNotice('')
     } catch (error) {
-      replacementStream?.getTracks().forEach(track => track.stop())
       console.warn('Could not switch video camera:', error)
       setNotice('Could not switch camera. Check camera permissions and try again.')
     } finally {
       setCameraSwitching(false)
     }
+  }
+  const syncCallLocalPreview = (room: Room) => {
+    const tracks = room.localParticipant.getTrackPublications()
+      .map(publication => publication.track?.mediaStreamTrack)
+      .filter((track): track is MediaStreamTrack => Boolean(track && track.readyState === 'live'))
+    const stream = new MediaStream(tracks)
+    localStreamRef.current = stream
+    setLocalStream(stream)
   }
   const dismissNotice = () => setNotice('')
   const endOrLeaveCall = async () => {

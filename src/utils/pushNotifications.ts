@@ -77,3 +77,17 @@ export async function unregisterPushNotifications() {
   const unsubscribed = await subscription.unsubscribe()
   if (!unsubscribed) throw new Error('The browser could not disable this push subscription.')
 }
+
+
+export async function sendActivityPushNotification(body: {
+  event_type: 'story_like'
+  story_id: string
+  notification_id: string
+}) {
+  try {
+    const { error } = await supabase.functions.invoke('send-chat-push', { body })
+    if (error) throw error
+  } catch {
+    // In-app notification is persisted; push delivery is best-effort.
+  }
+}
